@@ -9,24 +9,6 @@
         <b-collapse id="nav-collapse" is-nav>
           <b-navbar-nav v-if="isLoggedIn">
             <!--- Add in items for logged in only --->
-            <Bootstrapnavlinkcustom to="/manageissues"
-              >Manage Issues</Bootstrapnavlinkcustom
-            >
-            <Bootstrapnavlinkcustom to="/managementions"
-              >Manage Mentions</Bootstrapnavlinkcustom
-            >
-            <Bootstrapnavlinkcustom to="/repographs"
-              >Repo Graphs</Bootstrapnavlinkcustom
-            >
-            <Bootstrapnavlinkcustom to="/usergraphs"
-              >User Graphs</Bootstrapnavlinkcustom
-            >
-            <Bootstrapnavlinkcustom to="/team/triage"
-              >Team Triage</Bootstrapnavlinkcustom
-            >
-            <Bootstrapnavlinkcustom to="/repoissuegraph"
-              >Repo Issue Graph</Bootstrapnavlinkcustom
-            >
           </b-navbar-nav>
           <b-navbar-nav>
             <Bootstrapnavlinkcustom to="/about">About</Bootstrapnavlinkcustom>

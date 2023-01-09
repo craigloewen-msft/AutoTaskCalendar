@@ -2,13 +2,8 @@
   <div>
     <div class="jumbotron header-container">
       <div class="header-text-container">
-        <h2>GitGudIssues</h2>
-        <h4>Manage your Github presence</h4>
-        <img
-          src="/GitGudIssuesGIF.gif"
-          class="img-fluid cover-gif"
-          alt="GitGudIssuesPromo"
-        />
+        <h2>Title</h2>
+        <h4>Subtitle</h4>
         <div v-if="!this.$store.getters.isLoggedIn" class="loginSelect">
           <router-link class="btn btn-primary" to="/login">Login</router-link>
           <router-link class="btn btn-primary" to="/register"
@@ -25,53 +20,12 @@
 
     <b-container class="section-slides">
       <header class="section-header">
-        <p>How it works</p>
+        <p>Title content goes here.</p>
       </header>
 
       <div class="row">
-        <div class="col-md-4 mt-4 mt-lg-0">
-          <div class="box">
-            <h3>
-              The goal of this project is to never have to use email to manage
-              Github Issues ever again
-            </h3>
-            <p>
-              Managing Github issues from email simply sucks. This project was
-              created to make an easy to use interface to keep track of all your
-              Github issues on repos that you maintain, as well as any mentions
-              that you'd have from these repos. It's goal is to make it so you
-              spend less time searching through Github, and more time actually
-              triaging and responding to the right issues.
-            </p>
-          </div>
-        </div>
-
-        <div class="col-md-4 mt-4 mt-lg-0">
-          <div class="box">
-            <h3>This project only uses public APIs, no Auth required</h3>
-            <p>
-              GitGudIssues uses the public APIs on Github to create a database
-              of the issues in repos that you care about. This allows you to
-              mark issues as read or unread, assign personal tags to them, and
-              create your own custom queries all in the same page, so you don't
-              have to look around on different repos. One of the main goals is
-              to make it easy to sign up and use, which is why you don't need to
-              auth to your GitHub account to use this tool!
-            </p>
-          </div>
-        </div>
-
-        <div class="col-md-4 mt-4 mt-lg-0">
-          <div class="box">
-            <h3>How to get started</h3>
-            <p>
-              To get started simply register using the links above. Once you've
-              registered you can then input the Github accounts that you'd like
-              to track your issues with. From there the issues and comments in
-              these accounts will automatically populate on the site, and you'll
-              be able to search, query and manage them easily.
-            </p>
-          </div>
+        <div class="col">
+          Your content can go here.
         </div>
       </div>
     </b-container>
@@ -85,7 +39,6 @@
 export default {
   name: "Home",
   components: {
-    // HelloWorld
   },
   computed: {
     user: function () {

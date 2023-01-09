@@ -6,13 +6,6 @@
       <input
         class="form-control"
         type="text"
-        name="githubUsername"
-        v-model="input.githubUsername"
-        placeholder="Github username (to track your mentions)"
-      />
-      <input
-        class="form-control"
-        type="text"
         name="email"
         v-model="input.email"
         placeholder="Email (to receive notifications)"
@@ -22,14 +15,14 @@
         type="text"
         name="username"
         v-model="input.username"
-        placeholder="Create your GitGudIssues username"
+        placeholder="Username"
       />
       <input
         class="form-control"
         type="password"
         name="password"
         v-model="input.password"
-        placeholder="Create your GitGud password"
+        placeholder="Password"
         @keyup.enter="register"
       />
       <input
@@ -37,7 +30,7 @@
         type="password"
         name="passwordconfirm"
         v-model="input.passwordconfirm"
-        placeholder="Confirm your GitGud password"
+        placeholder="Confirm password"
         @keyup.enter="register"
       />
       <br />
@@ -63,12 +56,10 @@ export default {
         password: "",
         email: "",
         passwordconfirm: "",
-        githubUsername: "",
       },
     };
   },
   components: {
-    // HelloWorld
   },
   methods: {
     register: function () {
@@ -136,10 +127,6 @@ export default {
       }
       if (this.input.username.length > 20) {
         this.failuretext = "Username is too long";
-        return false;
-      }
-      if (this.input.githubUsername.length == 0) {
-        this.failuretext = "Github username required";
         return false;
       }
       if (this.input.password.length > 30) {

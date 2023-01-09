@@ -3,25 +3,15 @@
     <b-container>
       <div class="row">
         <div class="col-lg-12 text-center">
-          <h1>About GitGudIssues</h1>
+          <h1>About your site</h1>
           <hr />
         </div>
       </div>
       <div class="row">
         <div class="col-md-7">
           <p>
-            This is an experimental feature that is designed to help people
-            manage their Github issues.
-          </p>
-          <p>
-            The goal is to work well with existing Github tools. This tool is
-            supposed to feel like interacting with a well manicured spreadsheet
-            or dashboard, that will then let you access Github effectively.
-          </p>
-          <p>
-            If you have questions about this app please email:
-            craig.loewen@microsoft.com
-          </p>
+            Your content goes here
+            </p>
         </div>
         <div class="col-md-5">
           <img

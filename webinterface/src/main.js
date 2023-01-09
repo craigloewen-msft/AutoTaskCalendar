@@ -26,7 +26,7 @@ Vue.use(vueDebounce, {
 });
 
 Vue.use(VueGtag, {
-  config: { id: "G-RGZMG4RTH7" }
+  config: { id: "INSERTTAG" }
 });
 
 Vue.use(VueMeta);
