@@ -1,0 +1,22 @@
+{
+  "dependencies": {
+    "axios": "^0.21.4",
+    "connect-ensure-login": "^0.1.1",
+    "connect-mongo": "^4.6.0",
+    "es6-promise": "^4.2.8",
+    "express": "^4.17.1",
+    "express-session": "^1.17.2",
+    "jsonwebtoken": "^8.5.1",
+    "mongoose": "^6.0.7",
+    "nodemon": "^2.0.16",
+    "passport": "^0.4.1",
+    "passport-local-mongoose": "^6.1.0"
+  },
+  "scripts": {
+    "build": "cd webinterface; npm install; npm run build; cd ..; rm -rf ./dist; mv ./webinterface/dist .",
+    "dev": "concurrently --kill-others \"nodemon --inspect app.js\" \"cd webinterface; npm run serve\""
+  },
+  "devDependencies": {
+    "concurrently": "^7.1.0"
+  }
+}
