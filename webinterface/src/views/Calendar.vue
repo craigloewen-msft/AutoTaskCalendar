@@ -4,7 +4,18 @@
     <div class="calendar-box">
       <div class="task-controls">
         <h2>Controls</h2>
-        <button class="btn btn-primary">Add Task</button>
+        <button class="btn btn-primary" @click="addSampleTask()">
+          Add Task
+        </button>
+        <div class="task-list">
+          <h2>Task List</h2>
+          <ul>
+            <li v-for="task in taskList" :key="task._id">
+              {{ task.title }} - {{ task.dueDate }}
+              <button @click="deleteTask(task._id)">Delete</button>
+            </li>
+          </ul>
+        </div>
       </div>
       <div class="main-calendar">
         <div class="calendar">
@@ -45,10 +56,16 @@ export default {
           });
         },
       },
+      user: this.$store.state.user,
+      taskList: null,
     };
   },
   methods: {
-    loadEvents() {
+    async loadData() {
+
+      const taskDataResponse = await this.$http.get("/api/getUserTasks/");
+      this.taskList = taskDataResponse.data.taskList;
+
       // placeholder for an AJAX call
       const events = [
         {
@@ -66,6 +83,28 @@ export default {
       ];
       this.calendar.update({ events });
     },
+    async addSampleTask() {
+      try {
+        const response = await this.$http.post("/api/createTask/", {
+          title: "Sample Task",
+          dueDate: new Date(),
+          duration: 30,
+          notes: "This is a sample task added from the frontend",
+        });
+        this.taskList = response.data.taskList;
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    async deleteTask(taskId) {
+        try {
+            const response = await this.$http.post(`/api/deleteTask`, {taskId});
+            // refresh task list after deletion
+            this.taskList = response.data.taskList;
+        } catch (error) {
+            console.error(error);
+        }
+    },
   },
   computed: {
     calendar() {
@@ -74,7 +113,7 @@ export default {
   },
   mounted() {
     this.$gtag.pageview(this.$route);
-    this.loadEvents();
+    this.loadData();
   },
 };
 </script>

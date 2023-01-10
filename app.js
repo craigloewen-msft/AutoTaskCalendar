@@ -39,10 +39,25 @@ const UserDetail = new Schema({
     lastLoginDate: Date,
 }, { collection: 'usercollection' });
 
+UserDetail.virtual('taskList', {
+    ref: 'taskInfo',
+    localField: '_id',
+    foreignField: 'userRef'
+});
+
+const TaskDetail = new Schema({
+    title: String,
+    dueDate: Date,
+    notes: String,
+    duration: Number,
+    userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
+})
+
 mongoose.connect(mongooseConnectionString, { useNewUrlParser: true, useUnifiedTopology: true });
 
 UserDetail.plugin(passportLocalMongoose);
 const UserDetails = mongoose.model('userInfo', UserDetail, 'userInfo');
+const TaskDetails = mongoose.model('taskInfo', TaskDetail, 'taskInfo');
 
 const JWTTimeout = 4 * 604800; // 28 Days
 
@@ -89,8 +104,9 @@ function returnFailure(messageString) {
     return { success: false, log: messageString };
 }
 
-function returnBasicUserInfo(inputUser) {
-    return { username: inputUser.username, email: inputUser.email, _id: inputUser._id };
+async function returnBasicUserInfo(inputUser) {
+    inputUser = await inputUser.populate('taskList');
+    return { username: inputUser.username, email: inputUser.email, _id: inputUser._id, taskList: inputUser.taskList };
 }
 
 // Middleware function
@@ -133,7 +149,9 @@ app.post('/api/login', (req, res, next) => {
 
                 let token = jwt.sign({ id: user.username }, config.secret, { expiresIn: JWTTimeout });
 
-                let response = { success: true, auth: true, token: token, user: returnBasicUserInfo(user) };
+                let returnUserInfo = await returnBasicUserInfo(user);
+
+                let response = { success: true, auth: true, token: token, user: returnUserInfo };
                 return res.json(response);
             });
 
@@ -181,11 +199,120 @@ app.post('/api/register', async function (req, res) {
         let registeredUser = await UserDetails.register({ username: req.body.username, email: req.body.email }, req.body.password);
 
         let token = jwt.sign({ id: req.body.username }, config.secret, { expiresIn: JWTTimeout });
-        let response = { success: true, auth: true, token: token, user: returnBasicUserInfo(registeredUser) };
+
+        let returnUserInfo = await returnBasicUserInfo(registeredUser);
+
+        let response = { success: true, auth: true, token: token, user: returnUserInfo };
         return res.json(response);
     }
     catch (error) {
         return res.json(returnFailure(error));
     }
+});
 
+// Task management routes
+
+// - Helper functions
+async function getTaskListFromUserID(inUserID) {
+    let user = await UserDetails.findById(inUserID).populate('taskList');
+    return user.taskList;
+}
+
+app.post('/api/createTask', async (req, res) => {
+    // Check if user is logged in
+    if (!req.user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    const { title, dueDate, notes, duration } = req.body;
+    if (!title || !dueDate || !duration) {
+        return res.send(returnFailure('Title, duration, and due date are required'));
+    }
+
+    try {
+        // Create the new task
+        const task = new TaskDetails({
+            title: req.body.title,
+            dueDate: req.body.dueDate,
+            notes: req.body.notes,
+            duration: req.body.duration,
+            userRef: req.user._id
+        });
+        await task.save();
+        // Return the updated task list
+        const returnTaskList = await getTaskListFromUserID(req.user._id);
+        return res.json({success: true, taskList: returnTaskList});
+    } catch (error) {
+        console.error(error);
+        return res.json({ success: false });
+    }
+});
+
+app.post('/api/updateTask', async (req, res) => {
+    // Check if user is logged in
+    if (!req.user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    const { taskId, title, dueDate, notes } = req.body;
+    if (!taskId) {
+        return res.send(returnFailure('Task id is required'));
+    }
+
+    try {
+        const task = await TaskDetails.findOne({ _id: taskId, userRef: req.user._id });
+        if (!task) {
+            return res.send(returnFailure('Task not found'));
+        }
+        if (title) {
+            task.title = title;
+        }
+        if (dueDate) {
+            task.dueDate = dueDate;
+        }
+        if (notes) {
+            task.notes = notes;
+        }
+
+        await task.save();
+        res.send({ success: true, task: task });
+    } catch (err) {
+        res.send(returnFailure('Error updating task'));
+    }
+});
+
+app.post('/api/deleteTask', async (req, res) => {
+    // Check if user is logged in
+    if (!req.user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    const { taskId } = req.body;
+    if (!taskId) {
+        return res.send(returnFailure('Task id is required'));
+    }
+
+    try {
+        const task = await TaskDetails.findOne({ _id: taskId, userRef: req.user._id });
+        if (!task) {
+            return res.send(returnFailure('Task not found'));
+        }
+        await task.remove();
+        // Return the updated task list
+        const returnTaskList = await getTaskListFromUserID(req.user._id);
+        return res.json({success: true, taskList: returnTaskList});
+    } catch (err) {
+        res.send(returnFailure('Error deleting task'));
+    }
+});
+
+app.get("/api/getUserTasks", async (req, res) => {
+    try {
+        // Return the updated task list
+        const returnTaskList = await getTaskListFromUserID(req.user._id);
+        return res.json({success: true, taskList: returnTaskList});
+    } catch (error) {
+        console.error(error);
+        return res.json({ success: false });
+    }
 });
