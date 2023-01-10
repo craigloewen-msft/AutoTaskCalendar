@@ -9,6 +9,7 @@
         <b-collapse id="nav-collapse" is-nav>
           <b-navbar-nav v-if="isLoggedIn">
             <!--- Add in items for logged in only --->
+            <Bootstrapnavlinkcustom to="/calendar">Calendar</Bootstrapnavlinkcustom>
           </b-navbar-nav>
           <b-navbar-nav>
             <Bootstrapnavlinkcustom to="/about">About</Bootstrapnavlinkcustom>

@@ -181,7 +181,7 @@ app.post('/api/register', async function (req, res) {
         let registeredUser = await UserDetails.register({ username: req.body.username, email: req.body.email }, req.body.password);
 
         let token = jwt.sign({ id: req.body.username }, config.secret, { expiresIn: JWTTimeout });
-        let response = { success: true, auth: true, token: token, user: registeredUser };
+        let response = { success: true, auth: true, token: token, user: returnBasicUserInfo(registeredUser) };
         return res.json(response);
     }
     catch (error) {
