@@ -4,9 +4,7 @@
     <div class="calendar-box">
       <div class="task-controls">
         <h2>Controls</h2>
-        <button class="btn btn-primary" @click="addSampleTask()">
-          Add Task
-        </button>
+        <b-button v-b-modal.modal-1>Add Task</b-button>
         <div class="task-list">
           <h2>Task List</h2>
           <ul>
@@ -23,6 +21,58 @@
         </div>
       </div>
     </div>
+    <b-modal
+      id="modal-1"
+      ref="addtaskmodal"
+      @ok="addSampleTask"
+      title="Add Task"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-body">
+            <div v-if="input.error">{{ input.error }}</div>
+            <form ref="form" @submit.stop.prevent="handleSubmit">
+              <div class="form-group">
+                <label for="task-title">Task Title</label>
+                <input
+                  type="text"
+                  v-model="input.taskTitle"
+                  class="form-control"
+                  id="task-title"
+                  placeholder="Enter task title"
+                />
+              </div>
+              <div class="form-group">
+                <label for="task-due-date">Due Date</label>
+                <b-calendar
+                  v-model="input.taskDueDate"
+                  class="mb-2"
+                ></b-calendar>
+              </div>
+              <div class="form-group">
+                <label for="task-duration">Duration</label>
+                <input
+                  type="number"
+                  v-model="input.taskDuration"
+                  class="form-control"
+                  id="task-duration"
+                />
+              </div>
+              <div class="form-group">
+                <label for="task-notes">Notes</label>
+                <input
+                  type="text"
+                  v-model="input.taskNotes"
+                  class="form-control"
+                  id="task-notes"
+                  placeholder="Enter task notes"
+                />
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </b-modal>
   </div>
 </template>
 
@@ -38,6 +88,8 @@ export default {
     return {
       config: {
         viewType: "Week",
+        businessBeginsHour: 10,
+        businessEndsHour: 18,
         onTimeRangeSelected: async (args) => {
           const modal = await DayPilot.Modal.prompt(
             "Create a new event:",
@@ -48,62 +100,136 @@ export default {
           if (modal.canceled) {
             return;
           }
-          dp.events.add({
-            start: args.start,
-            end: args.end,
-            id: DayPilot.guid(),
-            text: modal.result,
-          });
+          // Make an API call to create the event in the backend
+          try {
+            const response = await this.$http.post("/api/createEvent", {
+              title: modal.result,
+              startDate: args.start,
+              endDate: args.end,
+            });
+            if (response.data.success) {
+              // Add the event to the calendar if the backend creation was successful
+              dp.events.add({
+                start: args.start,
+                end: args.end,
+                id: response.data.event._id,
+                text: modal.result,
+              });
+            } else {
+              console.log("Error here");
+              console.error(response.data.error);
+            }
+          } catch (error) {
+              console.log("Error here2");
+            console.error(error);
+          }
+        },
+        onEventMove: async (args) => {
+          try {
+            const response = await this.$http.post("/api/updateEvent", {
+              eventId: args.e.data.id,
+              startDate: args.newStart.toString(),
+              endDate: args.newEnd.toString(),
+            });
+            if (!response.data.success) {
+              console.error(response.data.error);
+            }
+          } catch (error) {
+            console.error(error);
+          }
+        },
+        onEventResize: async (args) => {
+          try {
+            const response = await this.$http.post("/api/updateEvent", {
+              eventId: args.e.data.id,
+              startDate: args.newStart.toString(),
+              endDate: args.newEnd.toString(),
+            });
+            if (!response.data.success) {
+              console.error(response.data.error);
+            }
+          } catch (error) {
+            console.error(error);
+          }
         },
       },
       user: this.$store.state.user,
       taskList: null,
+      input: {
+        taskTitle: null,
+        taskDueDate: null,
+        taskDuration: null,
+        taskNotes: null,
+        error: null,
+      },
+      showModal: false,
+      currentDate: new Date(),
     };
   },
   methods: {
     async loadData() {
-
       const taskDataResponse = await this.$http.get("/api/getUserTasks/");
       this.taskList = taskDataResponse.data.taskList;
 
-      // placeholder for an AJAX call
-      const events = [
-        {
-          id: 1,
-          start: "2023-01-09T10:00:00",
-          end: "2023-01-09T11:00:00",
-          text: "Event 1",
-        },
-        {
-          id: 2,
-          start: "2023-01-10T13:00:00",
-          end: "2023-01-10T16:00:00",
-          text: "Event 2",
-        },
-      ];
-      this.calendar.update({ events });
+      const eventDataResponse = await this.$http.get(
+        `/api/getUserEvents/${this.currentDate}`
+      );
+      const events = eventDataResponse.data.events;
+      // use map function to transform the events
+      const eventsToAdd = events.map((event) => {
+        return {
+          id: event._id,
+          start: event.startDate,
+          end: event.endDate,
+          text: event.title,
+        };
+      });
+      this.calendar.update({ events: eventsToAdd });
     },
-    async addSampleTask() {
+    async addSampleTask(bvModalEvent) {
+      // Prevent modal from closing
+      bvModalEvent.preventDefault();
+
+      this.input.error = "";
+
+      if (!this.input.taskTitle) {
+        this.input.error = "Need task title";
+      } else if (!this.input.taskDueDate) {
+        this.input.error = "Need task due date";
+      } else if (!this.input.taskDuration) {
+        this.input.error = "Need duration";
+      }
+
+      if (this.input.error) {
+        return;
+      }
+
+      this.$nextTick(() => {
+        this.$refs.addtaskmodal.hide();
+      });
+
       try {
         const response = await this.$http.post("/api/createTask/", {
-          title: "Sample Task",
-          dueDate: new Date(),
-          duration: 30,
-          notes: "This is a sample task added from the frontend",
+          title: this.input.taskTitle,
+          dueDate: this.input.taskDueDate,
+          duration: this.input.taskDuration,
+          notes: this.input.taskNotes,
         });
         this.taskList = response.data.taskList;
+
+        Object.keys(this.input).forEach((i) => (this.input[i] = null));
       } catch (error) {
         console.error(error);
       }
     },
     async deleteTask(taskId) {
-        try {
-            const response = await this.$http.post(`/api/deleteTask`, {taskId});
-            // refresh task list after deletion
-            this.taskList = response.data.taskList;
-        } catch (error) {
-            console.error(error);
-        }
+      try {
+        const response = await this.$http.post(`/api/deleteTask`, { taskId });
+        // refresh task list after deletion
+        this.taskList = response.data.taskList;
+      } catch (error) {
+        console.error(error);
+      }
     },
   },
   computed: {

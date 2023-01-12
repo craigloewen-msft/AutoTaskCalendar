@@ -45,6 +45,12 @@ UserDetail.virtual('taskList', {
     foreignField: 'userRef'
 });
 
+UserDetail.virtual('eventList', {
+    ref: 'eventInfo',
+    localField: '_id',
+    foreignField: 'userRef'
+});
+
 const TaskDetail = new Schema({
     title: String,
     dueDate: Date,
@@ -53,11 +59,21 @@ const TaskDetail = new Schema({
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
 })
 
+// Add a new schema for events
+const EventDetail = new Schema({
+    title: String,
+    startDate: Date,
+    endDate: Date,
+    notes: String,
+    userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
+});
+
 mongoose.connect(mongooseConnectionString, { useNewUrlParser: true, useUnifiedTopology: true });
 
 UserDetail.plugin(passportLocalMongoose);
 const UserDetails = mongoose.model('userInfo', UserDetail, 'userInfo');
 const TaskDetails = mongoose.model('taskInfo', TaskDetail, 'taskInfo');
+const EventDetails = mongoose.model('eventInfo', EventDetail, 'eventInfo');
 
 const JWTTimeout = 4 * 604800; // 28 Days
 
@@ -230,10 +246,14 @@ app.post('/api/createTask', async (req, res) => {
     }
 
     try {
+        // Make the due date at the end of the specified day:
+        let taskDate = new Date(req.body.dueDate);
+        taskDate.setUTCHours(23, 59, 59, 999);
+
         // Create the new task
         const task = new TaskDetails({
             title: req.body.title,
-            dueDate: req.body.dueDate,
+            dueDate: taskDate,
             notes: req.body.notes,
             duration: req.body.duration,
             userRef: req.user._id
@@ -314,5 +334,156 @@ app.get("/api/getUserTasks", async (req, res) => {
     } catch (error) {
         console.error(error);
         return res.json({ success: false });
+    }
+});
+
+// Event management routes
+
+// - Helper function
+async function getEventListFromUserID(inUserID) {
+    let user = await UserDetails.findById(inUserID).populate('eventList');
+    return user.eventList;
+}
+
+
+async function createEvent(userId, title, startDate, endDate, notes) {
+    try {
+        // Create the new event
+        const event = new EventDetails({
+            title: title,
+            startDate: startDate,
+            endDate: endDate,
+            notes: notes,
+            userRef: userId
+        });
+        await event.save();
+        return event;
+    } catch (error) {
+        console.error(error);
+        throw new Error("Error creating event");
+    }
+}
+
+async function updateEvent(eventId, userId, title, startDate, endDate, notes) {
+    try {
+        const event = await EventDetails.findOne({ _id: eventId, userRef: userId });
+        if (!event) {
+            throw new Error("Event not found");
+        }
+        if (title) {
+            event.title = title;
+        }
+        if (startDate) {
+            event.startDate = startDate;
+        }
+        if (endDate) {
+            event.endDate = endDate;
+        }
+        if (notes) {
+            event.notes = notes;
+        }
+
+        await event.save();
+        return event;
+    } catch (err) {
+        throw new Error("Error updating event");
+    }
+}
+
+async function deleteEvent(eventId, userId) {
+    try {
+        const event = await EventDetails.findOne({ _id: eventId, userRef: userId });
+        if (!event) {
+            throw new Error("Event not found");
+        }
+        await event.remove();
+    } catch (err) {
+        throw new Error("Error deleting event");
+    }
+}
+
+// Event management routes
+
+app.post('/api/createEvent', async (req, res) => {
+    // Check if user is logged in
+    if (!req.user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    const { title, startDate, endDate, notes } = req.body;
+    if (!title || !startDate || !endDate) {
+        return res.send(returnFailure('Title, start date, and end date are required'));
+    }
+
+    try {
+        const event = await createEvent(req.user._id, title, startDate, endDate, notes);
+        return res.json({success: true, event});
+    } catch (error) {
+        console.error(error);
+        return res.json({ success: false });
+    }
+});
+
+app.post('/api/updateEvent', async (req, res) => {
+    // Check if user is logged in
+    if (!req.user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    const { eventId, title, startDate, endDate, notes } = req.body;
+    if (!eventId) {
+        return res.send(returnFailure('Event id is required'));
+    }
+
+    try {
+        const event = await updateEvent(eventId, req.user._id, title, startDate, endDate, notes);
+        res.send({ success: true, event });
+    } catch (err) {
+        res.send(returnFailure(err.message));
+    }
+});
+
+app.post('/api/deleteEvent', async (req, res) => {
+    // Check if user is logged in
+    if (!req.user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    const { eventId } = req.body;
+    if (!eventId) {
+        return res.send(returnFailure('Event id is required'));
+    }
+
+    try {
+        await deleteEvent(eventId, req.user._id);
+        // Return the updated event list
+        const returnEventList = await getEventListFromUserID(req.user._id);
+        return res.json({success: true, eventList: returnEventList});
+    } catch (err) {
+        res.send(returnFailure(err.message));
+    }
+});
+
+app.get("/api/getUserEvents/:date", async (req, res) => {
+    // Check if user is logged in
+    if (!req.user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+    try {
+        const date = new Date(req.params.date);
+        const startOfWeek = new Date(date);
+        startOfWeek.setUTCDate(startOfWeek.getUTCDate() - startOfWeek.getUTCDay());
+        startOfWeek.setUTCHours(0,0,0);
+        const endOfWeek = new Date(date);
+        endOfWeek.setUTCDate(endOfWeek.getUTCDate() + (7 - endOfWeek.getUTCDay()));
+        endOfWeek.setUTCHours(23,59,59);
+        const events = await EventDetails.find({
+            userRef: req.user._id,
+            startDate: {$gte: startOfWeek, $lt: endOfWeek}
+        });
+        return res.json({ success: true, events });
+    } catch (err) {
+        console.error(err);
+        return res.send(returnFailure(err.message));
     }
 });
