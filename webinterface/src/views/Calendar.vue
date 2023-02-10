@@ -170,10 +170,18 @@ export default {
     async loadData() {
       const taskDataResponse = await this.$http.get("/api/getUserTasks/");
       this.taskList = taskDataResponse.data.taskList;
+      if (!taskDataResponse.data.success) {
+        console.error("Task retrieval error");
+      }
 
       const eventDataResponse = await this.$http.get(
         `/api/getUserEvents/${this.currentDate}`
       );
+
+      if (!eventDataResponse.data.success) {
+        console.error("Event retrieval error");
+      }
+      
       const events = eventDataResponse.data.events;
       // use map function to transform the events
       const eventsToAdd = events.map((event) => {

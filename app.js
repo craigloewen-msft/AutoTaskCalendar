@@ -65,6 +65,7 @@ const EventDetail = new Schema({
     startDate: Date,
     endDate: Date,
     notes: String,
+    type: String,
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
 });
 
@@ -229,14 +230,17 @@ app.post('/api/register', async function (req, res) {
 // Task management routes
 
 // - Helper functions
-async function getTaskListFromUserID(inUserID) {
-    let user = await UserDetails.findById(inUserID).populate('taskList');
+async function getTaskListFromUsername(inUsername) {
+    let user = await UserDetails.findOne({ username: inUsername }).populate('taskList');
     return user.taskList;
 }
 
-app.post('/api/createTask', async (req, res) => {
+app.post('/api/createTask', authenticateToken, async (req, res) => {
     // Check if user is logged in
-    if (!req.user) {
+
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
         return res.send(returnFailure('Not logged in'));
     }
 
@@ -256,21 +260,27 @@ app.post('/api/createTask', async (req, res) => {
             dueDate: taskDate,
             notes: req.body.notes,
             duration: req.body.duration,
-            userRef: req.user._id
+            userRef: user._id
         });
         await task.save();
         // Return the updated task list
-        const returnTaskList = await getTaskListFromUserID(req.user._id);
-        return res.json({success: true, taskList: returnTaskList});
+        const returnTaskList = await getTaskListFromUsername(req.user.id);
+
+        await generateTaskEvents(user);
+
+        return res.json({ success: true, taskList: returnTaskList });
     } catch (error) {
         console.error(error);
         return res.json({ success: false });
     }
 });
 
-app.post('/api/updateTask', async (req, res) => {
+app.post('/api/updateTask', authenticateToken, async (req, res) => {
     // Check if user is logged in
-    if (!req.user) {
+
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
         return res.send(returnFailure('Not logged in'));
     }
 
@@ -280,7 +290,7 @@ app.post('/api/updateTask', async (req, res) => {
     }
 
     try {
-        const task = await TaskDetails.findOne({ _id: taskId, userRef: req.user._id });
+        const task = await TaskDetails.findOne({ _id: taskId, userRef: user._id });
         if (!task) {
             return res.send(returnFailure('Task not found'));
         }
@@ -301,9 +311,11 @@ app.post('/api/updateTask', async (req, res) => {
     }
 });
 
-app.post('/api/deleteTask', async (req, res) => {
+app.post('/api/deleteTask', authenticateToken, async (req, res) => {
     // Check if user is logged in
-    if (!req.user) {
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
         return res.send(returnFailure('Not logged in'));
     }
 
@@ -313,24 +325,24 @@ app.post('/api/deleteTask', async (req, res) => {
     }
 
     try {
-        const task = await TaskDetails.findOne({ _id: taskId, userRef: req.user._id });
+        const task = await TaskDetails.findOne({ _id: taskId, userRef: user._id });
         if (!task) {
             return res.send(returnFailure('Task not found'));
         }
         await task.remove();
         // Return the updated task list
-        const returnTaskList = await getTaskListFromUserID(req.user._id);
-        return res.json({success: true, taskList: returnTaskList});
+        const returnTaskList = await getTaskListFromUsername(req.user.id);
+        return res.json({ success: true, taskList: returnTaskList });
     } catch (err) {
         res.send(returnFailure('Error deleting task'));
     }
 });
 
-app.get("/api/getUserTasks", async (req, res) => {
+app.get("/api/getUserTasks", authenticateToken, async (req, res) => {
     try {
         // Return the updated task list
-        const returnTaskList = await getTaskListFromUserID(req.user._id);
-        return res.json({success: true, taskList: returnTaskList});
+        const returnTaskList = await getTaskListFromUsername(req.user.id);
+        return res.json({ success: true, taskList: returnTaskList });
     } catch (error) {
         console.error(error);
         return res.json({ success: false });
@@ -340,13 +352,13 @@ app.get("/api/getUserTasks", async (req, res) => {
 // Event management routes
 
 // - Helper function
-async function getEventListFromUserID(inUserID) {
-    let user = await UserDetails.findById(inUserID).populate('eventList');
+async function getEventListFromUsername(inUsername) {
+    let user = await UserDetails.findOne({ username: inUsername }).populate('eventList');
     return user.eventList;
 }
 
 
-async function createEvent(userId, title, startDate, endDate, notes) {
+async function createEvent(userId, title, startDate, endDate, notes, type) {
     try {
         // Create the new event
         const event = new EventDetails({
@@ -354,6 +366,7 @@ async function createEvent(userId, title, startDate, endDate, notes) {
             startDate: startDate,
             endDate: endDate,
             notes: notes,
+            type: type,
             userRef: userId
         });
         await event.save();
@@ -404,9 +417,12 @@ async function deleteEvent(eventId, userId) {
 
 // Event management routes
 
-app.post('/api/createEvent', async (req, res) => {
+app.post('/api/createEvent', authenticateToken, async (req, res) => {
     // Check if user is logged in
-    if (!req.user) {
+
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
         return res.send(returnFailure('Not logged in'));
     }
 
@@ -416,17 +432,19 @@ app.post('/api/createEvent', async (req, res) => {
     }
 
     try {
-        const event = await createEvent(req.user._id, title, startDate, endDate, notes);
-        return res.json({success: true, event});
+        const event = await createEvent(user._id, title, startDate, endDate, notes, 'calendar');
+        return res.json({ success: true, event });
     } catch (error) {
         console.error(error);
         return res.json({ success: false });
     }
 });
 
-app.post('/api/updateEvent', async (req, res) => {
+app.post('/api/updateEvent', authenticateToken, async (req, res) => {
     // Check if user is logged in
-    if (!req.user) {
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!user) {
         return res.send(returnFailure('Not logged in'));
     }
 
@@ -436,16 +454,18 @@ app.post('/api/updateEvent', async (req, res) => {
     }
 
     try {
-        const event = await updateEvent(eventId, req.user._id, title, startDate, endDate, notes);
+        const event = await updateEvent(eventId, user._id, title, startDate, endDate, notes);
         res.send({ success: true, event });
     } catch (err) {
         res.send(returnFailure(err.message));
     }
 });
 
-app.post('/api/deleteEvent', async (req, res) => {
+app.post('/api/deleteEvent', authenticateToken, async (req, res) => {
     // Check if user is logged in
-    if (!req.user) {
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
         return res.send(returnFailure('Not logged in'));
     }
 
@@ -455,31 +475,33 @@ app.post('/api/deleteEvent', async (req, res) => {
     }
 
     try {
-        await deleteEvent(eventId, req.user._id);
+        await deleteEvent(eventId, user._id);
         // Return the updated event list
-        const returnEventList = await getEventListFromUserID(req.user._id);
-        return res.json({success: true, eventList: returnEventList});
+        const returnEventList = await getEventListFromUsername(req.user.id);
+        return res.json({ success: true, eventList: returnEventList });
     } catch (err) {
         res.send(returnFailure(err.message));
     }
 });
 
-app.get("/api/getUserEvents/:date", async (req, res) => {
+app.get("/api/getUserEvents/:date", authenticateToken, async (req, res) => {
     // Check if user is logged in
-    if (!req.user) {
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
         return res.send(returnFailure('Not logged in'));
     }
     try {
         const date = new Date(req.params.date);
         const startOfWeek = new Date(date);
         startOfWeek.setUTCDate(startOfWeek.getUTCDate() - startOfWeek.getUTCDay());
-        startOfWeek.setUTCHours(0,0,0);
+        startOfWeek.setUTCHours(0, 0, 0);
         const endOfWeek = new Date(date);
         endOfWeek.setUTCDate(endOfWeek.getUTCDate() + (7 - endOfWeek.getUTCDay()));
-        endOfWeek.setUTCHours(23,59,59);
+        endOfWeek.setUTCHours(23, 59, 59);
         const events = await EventDetails.find({
-            userRef: req.user._id,
-            startDate: {$gte: startOfWeek, $lt: endOfWeek}
+            userRef: user._id,
+            startDate: { $gte: startOfWeek, $lt: endOfWeek }
         });
         return res.json({ success: true, events });
     } catch (err) {
@@ -487,3 +509,78 @@ app.get("/api/getUserEvents/:date", async (req, res) => {
         return res.send(returnFailure(err.message));
     }
 });
+
+// Event-task management functions
+
+async function generateTaskEvents(inUser) {
+    const currentTime = new Date();
+    // Clear out old events
+    await EventDetails.deleteMany({ userRef: inUser._id, type: 'task' });
+
+    // Get the TaskDetails sorted in order of their deadlines, earliest first. Only get tasks that have deadlines less than 2 weeks from now
+    const twoWeeksFromNow = new Date(currentTime.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const sortedTasks = await TaskDetails.find({
+        userRef: inUser._id,
+    }).sort({ dueDate: 1 });
+
+    // Query the EventDetails sorted in order of when they appear, up to 2 weeks from now
+    const sortedEvents = await EventDetails.find({
+        userRef: inUser._id,
+        startDate: { $lte: twoWeeksFromNow },
+        endDate: { $gte: currentTime }
+    }).sort({ startDate: 1 });
+
+    // Start organizing the tasks into events:
+    let currentExaminedTime = currentTime;
+    let eventIndex = 0;
+    while (sortedTasks.length > 0) {
+        let nextEvent = null; 
+        try {
+            nextEvent = sortedEvents[eventIndex];
+        } catch {
+            nextEvent = null;
+        }
+
+        // Get the amount of time between the current examined time and the next event
+        let timeBetween = 999 * 24 * 60 * 60 * 1000;
+        if (nextEvent) {
+            timeBetween = nextEvent.startDate.getTime() - currentExaminedTime.getTime();
+        }
+        // Determine if a task can fit into that timeslot (Starting with the earliest tasks first)
+        let insertedTask = false;
+        for (let k = 0; k < sortedTasks.length; k++) {
+            const task = sortedTasks[k];
+            const taskDuration = task.duration * 60 * 1000;
+            if (timeBetween > taskDuration) {
+                // Create a new task event from the task
+                const taskEvent = new EventDetails({
+                    title: task.title,
+                    startDate: currentExaminedTime,
+                    endDate: new Date(currentExaminedTime.getTime() + taskDuration),
+                    notes: task.notes,
+                    type: 'task',
+                    userRef: inUser._id,
+                });
+                await taskEvent.save();
+
+                // Remove the task from the list
+                sortedTasks.splice(k, 1);
+
+                // Set the examined time to the endDate of this last task
+                currentExaminedTime = taskEvent.endDate;
+                insertedTask = true;
+                break;
+            }
+        }
+
+        if (!insertedTask) {
+            // Set the examined time to be the next event's end time
+            currentExaminedTime = new Date(nextEvent.endDate)
+            eventIndex++;
+        }
+
+        // Hnadle case of no more events. What if there are multiple tasks?
+    }
+
+    return;
+}
