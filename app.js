@@ -37,6 +37,9 @@ const UserDetail = new Schema({
     password: String,
     email: String,
     lastLoginDate: Date,
+    workingStartTime: String,
+    workingEndTime: String,
+    workingDays: [String],
 }, { collection: 'usercollection' });
 
 UserDetail.virtual('taskList', {
@@ -123,7 +126,7 @@ function returnFailure(messageString) {
 
 async function returnBasicUserInfo(inputUser) {
     inputUser = await inputUser.populate('taskList');
-    return { username: inputUser.username, email: inputUser.email, _id: inputUser._id, taskList: inputUser.taskList };
+    return { username: inputUser.username, email: inputUser.email, _id: inputUser._id, taskList: inputUser.taskList, workingStartTime, workingEndTime, workingDays };
 }
 
 // Middleware function
@@ -220,6 +223,32 @@ app.post('/api/register', async function (req, res) {
         let returnUserInfo = await returnBasicUserInfo(registeredUser);
 
         let response = { success: true, auth: true, token: token, user: returnUserInfo };
+        return res.json(response);
+    }
+    catch (error) {
+        return res.json(returnFailure(error));
+    }
+});
+
+app.post('/api/setuserworkinghours', authenticateToken, async function (req, res) {
+    try {
+        let user = await UserDetails.findOne({ username: req.user.id });
+
+        if (!req.user || !user) {
+            return res.send(returnFailure('Not logged in'));
+        }
+
+        const { workingStartTime, workingEndTime, workingDays } = req.body;
+
+        // Update user object
+        user.workingStartTime = workingStartTime;
+        user.workingEndTime = workingEndTime;
+        user.workingDays = workingDays;
+
+        // Save the updated user object
+        let savedUser = await user.save();
+
+        let response = { success: true, user: savedUser };
         return res.json(response);
     }
     catch (error) {
@@ -534,7 +563,7 @@ async function generateTaskEvents(inUser) {
     let currentExaminedTime = currentTime;
     let eventIndex = 0;
     while (sortedTasks.length > 0) {
-        let nextEvent = null; 
+        let nextEvent = null;
         try {
             nextEvent = sortedEvents[eventIndex];
         } catch {

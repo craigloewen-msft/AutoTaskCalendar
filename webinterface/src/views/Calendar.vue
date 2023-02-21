@@ -16,6 +16,10 @@
         </div>
       </div>
       <div class="main-calendar">
+        <div class="calendar-controls">
+          <button v-on:click="nextWeek">N</button>
+          <button v-on:click="prevWeek">P</button>
+          </div>
         <div class="calendar">
           <DayPilotCalendar :config="config" ref="calendar" id="dp" />
         </div>
@@ -90,6 +94,7 @@ export default {
         viewType: "Week",
         businessBeginsHour: 10,
         businessEndsHour: 18,
+        startDate: new DayPilot.Date().firstDayOfWeek(),
         onTimeRangeSelected: async (args) => {
           const modal = await DayPilot.Modal.prompt(
             "Create a new event:",
@@ -239,6 +244,12 @@ export default {
         console.error(error);
       }
     },
+    prevWeek() {
+      this.config.startDate = this.config.startDate.addDays(-7);
+    },
+    nextWeek() {
+      this.config.startDate = this.config.startDate.addDays(7);
+    }
   },
   computed: {
     calendar() {
