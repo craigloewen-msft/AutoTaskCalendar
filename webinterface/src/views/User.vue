@@ -39,7 +39,7 @@ export default {
   data() {
     return {
       user: this.$store.state.user,
-      input: { startTime: this.$store.state.user.workingStartTime, endTime: this.$store.state.user.workingEndTime, selectedWeekdays: this.$store.state.user.workingDays? this.$store.state.user.workingDays:[]  },
+      input: { startTime: null, endTime: null, selectedWeekdays: this.$store.state.user.workingDays? this.$store.state.user.workingDays:[]  },
     };
   },
   methods: {
@@ -48,6 +48,7 @@ export default {
         workingStartTime: this.input.startTime,
         workingEndTime: this.input.endTime,
         workingDays: this.input.selectedWeekdays,
+        timeZoneOffset: new Date().getTimezoneOffset(),
       };
 
     try {
@@ -63,9 +64,15 @@ export default {
       console.error(error);
     }
     },
+    convertDateToHourString(inDate) {
+      let inputDate = new Date(inDate);
+      let returnValue = inputDate.getHours().toString().padStart(2,'0') + ":" + inputDate.getMinutes().toString().padStart(2,'0');
+      return returnValue 
+    },
   },
-  mounted() {
-
+  created() {
+    this.input.startTime = this.convertDateToHourString(this.$store.state.user.workingStartTime);
+    this.input.endTime = this.convertDateToHourString(this.$store.state.user.workingEndTime);
   },
 };
 </script>
