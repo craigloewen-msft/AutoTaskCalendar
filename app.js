@@ -7,6 +7,8 @@ const MongoStore = require('connect-mongo')
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const connectEnsureLogin = require('connect-ensure-login');
+const { google } = require('googleapis');
+const process = require('process');
 // Custom requires
 // Get config
 const config = fs.existsSync('./config.js') ? require('./config') : require('./defaultconfig');
@@ -23,9 +25,13 @@ if (process.env.NODE_ENV == 'production') {
     mongooseConnectionString = process.env.prodMongoDBConnectionString;
     config.secret = process.env.secret;
     config.sessionSecret = process.env.sessionSecret;
+    config.googleOAuthClientID = process.env.googleOAuthClientID;
+    config.googleOAuthClientSecret = process.env.googleOAuthClientSecret;
+    config.appUrl = process.env.appUrl;
     hostPort = 8080;
 } else {
     mongooseConnectionString = config.devMongoDBConnectionString;
+    config.appUrl = "localhost:3000";
     hostPort = 3000;
 }
 
@@ -40,6 +46,9 @@ const UserDetail = new Schema({
     workingStartTime: Date,
     workingEndTime: Date,
     workingDays: [String],
+    googleAccessToken: String,
+    googleRefreshToken: String,
+    selectedCalendars: [String],
 }, { collection: 'usercollection' });
 
 UserDetail.virtual('taskList', {
@@ -69,6 +78,7 @@ const EventDetail = new Schema({
     endDate: Date,
     notes: String,
     type: String,
+    externalEventID: String,
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
 });
 
@@ -126,7 +136,10 @@ function returnFailure(messageString) {
 
 async function returnBasicUserInfo(inputUser) {
     inputUser = await inputUser.populate('taskList');
-    return { username: inputUser.username, email: inputUser.email, _id: inputUser._id, taskList: inputUser.taskList, workingStartTime: inputUser.workingStartTime, workingEndTime: inputUser.workingEndTime, workingDays: inputUser.workingDays };
+    return {
+        username: inputUser.username, email: inputUser.email, _id: inputUser._id, taskList: inputUser.taskList, workingStartTime: inputUser.workingStartTime,
+        workingEndTime: inputUser.workingEndTime, workingDays: inputUser.workingDays, selectedCalendars: inputUser.selectedCalendars
+    };
 }
 
 // Middleware function
@@ -235,7 +248,7 @@ app.post('/api/register', async function (req, res) {
     }
 });
 
-app.post('/api/setuserworkinghours', authenticateToken, async function (req, res) {
+app.post('/api/updateuserinfo', authenticateToken, async function (req, res) {
     try {
         let user = await UserDetails.findOne({ username: req.user.id });
 
@@ -243,7 +256,7 @@ app.post('/api/setuserworkinghours', authenticateToken, async function (req, res
             return res.send(returnFailure('Not logged in'));
         }
 
-        const { workingStartTime, workingEndTime, workingDays, timeZoneOffset } = req.body;
+        const { workingStartTime, workingEndTime, workingDays, timeZoneOffset, selectedCalendars } = req.body;
 
         let timeZoneDifferenceMins = timeZoneOffset;
 
@@ -267,6 +280,7 @@ app.post('/api/setuserworkinghours', authenticateToken, async function (req, res
         user.workingStartTime = startDate;
         user.workingEndTime = endDate;
         user.workingDays = workingDays;
+        user.selectedCalendars = selectedCalendars;
 
         // Save the updated user object
         let savedUser = await user.save();
@@ -317,8 +331,6 @@ app.post('/api/createTask', authenticateToken, async (req, res) => {
         await task.save();
         // Return the updated task list
         const returnTaskList = await getTaskListFromUsername(req.user.id);
-
-        await generateTaskEvents(user);
 
         return res.json({ success: true, taskList: returnTaskList });
     } catch (error) {
@@ -392,7 +404,11 @@ app.post('/api/deleteTask', authenticateToken, async (req, res) => {
 
 app.get("/api/getUserTasks", authenticateToken, async (req, res) => {
     try {
-        // Return the updated task list
+        let user = await UserDetails.findOne({ username: req.user.id });
+
+        if (!req.user || !user) {
+            return res.send(returnFailure('Not logged in'));
+        }
         const returnTaskList = await getTaskListFromUsername(req.user.id);
         return res.json({ success: true, taskList: returnTaskList });
     } catch (error) {
@@ -400,6 +416,23 @@ app.get("/api/getUserTasks", authenticateToken, async (req, res) => {
         return res.json({ success: false });
     }
 });
+
+app.get("/api/scheduletasks", authenticateToken, async (req, res) => {
+    try {
+        let user = await UserDetails.findOne({ username: req.user.id });
+
+        if (!req.user || !user) {
+            return res.send(returnFailure('Not logged in'));
+        }
+
+        await generateTaskEvents(user);
+        return res.json({ success: true });
+    } catch (error) {
+        console.error(error);
+        return res.json({ success: false });
+    }
+});
+
 
 // Event management routes
 
@@ -551,11 +584,184 @@ app.get("/api/getUserEvents/:date", authenticateToken, async (req, res) => {
         const endOfWeek = new Date(date);
         endOfWeek.setUTCDate(endOfWeek.getUTCDate() + (7 - endOfWeek.getUTCDay()));
         endOfWeek.setUTCHours(23, 59, 59);
-        const events = await EventDetails.find({
-            userRef: user._id,
-            startDate: { $gte: startOfWeek, $lt: endOfWeek }
+
+        // Check if user has a Google Calendar access token
+        if (!user.googleAccessToken) {
+            return res.json({ success: true, events: [] });
+        }
+
+        // Sync Google Calendar events to events database
+        const oauth2Client = new google.auth.OAuth2();
+        oauth2Client.setCredentials({
+            access_token: user.googleAccessToken,
+            refresh_token: user.googleRefreshToken
         });
-        return res.json({ success: true, events });
+
+        const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+
+        // const eventsResponse = await calendar.events.list({
+        //     calendarId: "primary",
+        //     timeMin: startOfWeek.toISOString(),
+        //     timeMax: endOfWeek.toISOString(),
+        //     maxResults: 2500,
+        //     singleEvents: true,
+        //     orderBy: "startTime"
+        // });
+
+        // Array of calendar IDs
+        const calendarIds = user.selectedCalendars;
+
+        // Array of promises that get events for each calendar
+        const eventsPromises = calendarIds.map(async (calendarId) => {
+            const eventsResponse = await calendar.events.list({
+                calendarId,
+                timeMin: startOfWeek.toISOString(),
+                timeMax: endOfWeek.toISOString(),
+                maxResults: 2500,
+                singleEvents: true,
+                orderBy: "startTime",
+            });
+            return eventsResponse.data.items;
+        });
+
+        // Wait for all promises to resolve
+        const eventsResults = await Promise.all(eventsPromises);
+
+        // Merge events from all calendars into one array
+        const eventsResponse = eventsResults.reduce((accumulator, currentValue) => {
+            return [...accumulator, ...currentValue];
+        }, []);
+
+        const eventsData = eventsResponse;
+
+        const events = await Promise.all(
+            eventsData.map(async (eventData) => {
+                let event = await EventDetails.findOne({
+                    externalEventID: eventData.id,
+                    userRef: user._id
+                });
+
+                if (!event) {
+                    event = new EventDetails({
+                        externalEventID: eventData.id,
+                        userRef: user._id,
+                        title: eventData.summary,
+                        startDate: eventData.start.dateTime || eventData.start.date,
+                        endDate: eventData.end.dateTime || eventData.end.date,
+                        notes: eventData.description,
+                        type: "google"
+                    });
+                    await event.save();
+                }
+
+                return event;
+            })
+        );
+
+        // Delete all events that are not in the Google Calendar
+        await EventDetails.deleteMany({
+            userRef: user._id,
+            type: "google",
+            eventId: { $nin: eventsData.map((eventData) => eventData.id) }
+        });
+
+        // Get the user's events from the database
+        const databaseEventList = await EventDetails.find({
+            userRef: user._id,
+            startDate: { $gte: startOfWeek, $lt: endOfWeek },
+            type: { $ne: "google" }
+        });
+
+        // Combine the Google Calendar events and the user's events
+        const combinedEvents = [...events, ...databaseEventList];
+
+        return res.json({ success: true, events: combinedEvents });
+    } catch (err) {
+        console.error(err);
+        return res.send(returnFailure(err.message));
+    }
+});
+
+
+// Google Calendar API functions
+
+app.get('/api/connectGoogle', authenticateToken, async (req, res) => {
+    // Check if user is logged in
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    // Generate a URL for the user to connect their Google account
+    const oauth2Client = new google.auth.OAuth2(
+        config.googleOAuthClientID,
+        config.googleOAuthClientSecret,
+        `http://${config.appUrl}/api/connectGoogleCallback`
+    );
+
+    const scopes = [
+        'https://www.googleapis.com/auth/calendar.readonly',
+    ];
+
+    const authUrl = oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: scopes,
+        state: user._id.toString(),
+    });
+
+    return res.send({ authUrl });
+});
+
+app.get('/api/connectGoogleCallback', async (req, res) => {
+    // Get the user's ID from the state parameter
+    const userId = req.query.state;
+
+    // Check if user is logged in
+    let user = await UserDetails.findById(userId);
+
+    if (!user) {
+        return res.send(returnFailure('User not found'));
+    }
+
+    // Exchange the authorization code for an access token
+    const oauth2Client = new google.auth.OAuth2(
+        config.googleOAuthClientID,
+        config.googleOAuthClientSecret,
+        `http://${config.appUrl}/api/connectGoogleCallback`
+    );
+
+    try {
+        const { tokens } = await oauth2Client.getToken(req.query.code);
+
+        // Save the access and refresh tokens in the user's document
+        user.googleAccessToken = tokens.access_token;
+        user.googleRefreshToken = tokens.refresh_token;
+        await user.save();
+
+        return res.redirect(`https://${config.appUrl}`);
+    } catch (err) {
+        console.error(err);
+        return res.send(returnFailure('Failed to connect Google account'));
+    }
+});
+
+app.get("/api/getCalendars", authenticateToken, async (req, res) => {
+    try {
+        const user = await UserDetails.findOne({ username: req.user.id });
+        if (!user || !user.googleAccessToken) {
+            return res.send(returnFailure('User is not authenticated with Google'));
+        }
+
+        const { google } = require('googleapis');
+        const auth = new google.auth.OAuth2();
+        auth.setCredentials({ access_token: user.googleAccessToken });
+        const calendar = google.calendar({ version: 'v3', auth });
+
+        const calendarListResponse = await calendar.calendarList.list();
+        const calendars = calendarListResponse.data.items;
+
+        return res.json({ success: true, calendars });
     } catch (err) {
         console.error(err);
         return res.send(returnFailure(err.message));

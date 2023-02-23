@@ -5,6 +5,7 @@
       <div class="task-controls">
         <h2>Controls</h2>
         <b-button v-b-modal.modal-1>Add Task</b-button>
+        <b-button v-on:click="scheduleTasks">Schedule</b-button>
         <div class="task-list">
           <h2>Task List</h2>
           <ul>
@@ -19,7 +20,7 @@
         <div class="calendar-controls">
           <button v-on:click="nextWeek">N</button>
           <button v-on:click="prevWeek">P</button>
-          </div>
+        </div>
         <div class="calendar">
           <DayPilotCalendar :config="config" ref="calendar" id="dp" />
         </div>
@@ -94,6 +95,7 @@ export default {
         viewType: "Week",
         businessBeginsHour: 10,
         businessEndsHour: 18,
+        cellDuration: 15,
         startDate: new DayPilot.Date().firstDayOfWeek(),
         onTimeRangeSelected: async (args) => {
           const modal = await DayPilot.Modal.prompt(
@@ -109,8 +111,8 @@ export default {
           try {
             const response = await this.$http.post("/api/createEvent", {
               title: modal.result,
-              startDate: args.start,
-              endDate: args.end,
+              startDate: new Date(args.start),
+              endDate: new Date(args.end),
             });
             if (response.data.success) {
               // Add the event to the calendar if the backend creation was successful
@@ -125,7 +127,7 @@ export default {
               console.error(response.data.error);
             }
           } catch (error) {
-              console.log("Error here2");
+            console.log("Error here2");
             console.error(error);
           }
         },
@@ -133,8 +135,8 @@ export default {
           try {
             const response = await this.$http.post("/api/updateEvent", {
               eventId: args.e.data.id,
-              startDate: args.newStart.toString(),
-              endDate: args.newEnd.toString(),
+              startDate: new Date(args.newStart.toString()),
+              endDate: new Date(args.newEnd.toString()),
             });
             if (!response.data.success) {
               console.error(response.data.error);
@@ -147,8 +149,8 @@ export default {
           try {
             const response = await this.$http.post("/api/updateEvent", {
               eventId: args.e.data.id,
-              startDate: args.newStart.toString(),
-              endDate: args.newEnd.toString(),
+              startDate: new Date(args.newStart.toString()),
+              endDate: new Date(args.newEnd.toString()),
             });
             if (!response.data.success) {
               console.error(response.data.error);
@@ -186,14 +188,30 @@ export default {
       if (!eventDataResponse.data.success) {
         console.error("Event retrieval error");
       }
-      
+
       const events = eventDataResponse.data.events;
       // use map function to transform the events
+      let currentLocation = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const eventsToAdd = events.map((event) => {
+        let eventStartDate = new Date(event.startDate);
+        let inputStartDate = (eventStartDate.getFullYear()) + "-" +
+        ("0" + (eventStartDate.getMonth() + 1)).slice(-2) + "-" +
+        ("0" + eventStartDate.getDate()).slice(-2) + "T" +
+        ("0" + eventStartDate.getHours()).slice(-2) + ":" +
+        ("0" + eventStartDate.getMinutes()).slice(-2) + ":" +
+        ("0" + eventStartDate.getSeconds()).slice(-2) + "Z";
+
+        let eventEndDate = new Date(event.endDate);
+        let inputEndDate = (eventEndDate.getFullYear()) + "-" +
+        ("0" + (eventEndDate.getMonth() + 1)).slice(-2) + "-" +
+        ("0" + eventEndDate.getDate()).slice(-2) + "T" +
+        ("0" + eventEndDate.getHours()).slice(-2) + ":" +
+        ("0" + eventEndDate.getMinutes()).slice(-2) + ":" +
+        ("0" + eventEndDate.getSeconds()).slice(-2) + "Z";
         return {
           id: event._id,
-          start: event.startDate,
-          end: event.endDate,
+          start: inputStartDate,
+          end: inputEndDate,
           text: event.title,
         };
       });
@@ -249,7 +267,19 @@ export default {
     },
     nextWeek() {
       this.config.startDate = this.config.startDate.addDays(7);
-    }
+    },
+    getBusinessHourNumberFromDate(inputDate) {
+      const hour = inputDate.getHours();
+      return hour;
+    },
+    async scheduleTasks() {
+      try {
+        const response = await this.$http.get("api/scheduletasks");
+        this.loadData();
+      } catch (error) {
+        console.error(error);
+      }
+    },
   },
   computed: {
     calendar() {
@@ -259,6 +289,12 @@ export default {
   mounted() {
     this.$gtag.pageview(this.$route);
     this.loadData();
+    this.config.businessBeginsHour = this.getBusinessHourNumberFromDate(
+      new Date(this.$store.state.user.workingStartTime)
+    );
+    this.config.businessEndsHour = this.getBusinessHourNumberFromDate(
+      new Date(this.$store.state.user.workingEndTime)
+    );
   },
 };
 </script>
