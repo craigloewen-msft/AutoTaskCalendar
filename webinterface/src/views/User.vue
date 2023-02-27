@@ -109,19 +109,25 @@ export default {
     async refreshCalendarData() {
       try {
         const response = await this.$http.get("api/getCalendars");
-        this.userCalendarList = response.data.calendars;
+        if (response.data.success) {
+          this.userCalendarList = response.data.calendars;
+        }
       } catch (error) {
         console.error(error);
       }
     },
   },
   created() {
-    this.input.startTime = this.convertDateToHourString(
-      this.$store.state.user.workingStartTime
+    let startDate = new Date(this.$store.state.user.workingStartTime);
+    // Add user working duration to startDate to get endDate with getTime
+    let endDate = new Date();
+    endDate.setTime(
+      startDate.getTime() +
+        this.$store.state.user.workingDuration * 60 * 60 * 1000
     );
-    this.input.endTime = this.convertDateToHourString(
-      this.$store.state.user.workingEndTime
-    );
+
+    this.input.startTime = this.convertDateToHourString(startDate);
+    this.input.endTime = this.convertDateToHourString(endDate);
   },
   mounted() {
     this.refreshCalendarData();

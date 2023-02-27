@@ -44,7 +44,7 @@ const UserDetail = new Schema({
     email: String,
     lastLoginDate: Date,
     workingStartTime: Date,
-    workingEndTime: Date,
+    workingDuration: Number,
     workingDays: [String],
     googleAccessToken: String,
     googleRefreshToken: String,
@@ -138,7 +138,7 @@ async function returnBasicUserInfo(inputUser) {
     inputUser = await inputUser.populate('taskList');
     return {
         username: inputUser.username, email: inputUser.email, _id: inputUser._id, taskList: inputUser.taskList, workingStartTime: inputUser.workingStartTime,
-        workingEndTime: inputUser.workingEndTime, workingDays: inputUser.workingDays, selectedCalendars: inputUser.selectedCalendars
+        workingDuration: inputUser.workingDuration, workingDays: inputUser.workingDays, selectedCalendars: inputUser.selectedCalendars
     };
 }
 
@@ -232,9 +232,8 @@ app.post('/api/register', async function (req, res) {
         // TODO: Fix this to be accurate to the user's timezone
         let nowDate = new Date();
         let startDate = new Date(nowDate.setHours(14, 0, 0, 0));
-        let endDate = new Date(nowDate.setHours(23, 0, 0, 0));
 
-        let registeredUser = await UserDetails.register({ username: req.body.username, email: req.body.email, workingStartTime: startDate, workingEndTime: endDate, workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] }, req.body.password);
+        let registeredUser = await UserDetails.register({ username: req.body.username, email: req.body.email, workingStartTime: startDate, workingDuration: 8, workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] }, req.body.password);
 
         let token = jwt.sign({ id: req.body.username }, config.secret, { expiresIn: JWTTimeout });
 
@@ -276,9 +275,12 @@ app.post('/api/updateuserinfo', authenticateToken, async function (req, res) {
             0
         );
 
+        // workingDuration is hours between start date and end date
+        let workingDuration = (endDate.getTime() - startDate.getTime()) / 1000 / 60 / 60;
+
 
         user.workingStartTime = startDate;
-        user.workingEndTime = endDate;
+        user.workingDuration = workingDuration;
         user.workingDays = workingDays;
         user.selectedCalendars = selectedCalendars;
 
@@ -569,32 +571,20 @@ app.post('/api/deleteEvent', authenticateToken, async (req, res) => {
     }
 });
 
-app.get("/api/getUserEvents/:date", authenticateToken, async (req, res) => {
-    // Check if user is logged in
-    let user = await UserDetails.findOne({ username: req.user.id });
+async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod) {
 
-    if (!req.user || !user) {
-        return res.send(returnFailure('Not logged in'));
-    }
     try {
-        const date = new Date(req.params.date);
-        const startOfWeek = new Date(date);
-        startOfWeek.setUTCDate(startOfWeek.getUTCDate() - startOfWeek.getUTCDay());
-        startOfWeek.setUTCHours(0, 0, 0);
-        const endOfWeek = new Date(date);
-        endOfWeek.setUTCDate(endOfWeek.getUTCDate() + (7 - endOfWeek.getUTCDay()));
-        endOfWeek.setUTCHours(23, 59, 59);
 
         // Check if user has a Google Calendar access token
-        if (!user.googleAccessToken) {
-            return res.json({ success: true, events: [] });
+        if (!inUser.googleAccessToken) {
+            return false;
         }
 
         // Sync Google Calendar events to events database
         const oauth2Client = new google.auth.OAuth2();
         oauth2Client.setCredentials({
-            access_token: user.googleAccessToken,
-            refresh_token: user.googleRefreshToken
+            access_token: inUser.googleAccessToken,
+            refresh_token: inUser.googleRefreshToken
         });
 
         const calendar = google.calendar({ version: "v3", auth: oauth2Client });
@@ -609,14 +599,14 @@ app.get("/api/getUserEvents/:date", authenticateToken, async (req, res) => {
         // });
 
         // Array of calendar IDs
-        const calendarIds = user.selectedCalendars;
+        const calendarIds = inUser.selectedCalendars;
 
         // Array of promises that get events for each calendar
         const eventsPromises = calendarIds.map(async (calendarId) => {
             const eventsResponse = await calendar.events.list({
                 calendarId,
-                timeMin: startOfWeek.toISOString(),
-                timeMax: endOfWeek.toISOString(),
+                timeMin: startPeriod.toISOString(),
+                timeMax: endPeriod.toISOString(),
                 maxResults: 2500,
                 singleEvents: true,
                 orderBy: "startTime",
@@ -638,13 +628,13 @@ app.get("/api/getUserEvents/:date", authenticateToken, async (req, res) => {
             eventsData.map(async (eventData) => {
                 let event = await EventDetails.findOne({
                     externalEventID: eventData.id,
-                    userRef: user._id
+                    userRef: inUser._id
                 });
 
                 if (!event) {
                     event = new EventDetails({
                         externalEventID: eventData.id,
-                        userRef: user._id,
+                        userRef: inUser._id,
                         title: eventData.summary,
                         startDate: eventData.start.dateTime || eventData.start.date,
                         endDate: eventData.end.dateTime || eventData.end.date,
@@ -658,24 +648,65 @@ app.get("/api/getUserEvents/:date", authenticateToken, async (req, res) => {
             })
         );
 
+        let eventIds = events.map((event) => event._id);
+
         // Delete all events that are not in the Google Calendar
-        await EventDetails.deleteMany({
-            userRef: user._id,
+        let deleteResult = await EventDetails.deleteMany({
+            userRef: inUser._id,
             type: "google",
-            eventId: { $nin: eventsData.map((eventData) => eventData.id) }
+            _id: { $nin: eventIds }
         });
+
+        return true;
+
+    } catch (err) {
+        console.error(err);
+
+        if (err.code === 401) {
+            // Refresh Google Calendar access token
+            const oauth2Client = new google.auth.OAuth2();
+            oauth2Client.setCredentials({
+                refresh_token: inUser.googleRefreshToken
+            });
+
+            const tokens = await oauth2Client.refreshAccessToken();
+            inUser.googleAccessToken = tokens.credentials.access_token;
+            await inUser.save();
+
+            // Try again
+            return syncCalendarsToDatabase(inUser, startPeriod, endPeriod);
+        }
+
+        return false;
+    }
+}
+
+app.get("/api/getUserEvents/:date", authenticateToken, async (req, res) => {
+    // Check if user is logged in
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+    try {
+        const date = new Date(req.params.date);
+        const startOfWeek = new Date(date);
+        startOfWeek.setUTCDate(startOfWeek.getUTCDate() - startOfWeek.getUTCDay());
+        startOfWeek.setUTCHours(0, 0, 0);
+        const endOfWeek = new Date(date);
+        endOfWeek.setUTCDate(endOfWeek.getUTCDate() + (7 - endOfWeek.getUTCDay()));
+        endOfWeek.setUTCHours(23, 59, 59);
+
+        // Sync calendars
+        // await syncCalendarsToDatabase(user, startOfWeek, endOfWeek);
 
         // Get the user's events from the database
-        const databaseEventList = await EventDetails.find({
+        const events = await EventDetails.find({
             userRef: user._id,
             startDate: { $gte: startOfWeek, $lt: endOfWeek },
-            type: { $ne: "google" }
         });
 
-        // Combine the Google Calendar events and the user's events
-        const combinedEvents = [...events, ...databaseEventList];
-
-        return res.json({ success: true, events: combinedEvents });
+        return res.json({ success: true, events });
     } catch (err) {
         console.error(err);
         return res.send(returnFailure(err.message));
@@ -732,7 +763,7 @@ app.get('/api/connectGoogleCallback', async (req, res) => {
     );
 
     try {
-        const { tokens } = await oauth2Client.getToken(req.query.code);
+        const { tokens } = await oauth2Client.getToken(req.query.code, { access_type: 'offline' });
 
         // Save the access and refresh tokens in the user's document
         user.googleAccessToken = tokens.access_token;
@@ -771,6 +802,12 @@ app.get("/api/getCalendars", authenticateToken, async (req, res) => {
 // Event-task management functions
 
 async function generateTaskEvents(inUser) {
+
+    // If the user has no working days, don't generate any events
+    if (inUser.workingDays.length == 0) {
+        return;
+    }
+
     const currentTime = new Date();
     // Clear out old events
     await EventDetails.deleteMany({ userRef: inUser._id, type: 'task' });
@@ -790,6 +827,23 @@ async function generateTaskEvents(inUser) {
 
     // Start organizing the tasks into events:
     let currentExaminedTime = currentTime;
+
+    // Get the user's working hours and days
+    const workingStartTime = inUser.workingStartTime;
+    const workingDuration = inUser.workingDuration;
+    const workingDays = inUser.workingDays;
+
+    // Check if we are already in an event and if yes move ahead to the end of that event
+    // For each event, check if start date is before the current examined time. If that is true and if the currentExaminedTime is before the end date, then set the currentExaminedTime to the end date
+    // for (let i = 0; i < sortedEvents.length; i++) {
+    //     const event = sortedEvents[i];
+    //     if (event.startDate.getTime() < currentExaminedTime.getTime() && currentExaminedTime.getTime() < event.endDate.getTime()) {
+    //         currentExaminedTime = event.endDate;
+    //     } else if (event.startDate.getTime() > currentExaminedTime.getTime()) {
+    //         break;
+    //     }
+    // }
+
     let eventIndex = 0;
     while (sortedTasks.length > 0) {
         let nextEvent = null;
@@ -799,45 +853,95 @@ async function generateTaskEvents(inUser) {
             nextEvent = null;
         }
 
-        // Get the amount of time between the current examined time and the next event
-        let timeBetween = 999 * 24 * 60 * 60 * 1000;
-        if (nextEvent) {
-            timeBetween = nextEvent.startDate.getTime() - currentExaminedTime.getTime();
-        }
-        // Determine if a task can fit into that timeslot (Starting with the earliest tasks first)
-        let insertedTask = false;
-        for (let k = 0; k < sortedTasks.length; k++) {
-            const task = sortedTasks[k];
-            const taskDuration = task.duration * 60 * 1000;
-            if (timeBetween > taskDuration) {
-                // Create a new task event from the task
-                const taskEvent = new EventDetails({
-                    title: task.title,
-                    startDate: currentExaminedTime,
-                    endDate: new Date(currentExaminedTime.getTime() + taskDuration),
-                    notes: task.notes,
-                    type: 'task',
-                    userRef: inUser._id,
-                });
-                await taskEvent.save();
+        // Check if we are in an event
+        if (nextEvent ? nextEvent.startDate.getTime() <= currentExaminedTime.getTime() : false) {
+            if (currentExaminedTime.getTime() < nextEvent.endDate.getTime()) {
+                currentExaminedTime = nextEvent.endDate;
+            }
+            eventIndex++;
+            // Else check if we are outside of the user's working hours and days
+        } else {
 
-                // Remove the task from the list
-                sortedTasks.splice(k, 1);
+            // Get user's starting time and date for today
+            let startOfWorking = new Date(workingStartTime);
+            // Set start of working time to today's date
+            startOfWorking.setFullYear(currentExaminedTime.getFullYear());
+            startOfWorking.setMonth(currentExaminedTime.getMonth());
+            startOfWorking.setDate(currentExaminedTime.getDate());
+            startOfWorking.setHours(workingStartTime.getHours());
+            startOfWorking.setMinutes(workingStartTime.getMinutes());
+            startOfWorking.setSeconds(workingStartTime.getSeconds());
 
-                // Set the examined time to the endDate of this last task
-                currentExaminedTime = taskEvent.endDate;
-                insertedTask = true;
-                break;
+            // Get the user's end of working time and date
+            let endOfWorking = new Date();
+            endOfWorking.setTime(startOfWorking.getTime() + workingDuration * 60 * 60 * 1000);
+
+            // Get time between working hour boundaries
+            let timeBetweenStartOfWorking = currentExaminedTime.getTime() - startOfWorking.getTime();
+            let timeBetweenEndOfWorking = currentExaminedTime.getTime() - endOfWorking.getTime();
+
+            // Check if we are before the start of working hours
+            if (timeBetweenStartOfWorking < 0) {
+                // Move to the start of working hours
+                currentExaminedTime = startOfWorking;
+
+                // Check if we are after the end of working hours
+            } else if (timeBetweenEndOfWorking >= 0) {
+                // Move to the start of the next working day
+                currentExaminedTime.setTime(startOfWorking.getTime() + 24 * 60 * 60 * 1000);
+
+            } else {
+                // Get the amount of time between the current examined time and the next event
+                let timeBetween = 999 * 24 * 60 * 60 * 1000;
+                if (nextEvent) {
+                    timeBetween = nextEvent.startDate.getTime() - currentExaminedTime.getTime();
+                }
+
+                let timeToEndOfWorkingHours = endOfWorking.getTime() - currentExaminedTime.getTime();
+
+                if (timeBetween > timeToEndOfWorkingHours) {
+                    timeBetween = timeToEndOfWorkingHours;
+                }
+
+                // Determine if a task can fit into that timeslot (Starting with the earliest tasks first)
+                let insertedTask = false;
+                for (let k = 0; k < sortedTasks.length; k++) {
+                    const task = sortedTasks[k];
+                    const taskDuration = task.duration * 60 * 1000;
+                    if (timeBetween >= taskDuration) {
+                        // Create a new task event from the task
+                        const taskEvent = new EventDetails({
+                            title: task.title,
+                            startDate: currentExaminedTime,
+                            endDate: new Date(currentExaminedTime.getTime() + taskDuration),
+                            notes: task.notes,
+                            type: 'task',
+                            userRef: inUser._id,
+                        });
+                        await taskEvent.save();
+
+                        // Remove the task from the list
+                        sortedTasks.splice(k, 1);
+
+                        // Set the examined time to the endDate of this last task
+                        currentExaminedTime = taskEvent.endDate;
+                        insertedTask = true;
+                        break;
+                    }
+                }
+
+                // If no task was inserted, check if we have to go next to one of these destinations: [endOfWorkingHours, nextEventStartTime] whichever is earliest
+                if (!insertedTask) {
+                    let nextCurrentTime = endOfWorking;
+                    if (nextEvent ? nextEvent.startDate.getTime() <= nextCurrentTime.getTime() : false) {
+                        nextCurrentTime = nextEvent.startDate;
+                    }
+
+                    // Move to the next destination
+                    currentExaminedTime = nextCurrentTime;
+                }
             }
         }
-
-        if (!insertedTask) {
-            // Set the examined time to be the next event's end time
-            currentExaminedTime = new Date(nextEvent.endDate)
-            eventIndex++;
-        }
-
-        // Hnadle case of no more events. What if there are multiple tasks?
     }
 
     return;

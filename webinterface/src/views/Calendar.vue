@@ -174,13 +174,14 @@ export default {
     };
   },
   methods: {
-    async loadData() {
+    async loadTasks() {
       const taskDataResponse = await this.$http.get("/api/getUserTasks/");
       this.taskList = taskDataResponse.data.taskList;
       if (!taskDataResponse.data.success) {
         console.error("Task retrieval error");
       }
-
+    },
+    async loadCalendarEvents() {
       const eventDataResponse = await this.$http.get(
         `/api/getUserEvents/${this.currentDate}`
       );
@@ -194,20 +195,34 @@ export default {
       let currentLocation = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const eventsToAdd = events.map((event) => {
         let eventStartDate = new Date(event.startDate);
-        let inputStartDate = (eventStartDate.getFullYear()) + "-" +
-        ("0" + (eventStartDate.getMonth() + 1)).slice(-2) + "-" +
-        ("0" + eventStartDate.getDate()).slice(-2) + "T" +
-        ("0" + eventStartDate.getHours()).slice(-2) + ":" +
-        ("0" + eventStartDate.getMinutes()).slice(-2) + ":" +
-        ("0" + eventStartDate.getSeconds()).slice(-2) + "Z";
+        let inputStartDate =
+          eventStartDate.getFullYear() +
+          "-" +
+          ("0" + (eventStartDate.getMonth() + 1)).slice(-2) +
+          "-" +
+          ("0" + eventStartDate.getDate()).slice(-2) +
+          "T" +
+          ("0" + eventStartDate.getHours()).slice(-2) +
+          ":" +
+          ("0" + eventStartDate.getMinutes()).slice(-2) +
+          ":" +
+          ("0" + eventStartDate.getSeconds()).slice(-2) +
+          "Z";
 
         let eventEndDate = new Date(event.endDate);
-        let inputEndDate = (eventEndDate.getFullYear()) + "-" +
-        ("0" + (eventEndDate.getMonth() + 1)).slice(-2) + "-" +
-        ("0" + eventEndDate.getDate()).slice(-2) + "T" +
-        ("0" + eventEndDate.getHours()).slice(-2) + ":" +
-        ("0" + eventEndDate.getMinutes()).slice(-2) + ":" +
-        ("0" + eventEndDate.getSeconds()).slice(-2) + "Z";
+        let inputEndDate =
+          eventEndDate.getFullYear() +
+          "-" +
+          ("0" + (eventEndDate.getMonth() + 1)).slice(-2) +
+          "-" +
+          ("0" + eventEndDate.getDate()).slice(-2) +
+          "T" +
+          ("0" + eventEndDate.getHours()).slice(-2) +
+          ":" +
+          ("0" + eventEndDate.getMinutes()).slice(-2) +
+          ":" +
+          ("0" + eventEndDate.getSeconds()).slice(-2) +
+          "Z";
         return {
           id: event._id,
           start: inputStartDate,
@@ -216,6 +231,10 @@ export default {
         };
       });
       this.calendar.update({ events: eventsToAdd });
+    },
+    async loadData() {
+      this.loadTasks();
+      this.loadCalendarEvents();
     },
     async addSampleTask(bvModalEvent) {
       // Prevent modal from closing
@@ -262,11 +281,21 @@ export default {
         console.error(error);
       }
     },
+    addDays(date, days) {
+      var result = new Date(date);
+      result.setDate(result.getDate() + days);
+      return result;
+    },
     prevWeek() {
       this.config.startDate = this.config.startDate.addDays(-7);
+      // Add 7 days to the current date
+      this.currentDate = this.addDays(this.currentDate, -7);
+      this.loadCalendarEvents();
     },
     nextWeek() {
       this.config.startDate = this.config.startDate.addDays(7);
+      this.currentDate = this.addDays(this.currentDate, 7);
+      this.loadCalendarEvents();
     },
     getBusinessHourNumberFromDate(inputDate) {
       const hour = inputDate.getHours();
@@ -287,14 +316,19 @@ export default {
     },
   },
   mounted() {
-    this.$gtag.pageview(this.$route);
     this.loadData();
-    this.config.businessBeginsHour = this.getBusinessHourNumberFromDate(
-      new Date(this.$store.state.user.workingStartTime)
+
+    let startDate = new Date(this.$store.state.user.workingStartTime);
+    // Add user working duration to startDate to get endDate with getTime
+    let endDate = new Date();
+    endDate.setTime(
+      startDate.getTime() +
+        this.$store.state.user.workingDuration * 60 * 60 * 1000
     );
-    this.config.businessEndsHour = this.getBusinessHourNumberFromDate(
-      new Date(this.$store.state.user.workingEndTime)
-    );
+
+    this.config.businessBeginsHour =
+      this.getBusinessHourNumberFromDate(startDate);
+    this.config.businessEndsHour = this.getBusinessHourNumberFromDate(endDate);
   },
 };
 </script>
