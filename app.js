@@ -31,7 +31,7 @@ if (process.env.NODE_ENV == 'production') {
     hostPort = 8080;
 } else {
     mongooseConnectionString = config.devMongoDBConnectionString;
-    config.appUrl = "localhost:3000";
+    config.appUrl = "http://localhost:3000";
     hostPort = 3000;
 }
 
@@ -800,7 +800,7 @@ app.get('/api/connectGoogle', authenticateToken, async (req, res) => {
     const oauth2Client = new google.auth.OAuth2(
         config.googleOAuthClientID,
         config.googleOAuthClientSecret,
-        `https://${config.appUrl}/api/connectGoogleCallback`
+        `${config.appUrl}/api/connectGoogleCallback`
     );
 
     const scopes = [
@@ -832,7 +832,7 @@ app.get('/api/connectGoogleCallback', async (req, res) => {
     const oauth2Client = new google.auth.OAuth2(
         config.googleOAuthClientID,
         config.googleOAuthClientSecret,
-        `https://${config.appUrl}/api/connectGoogleCallback`
+        `${config.appUrl}/api/connectGoogleCallback`
     );
 
     try {
@@ -843,7 +843,7 @@ app.get('/api/connectGoogleCallback', async (req, res) => {
         user.googleRefreshToken = tokens.refresh_token;
         await user.save();
 
-        return res.redirect(`https://${config.appUrl}`);
+        return res.redirect(`${config.appUrl}`);
     } catch (err) {
         console.error(err);
         return res.send(returnFailure('Failed to connect Google account'));
