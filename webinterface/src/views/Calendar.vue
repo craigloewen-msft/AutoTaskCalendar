@@ -550,7 +550,7 @@ export default {
 };
 </script>
 
-<style scoped>
+<style>
 .main-calendar {
   /* Flex box style */
   display: flex;
