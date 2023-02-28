@@ -4,14 +4,19 @@
     <div class="calendar-box">
       <div class="task-controls">
         <h2>Controls</h2>
-        <b-button v-b-modal.modal-1>Add Task</b-button>
+        <b-button v-on:click="openAddTaskModal">Add Task</b-button>
         <b-button v-on:click="scheduleTasks">Schedule</b-button>
+        <b-button v-on:click="syncCalendar">Sync Calendar</b-button>
         <div class="task-list">
           <h2>Task List</h2>
           <ul>
-            <li v-for="task in taskList" :key="task._id">
-              {{ task.title }} - {{ task.dueDate }}
-              <button @click="deleteTask(task._id)">Delete</button>
+            <li
+              v-on:click="openEditTaskModal(task)"
+              v-for="task in taskList"
+              :key="task._id"
+            >
+              {{ task.title }} :
+              {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
             </li>
           </ul>
         </div>
@@ -27,10 +32,10 @@
       </div>
     </div>
     <b-modal
-      id="modal-1"
+      id="task-modal"
       ref="addtaskmodal"
-      @ok="addSampleTask"
-      title="Add Task"
+      @ok="resolveTaskModal"
+      :title="this.selectedTask ? 'Edit Task' : 'Add Task'"
     >
       <div class="modal-dialog">
         <div class="modal-content">
@@ -64,6 +69,33 @@
                 />
               </div>
               <div class="form-group">
+                <b-form-checkbox
+                  type="number"
+                  v-model="input.taskBreakUpTask"
+                  class="form-control"
+                  id="task-break-up-task"
+                  >Break Up Task Into Chunks</b-form-checkbox
+                >
+              </div>
+              <div v-if="input.taskBreakUpTask" class="form-group">
+                <label for="task-break-up-task-chunk-duration"
+                  >Chunk Duration</label
+                >
+                <input
+                  type="number"
+                  v-model="input.taskBreakUpTaskChunkDuration"
+                  class="form-control"
+                  id="task-break-up-task-chunk-duration"
+                />
+              </div>
+              <div class="form-group">
+                <label for="task-start-date">Start Date</label>
+                <b-form-datepicker
+                  v-model="input.taskStartDate"
+                  class="mb-2"
+                ></b-form-datepicker>
+              </div>
+              <div class="form-group">
                 <label for="task-notes">Notes</label>
                 <input
                   type="text"
@@ -72,6 +104,10 @@
                   id="task-notes"
                   placeholder="Enter task notes"
                 />
+              </div>
+              <div v-if="this.selectedTask">
+                <button class="btn btn-primary" v-on:click="completeTask(selectedTask._id)">Complete</button>
+                <button class="btn btn-danger" v-on:click="deleteTask(selectedTask._id)">Delete</button>
               </div>
             </form>
           </div>
@@ -93,6 +129,7 @@ export default {
     return {
       config: {
         viewType: "Week",
+        dayBeginsHour: 9,
         businessBeginsHour: 10,
         businessEndsHour: 18,
         cellDuration: 15,
@@ -123,26 +160,31 @@ export default {
                 text: modal.result,
               });
             } else {
-              console.log("Error here");
               console.error(response.data.error);
             }
           } catch (error) {
-            console.log("Error here2");
             console.error(error);
           }
         },
         onEventMove: async (args) => {
-          try {
-            const response = await this.$http.post("/api/updateEvent", {
-              eventId: args.e.data.id,
-              startDate: new Date(args.newStart.toString()),
-              endDate: new Date(args.newEnd.toString()),
-            });
-            if (!response.data.success) {
-              console.error(response.data.error);
+          let eventDetails = args.e.data;
+          if (
+            eventDetails.tags ? eventDetails.tags.type.includes("task") : false
+          ) {
+            this.openEditTaskModalById(eventDetails.tags.taskId);
+          } else {
+            try {
+              const response = await this.$http.post("/api/updateEvent", {
+                eventId: args.e.data.id,
+                startDate: new Date(args.newStart.toString()),
+                endDate: new Date(args.newEnd.toString()),
+              });
+              if (!response.data.success) {
+                console.error(response.data.error);
+              }
+            } catch (error) {
+              console.error(error);
             }
-          } catch (error) {
-            console.error(error);
           }
         },
         onEventResize: async (args) => {
@@ -159,6 +201,14 @@ export default {
             console.error(error);
           }
         },
+        onEventClicked: async (args) => {
+          let eventDetails = args.e.data;
+          if (
+            eventDetails.tags ? eventDetails.tags.type.includes("task") : false
+          ) {
+            this.openEditTaskModalById(eventDetails.tags.taskId);
+          }
+        },
       },
       user: this.$store.state.user,
       taskList: null,
@@ -167,10 +217,15 @@ export default {
         taskDueDate: null,
         taskDuration: null,
         taskNotes: null,
+        taskStartDate: this.changeDateToShortCalendarFormat(new Date()),
+        taskBreakUpTask: false,
+        taskBreakUpTaskChunkDuration: 30,
         error: null,
       },
       showModal: false,
       currentDate: new Date(),
+      selectedTask: null,
+      taskModalShow: false,
     };
   },
   methods: {
@@ -192,7 +247,6 @@ export default {
 
       const events = eventDataResponse.data.events;
       // use map function to transform the events
-      let currentLocation = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const eventsToAdd = events.map((event) => {
         let eventStartDate = new Date(event.startDate);
         let inputStartDate =
@@ -223,11 +277,27 @@ export default {
           ":" +
           ("0" + eventEndDate.getSeconds()).slice(-2) +
           "Z";
+
+        let eventColor = "green";
+        let eventTags = null;
+        if (event.type.includes("task")) {
+          eventColor = "#333";
+          eventTags = {};
+          eventTags.taskId = event.taskRef;
+          if (event.type.includes("task-chunk")) {
+            eventTags.type = "task-chunk";
+          } else {
+            eventTags.type = "task";
+          }
+        }
+
         return {
           id: event._id,
           start: inputStartDate,
           end: inputEndDate,
           text: event.title,
+          backColor: eventColor,
+          tags: eventTags,
         };
       });
       this.calendar.update({ events: eventsToAdd });
@@ -236,7 +306,11 @@ export default {
       this.loadTasks();
       this.loadCalendarEvents();
     },
-    async addSampleTask(bvModalEvent) {
+    async syncCalendar() {
+      const taskDataResponse = await this.$http.get("/api/synccalendar/");
+      this.loadCalendarEvents();
+    },
+    async addTask(bvModalEvent) {
       // Prevent modal from closing
       bvModalEvent.preventDefault();
 
@@ -258,16 +332,62 @@ export default {
         this.$refs.addtaskmodal.hide();
       });
 
+      // this.input.taskDueDate comes in format '2023-03-01', convert that to start of the day in this timezone
+      let inputDueDate = this.changeShortCalendarFormatToDate(
+        this.input.taskDueDate
+      );
+
+      // Do same for startDate
+      let inputStartDate = this.changeShortCalendarFormatToDate(
+        this.input.taskStartDate || this.changeDateToShortCalendarFormat(new Date())
+      );
+
+      // Make taskDueDate at the end of the day by adding 23 hours, 59 minutes, 59 seconds
+      inputDueDate = new Date(
+        new Date(inputDueDate).getTime() + 86399000
+      ).toISOString();
+
       try {
         const response = await this.$http.post("/api/createTask/", {
           title: this.input.taskTitle,
-          dueDate: this.input.taskDueDate,
+          dueDate: inputDueDate,
           duration: this.input.taskDuration,
+          startDate: inputStartDate,
           notes: this.input.taskNotes,
+          breakUpTask: this.input.taskBreakUpTask,
+          breakUpTaskChunkDuration: this.input.taskBreakUpTaskChunkDuration,
         });
         this.taskList = response.data.taskList;
 
         Object.keys(this.input).forEach((i) => (this.input[i] = null));
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    async editTask(bvModalEvent) {
+      bvModalEvent.preventDefault();
+
+      // Set all of the input to the current task
+      this.selectedTask.title = this.input.taskTitle;
+      this.selectedTask.dueDate = this.changeShortCalendarFormatToDate(
+        this.input.taskDueDate
+      );
+      this.selectedTask.duration = this.input.taskDuration;
+      this.selectedTask.notes = this.input.taskNotes;
+      this.selectedTask.startDate = this.changeShortCalendarFormatToDate(
+        this.input.taskStartDate
+      );
+      this.selectedTask.breakUpTask = this.input.taskBreakUpTask;
+      this.selectedTask.breakUpTaskChunkDuration =
+        this.input.taskBreakUpTaskChunkDuration;
+
+      try {
+        const response = await this.$http.post("/api/editTask/", {
+          task: this.selectedTask,
+        });
+        this.$nextTick(() => {
+          this.$refs.addtaskmodal.hide();
+        });
       } catch (error) {
         console.error(error);
       }
@@ -277,6 +397,17 @@ export default {
         const response = await this.$http.post(`/api/deleteTask`, { taskId });
         // refresh task list after deletion
         this.taskList = response.data.taskList;
+        this.$bvModal.hide('task-modal');
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    async completeTask(taskId) {
+      try {
+        const response = await this.$http.post(`/api/completeTask`, { taskId });
+        // refresh task list after deletion
+        this.taskList = response.data.taskList;
+        this.$bvModal.hide('task-modal');
       } catch (error) {
         console.error(error);
       }
@@ -308,6 +439,92 @@ export default {
       } catch (error) {
         console.error(error);
       }
+    },
+    changeShortCalendarFormatToDate(inString) {
+      let returnDate = new Date(inString + "T00:00:00").toISOString();
+      return returnDate;
+    },
+    changeDateToShortCalendarFormat(inDate) {
+      let returnDate =
+        inDate.getFullYear() +
+        "-" +
+        ("0" + (inDate.getMonth() + 1)).slice(-2) +
+        "-" +
+        ("0" + inDate.getDate()).slice(-2);
+
+      return returnDate;
+    },
+    openAddTaskModal() {
+      this.selectedTask = null;
+
+      // Make all of this.input null
+      Object.keys(this.input).forEach((i) => (this.input[i] = null));
+      this.$bvModal.show("task-modal");
+    },
+    openEditTaskModal(inputTask) {
+      this.selectedTask = inputTask;
+
+      // Make all this.input be that of the task's
+      this.input.taskTitle = inputTask.title;
+      this.input.taskDueDate = this.changeDateToShortCalendarFormat(
+        new Date(inputTask.dueDate)
+      );
+      this.input.taskDuration = inputTask.duration;
+      this.input.taskStartDate = this.changeDateToShortCalendarFormat(
+        new Date(inputTask.startDate)
+      );
+      this.input.taskNotes = inputTask.notes;
+      this.input.taskBreakUpTask = inputTask.breakUpTask;
+      this.input.taskBreakUpTaskChunkDuration =
+        inputTask.breakUpTaskChunkDuration;
+
+      this.$bvModal.show("task-modal");
+    },
+    openEditTaskModalById(inTaskId) {
+      // Find the task with the right Id
+      let foundTask = this.taskList.find((object) => object._id == inTaskId);
+      this.openEditTaskModal(foundTask);
+    },
+    resolveTaskModal(bvModalEvent) {
+      if (this.selectedTask) {
+        this.editTask(bvModalEvent);
+      } else {
+        this.addTask(bvModalEvent);
+      }
+    },
+    getTaskDaysBetweenDeadlineAndSchedule(inTask) {
+      let dueDate = new Date(inTask.dueDate);
+      let scheduledDate = new Date(inTask.scheduledDate);
+
+      if (dueDate && scheduledDate) {
+        // Get the number of milliseconds per day:
+        const MILLISECONDS_PER_DAY = 1000 * 60 * 60 * 24;
+
+        // Create new Date objects with zeroed out time values:
+        const dueDateWithoutTime = new Date(
+          dueDate.getFullYear(),
+          dueDate.getMonth(),
+          dueDate.getDate()
+        );
+        const scheduledDateWithoutTime = new Date(
+          scheduledDate.getFullYear(),
+          scheduledDate.getMonth(),
+          scheduledDate.getDate()
+        );
+
+        // Calculate the difference in milliseconds ensuring to not include time:
+        const differenceInMilliseconds =
+          dueDateWithoutTime.getTime() - scheduledDateWithoutTime.getTime();
+
+        // Convert the difference to days:
+        return Math.floor(differenceInMilliseconds / MILLISECONDS_PER_DAY);
+      } else {
+        return null;
+      }
+    },
+    handleSubmit() {
+      // DO nothing on general modal submit
+      return null;
     },
   },
   computed: {

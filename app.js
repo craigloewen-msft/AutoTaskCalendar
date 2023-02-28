@@ -68,6 +68,11 @@ const TaskDetail = new Schema({
     dueDate: Date,
     notes: String,
     duration: Number,
+    startDate: Date,
+    breakUpTask: Boolean,
+    breakUpTaskChunkDuration: Number,
+    completed: Boolean,
+    scheduledDate: Date,
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
 })
 
@@ -80,6 +85,7 @@ const EventDetail = new Schema({
     type: String,
     externalEventID: String,
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
+    taskRef: { type: Schema.Types.ObjectId, ref: 'taskInfo' },
 });
 
 mongoose.connect(mongooseConnectionString, { useNewUrlParser: true, useUnifiedTopology: true });
@@ -137,7 +143,7 @@ function returnFailure(messageString) {
 async function returnBasicUserInfo(inputUser) {
     inputUser = await inputUser.populate('taskList');
     return {
-        username: inputUser.username, email: inputUser.email, _id: inputUser._id, taskList: inputUser.taskList, workingStartTime: inputUser.workingStartTime,
+        username: inputUser.username, email: inputUser.email, _id: inputUser._id, workingStartTime: inputUser.workingStartTime,
         workingDuration: inputUser.workingDuration, workingDays: inputUser.workingDays, selectedCalendars: inputUser.selectedCalendars
     };
 }
@@ -226,7 +232,7 @@ app.post('/api/register', async function (req, res) {
         let doesUserExist = await UserDetails.exists({ username: req.body.username });
 
         if (doesUserExist) {
-            return res.json(returnFailure("GitGudIssues username already exists"));
+            return res.json(returnFailure("Username already exists"));
         }
 
         // TODO: Fix this to be accurate to the user's timezone
@@ -299,8 +305,30 @@ app.post('/api/updateuserinfo', authenticateToken, async function (req, res) {
 
 // - Helper functions
 async function getTaskListFromUsername(inUsername) {
-    let user = await UserDetails.findOne({ username: inUsername }).populate('taskList');
+    let user = await UserDetails.findOne({ username: inUsername }).populate({
+        path: 'taskList',
+        match: { complete: true },
+        options: { sort: { dueDate: 1 } },
+    });
+
     return user.taskList;
+}
+
+async function refreshGoogleCalendarAccessToken(inUser) {
+    // Refresh Google Calendar access token
+    const oauth2Client = new google.auth.OAuth2(
+        config.googleOAuthClientID,
+        config.googleOAuthClientSecret,
+    );
+    oauth2Client.setCredentials({
+        refresh_token: inUser.googleRefreshToken
+    });
+
+    const tokens = await oauth2Client.refreshAccessToken();
+    inUser.googleAccessToken = tokens.credentials.access_token;
+    await inUser.save();
+
+    return true;
 }
 
 app.post('/api/createTask', authenticateToken, async (req, res) => {
@@ -312,23 +340,25 @@ app.post('/api/createTask', authenticateToken, async (req, res) => {
         return res.send(returnFailure('Not logged in'));
     }
 
-    const { title, dueDate, notes, duration } = req.body;
-    if (!title || !dueDate || !duration) {
+    const { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration } = req.body;
+    if (!title || !dueDate || !duration || !startDate || breakUpTask ? !breakUpTaskChunkDuration : false) {
         return res.send(returnFailure('Title, duration, and due date are required'));
     }
 
     try {
         // Make the due date at the end of the specified day:
         let taskDate = new Date(req.body.dueDate);
-        taskDate.setUTCHours(23, 59, 59, 999);
 
         // Create the new task
         const task = new TaskDetails({
             title: req.body.title,
             dueDate: taskDate,
-            notes: req.body.notes,
+            notes: notes,
             duration: req.body.duration,
-            userRef: user._id
+            startDate: startDate,
+            userRef: user._id,
+            breakUpTask: breakUpTask,
+            breakUpTaskChunkDuration: breakUpTaskChunkDuration,
         });
         await task.save();
         // Return the updated task list
@@ -339,6 +369,28 @@ app.post('/api/createTask', authenticateToken, async (req, res) => {
         console.error(error);
         return res.json({ success: false });
     }
+});
+
+app.post('/api/editTask', authenticateToken, async (req, res) => {
+
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    try {
+
+        let { task } = req.body;
+
+        let actualTask = await TaskDetails.findByIdAndUpdate(task._id, task);
+
+        return res.json({ success: true });
+    } catch (error) {
+        console.error(error);
+        return res.json({ success: false });
+    }
+
 });
 
 app.post('/api/updateTask', authenticateToken, async (req, res) => {
@@ -404,6 +456,34 @@ app.post('/api/deleteTask', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/api/completeTask', authenticateToken, async (req, res) => {
+    // Check if user is logged in
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    const { taskId } = req.body;
+    if (!taskId) {
+        return res.send(returnFailure('Task id is required'));
+    }
+
+    try {
+        const task = await TaskDetails.findOne({ _id: taskId, userRef: user._id });
+        if (!task) {
+            return res.send(returnFailure('Task not found'));
+        }
+        task.completed = true;
+        await task.save();
+        // Return the updated task list
+        const returnTaskList = await getTaskListFromUsername(req.user.id);
+        return res.json({ success: true, taskList: returnTaskList });
+    } catch (err) {
+        res.send(returnFailure('Error deleting task'));
+    }
+});
+
 app.get("/api/getUserTasks", authenticateToken, async (req, res) => {
     try {
         let user = await UserDetails.findOne({ username: req.user.id });
@@ -434,7 +514,6 @@ app.get("/api/scheduletasks", authenticateToken, async (req, res) => {
         return res.json({ success: false });
     }
 });
-
 
 // Event management routes
 
@@ -662,16 +741,9 @@ async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod) {
     } catch (err) {
         console.error(err);
 
-        if (err.code === 401) {
-            // Refresh Google Calendar access token
-            const oauth2Client = new google.auth.OAuth2();
-            oauth2Client.setCredentials({
-                refresh_token: inUser.googleRefreshToken
-            });
+        if (err.code == 401) {
 
-            const tokens = await oauth2Client.refreshAccessToken();
-            inUser.googleAccessToken = tokens.credentials.access_token;
-            await inUser.save();
+            await refreshGoogleCalendarAccessToken(inUser);
 
             // Try again
             return syncCalendarsToDatabase(inUser, startPeriod, endPeriod);
@@ -739,6 +811,7 @@ app.get('/api/connectGoogle', authenticateToken, async (req, res) => {
         access_type: 'offline',
         scope: scopes,
         state: user._id.toString(),
+        prompt: 'consent',
     });
 
     return res.send({ authUrl });
@@ -763,7 +836,7 @@ app.get('/api/connectGoogleCallback', async (req, res) => {
     );
 
     try {
-        const { tokens } = await oauth2Client.getToken(req.query.code, { access_type: 'offline' });
+        const { tokens } = await oauth2Client.getToken(req.query.code);
 
         // Save the access and refresh tokens in the user's document
         user.googleAccessToken = tokens.access_token;
@@ -789,7 +862,15 @@ app.get("/api/getCalendars", authenticateToken, async (req, res) => {
         auth.setCredentials({ access_token: user.googleAccessToken });
         const calendar = google.calendar({ version: 'v3', auth });
 
-        const calendarListResponse = await calendar.calendarList.list();
+        let calendarListResponse = null;
+        try {
+            calendarListResponse = await calendar.calendarList.list();
+        } catch (err) {
+            if (err.code == 401) {
+                await refreshGoogleCalendarAccessToken(user);
+                calendarListResponse = await calendar.calendarList.list();
+            }
+        }
         const calendars = calendarListResponse.data.items;
 
         return res.json({ success: true, calendars });
@@ -797,6 +878,32 @@ app.get("/api/getCalendars", authenticateToken, async (req, res) => {
         console.error(err);
         return res.send(returnFailure(err.message));
     }
+});
+
+app.get("/api/synccalendar", authenticateToken, async (req, res) => {
+    try {
+        // Check if user is logged in
+        let user = await UserDetails.findOne({ username: req.user.id });
+
+        if (!req.user || !user) {
+            return res.send(returnFailure('Not logged in'));
+        }
+
+
+        let now = new Date();
+
+        // Get 
+        let twoWeeksBefore = new Date(now.getTime() - 12096e5);
+        let monthAfter = new Date(now.getTime() + 2629800000);
+
+        await syncCalendarsToDatabase(user, twoWeeksBefore, monthAfter);
+
+        return res.send({ success: true });
+    } catch (err) {
+        console.error(err);
+        return res.send(returnFailure(err.message));
+    }
+
 });
 
 // Event-task management functions
@@ -809,8 +916,8 @@ async function generateTaskEvents(inUser) {
     }
 
     const currentTime = new Date();
-    // Clear out old events
-    await EventDetails.deleteMany({ userRef: inUser._id, type: 'task' });
+    // Clear out old events if type is task or task-chunk
+    await EventDetails.deleteMany({ userRef: inUser._id, type: { $in: ['task', 'task-chunk'] } });
 
     // Get the TaskDetails sorted in order of their deadlines, earliest first. Only get tasks that have deadlines less than 2 weeks from now
     const twoWeeksFromNow = new Date(currentTime.getTime() + 14 * 24 * 60 * 60 * 1000);
@@ -832,17 +939,6 @@ async function generateTaskEvents(inUser) {
     const workingStartTime = inUser.workingStartTime;
     const workingDuration = inUser.workingDuration;
     const workingDays = inUser.workingDays;
-
-    // Check if we are already in an event and if yes move ahead to the end of that event
-    // For each event, check if start date is before the current examined time. If that is true and if the currentExaminedTime is before the end date, then set the currentExaminedTime to the end date
-    // for (let i = 0; i < sortedEvents.length; i++) {
-    //     const event = sortedEvents[i];
-    //     if (event.startDate.getTime() < currentExaminedTime.getTime() && currentExaminedTime.getTime() < event.endDate.getTime()) {
-    //         currentExaminedTime = event.endDate;
-    //     } else if (event.startDate.getTime() > currentExaminedTime.getTime()) {
-    //         break;
-    //     }
-    // }
 
     let eventIndex = 0;
     while (sortedTasks.length > 0) {
@@ -906,27 +1002,68 @@ async function generateTaskEvents(inUser) {
                 // Determine if a task can fit into that timeslot (Starting with the earliest tasks first)
                 let insertedTask = false;
                 for (let k = 0; k < sortedTasks.length; k++) {
-                    const task = sortedTasks[k];
+                    let task = sortedTasks[k];
                     const taskDuration = task.duration * 60 * 1000;
-                    if (timeBetween >= taskDuration) {
-                        // Create a new task event from the task
-                        const taskEvent = new EventDetails({
-                            title: task.title,
-                            startDate: currentExaminedTime,
-                            endDate: new Date(currentExaminedTime.getTime() + taskDuration),
-                            notes: task.notes,
-                            type: 'task',
-                            userRef: inUser._id,
-                        });
-                        await taskEvent.save();
+                    const breakUpTaskChunkDuration = task.breakUpTask ? task.breakUpTaskChunkDuration * 60 * 1000 : 0;
+                    if (currentExaminedTime.getTime() > task.startDate.getTime()) {
+                        if (timeBetween >= taskDuration) {
+                            // Create a new task event from the task
 
-                        // Remove the task from the list
-                        sortedTasks.splice(k, 1);
+                            if (task.chunkNumber) {
+                                task.chunkNumber++;
+                            }
 
-                        // Set the examined time to the endDate of this last task
-                        currentExaminedTime = taskEvent.endDate;
-                        insertedTask = true;
-                        break;
+                            const taskEvent = new EventDetails({
+                                title: task.chunkNumber ? task.title + " (" + task.chunkNumber + ")" : task.title,
+                                startDate: currentExaminedTime,
+                                endDate: new Date(currentExaminedTime.getTime() + taskDuration),
+                                notes: task.notes,
+                                type: 'task',
+                                userRef: inUser._id,
+                                taskRef: task._id,
+                            });
+                            await taskEvent.save();
+
+                            // Remove the task from the list
+                            sortedTasks.splice(k, 1);
+
+                            // Update the task's scheduledDate to be the current time.
+                            task.scheduledDate = currentExaminedTime;
+                            await task.save();
+
+                            // Set the examined time to the endDate of this last task
+                            currentExaminedTime = taskEvent.endDate;
+                            insertedTask = true;
+                            break;
+                        } else if (task.breakUpTask ? timeBetween >= breakUpTaskChunkDuration : false) {
+                            // Chunk out the task 
+
+                            // Get how many chunks could fit into the timeBetween
+                            const numChunks = Math.floor(timeBetween / breakUpTaskChunkDuration);
+
+                            const chunkDuration = numChunks * breakUpTaskChunkDuration;
+                            const chunkDurationMins = chunkDuration / 1000 / 60;
+
+                            // Modify task to show it's a chunk
+                            task.chunkNumber = task.chunkNumber ? task.chunkNumber + 1 : 1;
+                            task.duration = task.duration - chunkDurationMins;
+
+                            const taskEvent = new EventDetails({
+                                title: task.title + " (" + task.chunkNumber + ")",
+                                startDate: currentExaminedTime,
+                                endDate: new Date(currentExaminedTime.getTime() + chunkDuration),
+                                notes: task.notes,
+                                type: 'task-chunk',
+                                userRef: inUser._id,
+                                taskRef: task._id,
+                            });
+                            await taskEvent.save();
+
+                            // Set the examined time to the endDate of this last task
+                            currentExaminedTime = taskEvent.endDate;
+                            insertedTask = true;
+                            break;
+                        }
                     }
                 }
 

@@ -2,8 +2,8 @@
   <div>
     <div class="jumbotron header-container">
       <div class="header-text-container">
-        <h2>Title</h2>
-        <h4>Subtitle</h4>
+        <h2>AutoTaskCalendar</h2>
+        <h4>Automatically schedule tasks into your calendar</h4>
         <div v-if="!this.$store.getters.isLoggedIn" class="loginSelect">
           <router-link class="btn btn-primary" to="/login">Login</router-link>
           <router-link class="btn btn-primary" to="/register"
@@ -20,13 +20,11 @@
 
     <b-container class="section-slides">
       <header class="section-header">
-        <p>Title content goes here.</p>
+        <p>Make it easy to manage what you need to do</p>
       </header>
 
       <div class="row">
-        <div class="col">
-          Your content can go here.
-        </div>
+        <div class="col">It's free to register and use!</div>
       </div>
     </b-container>
   </div>

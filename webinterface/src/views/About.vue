@@ -3,14 +3,14 @@
     <b-container>
       <div class="row">
         <div class="col-lg-12 text-center">
-          <h1>About your site</h1>
+          <h1>About</h1>
           <hr />
         </div>
       </div>
       <div class="row">
         <div class="col-md-7">
           <p>
-            Your content goes here
+            This site allows you to auto schedule your tasks into your calendar.
             </p>
         </div>
         <div class="col-md-5">
