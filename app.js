@@ -800,7 +800,7 @@ app.get('/api/connectGoogle', authenticateToken, async (req, res) => {
     const oauth2Client = new google.auth.OAuth2(
         config.googleOAuthClientID,
         config.googleOAuthClientSecret,
-        `http://${config.appUrl}/api/connectGoogleCallback`
+        `https://${config.appUrl}/api/connectGoogleCallback`
     );
 
     const scopes = [
@@ -832,7 +832,7 @@ app.get('/api/connectGoogleCallback', async (req, res) => {
     const oauth2Client = new google.auth.OAuth2(
         config.googleOAuthClientID,
         config.googleOAuthClientSecret,
-        `http://${config.appUrl}/api/connectGoogleCallback`
+        `https://${config.appUrl}/api/connectGoogleCallback`
     );
 
     try {
