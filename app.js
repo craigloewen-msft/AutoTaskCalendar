@@ -307,7 +307,7 @@ app.post('/api/updateuserinfo', authenticateToken, async function (req, res) {
 async function getTaskListFromUsername(inUsername) {
     let user = await UserDetails.findOne({ username: inUsername }).populate({
         path: 'taskList',
-        match: { complete: true },
+        match: { $or: [ { completed: false }, { completed: null } ] },
         options: { sort: { dueDate: 1 } },
     });
 
@@ -923,6 +923,7 @@ async function generateTaskEvents(inUser) {
     const twoWeeksFromNow = new Date(currentTime.getTime() + 14 * 24 * 60 * 60 * 1000);
     const sortedTasks = await TaskDetails.find({
         userRef: inUser._id,
+        $or: [ { completed: false }, { completed: null } ],
     }).sort({ dueDate: 1 });
 
     // Query the EventDetails sorted in order of when they appear, up to 2 weeks from now
