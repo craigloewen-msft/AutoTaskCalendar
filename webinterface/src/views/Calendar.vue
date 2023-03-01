@@ -569,16 +569,16 @@ export default {
 .calendar_default_corner_inner,
 .calendar_default_colheader_inner,
 .calendar_default_alldayheader_inner {
-  background: rgb(38, 38, 39);
-  color: rgb(211, 211, 212);
+  background: rgb(38, 38, 39) !important;
+  color: rgb(211, 211, 212) !important;
 }
 
 .calendar_default_cell_inner {
-  background: rgb(71, 71, 72);
+  background: rgb(71, 71, 72) !important;
 }
 
 .calendar_default_cell_business .calendar_default_cell_inner {
-  background: rgb(111, 111, 112);
+  background: rgb(111, 111, 112) !important;
 }
 
 .calendar-box {
