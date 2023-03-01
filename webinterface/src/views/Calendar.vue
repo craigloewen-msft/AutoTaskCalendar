@@ -559,8 +559,8 @@ export default {
 
 .calendar_default_event_inner {
   background: #2e78d6;
-  color: white;
-  border-radius: 5px;
+  color: white !important;
+  border-radius: 5px !important;
   opacity: 0.9;
 }
 
