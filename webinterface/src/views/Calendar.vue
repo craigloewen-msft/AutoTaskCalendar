@@ -9,16 +9,18 @@
         <b-button v-on:click="syncCalendar">Sync Calendar</b-button>
         <div class="task-list">
           <h2>Task List</h2>
-          <ul>
-            <li
-              v-on:click="openEditTaskModal(task)"
-              v-for="task in taskList"
-              :key="task._id"
-            >
-              {{ task.title }} :
-              {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
-            </li>
-          </ul>
+          <div v-for="(tasks, date) in taskGroupedByDate" :key="date">
+            <h4>{{ date }}</h4>
+            <ul>
+              <li
+                v-for="task in tasks"
+                :key="task._id"
+                v-on:click="openEditTaskModal(task)"
+              >
+                {{ task.title }} : {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
       <div class="main-calendar">
@@ -106,8 +108,18 @@
                 />
               </div>
               <div v-if="this.selectedTask">
-                <button class="btn btn-primary" v-on:click="completeTask(selectedTask._id)">Complete</button>
-                <button class="btn btn-danger" v-on:click="deleteTask(selectedTask._id)">Delete</button>
+                <button
+                  class="btn btn-primary"
+                  v-on:click="completeTask(selectedTask._id)"
+                >
+                  Complete
+                </button>
+                <button
+                  class="btn btn-danger"
+                  v-on:click="deleteTask(selectedTask._id)"
+                >
+                  Delete
+                </button>
               </div>
             </form>
           </div>
@@ -339,7 +351,8 @@ export default {
 
       // Do same for startDate
       let inputStartDate = this.changeShortCalendarFormatToDate(
-        this.input.taskStartDate || this.changeDateToShortCalendarFormat(new Date())
+        this.input.taskStartDate ||
+          this.changeDateToShortCalendarFormat(new Date())
       );
 
       // Make taskDueDate at the end of the day by adding 23 hours, 59 minutes, 59 seconds
@@ -397,7 +410,7 @@ export default {
         const response = await this.$http.post(`/api/deleteTask`, { taskId });
         // refresh task list after deletion
         this.taskList = response.data.taskList;
-        this.$bvModal.hide('task-modal');
+        this.$bvModal.hide("task-modal");
       } catch (error) {
         console.error(error);
       }
@@ -407,7 +420,7 @@ export default {
         const response = await this.$http.post(`/api/completeTask`, { taskId });
         // refresh task list after deletion
         this.taskList = response.data.taskList;
-        this.$bvModal.hide('task-modal');
+        this.$bvModal.hide("task-modal");
       } catch (error) {
         console.error(error);
       }
@@ -526,10 +539,34 @@ export default {
       // DO nothing on general modal submit
       return null;
     },
+    getTaskDate(task) {
+      const taskDate = new Date(task.scheduledDate);
+      return taskDate.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    },
   },
   computed: {
     calendar() {
       return this.$refs.calendar.control;
+    },
+    taskGroupedByDate() {
+      const groupedTasks = {};
+      if (this.taskList) {
+        this.taskList.forEach((task) => {
+          const date = this.getTaskDate(task);
+          if (!groupedTasks[date]) {
+            groupedTasks[date] = [];
+          }
+          groupedTasks[date].push(task);
+        });
+        return groupedTasks;
+      } else {
+        return null;
+      }
     },
   },
   mounted() {
