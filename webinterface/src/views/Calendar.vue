@@ -9,11 +9,11 @@
         <b-button v-on:click="syncCalendar">Sync Calendar</b-button>
         <div class="task-list">
           <h2>Task List</h2>
-          <div v-for="(tasks, date) in taskGroupedByDate" :key="date">
+          <div v-for="date in tasksDatesArray" :key="date">
             <h4>{{ date }}</h4>
             <ul>
               <li
-                v-for="task in tasks"
+                v-for="task in taskGroupedByDate[date]"
                 :key="task._id"
                 v-on:click="openEditTaskModal(task)"
               >
@@ -564,6 +564,18 @@ export default {
           groupedTasks[date].push(task);
         });
         return groupedTasks;
+      } else {
+        return null;
+      }
+    },
+    tasksDatesArray() {
+      if (this.taskGroupedByDate) {
+        let taskDateArray = Object.keys(this.taskGroupedByDate);
+        // Sort taskDateArray by date
+        taskDateArray.sort(function (a, b) {
+          return new Date(a) - new Date(b);
+        });
+        return taskDateArray;
       } else {
         return null;
       }
