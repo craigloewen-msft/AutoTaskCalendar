@@ -563,6 +563,13 @@ export default {
           }
           groupedTasks[date].push(task);
         });
+
+        // For each date, sort the tasks by scheduled time
+        Object.keys(groupedTasks).forEach((date) => {
+          groupedTasks[date].sort(function (a, b) {
+            return new Date(a.scheduledDate) - new Date(b.scheduledDate);
+          });
+        });
         return groupedTasks;
       } else {
         return null;
