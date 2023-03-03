@@ -15,6 +15,7 @@
               <li
                 v-for="task in taskGroupedByDate[date]"
                 :key="task._id"
+                v-bind:class="{'late-task': getTaskDaysBetweenDeadlineAndSchedule(task) < 0, 'on-track-task': getTaskDaysBetweenDeadlineAndSchedule(task) >= 0}"
                 v-on:click="openEditTaskModal(task)"
               >
                 {{ task.title }} : {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
@@ -645,5 +646,9 @@ export default {
 .task-controls {
   min-width: 280px;
   padding: 0 5;
+}
+
+.late-task {
+  color: rgb(255, 25, 0);
 }
 </style>
