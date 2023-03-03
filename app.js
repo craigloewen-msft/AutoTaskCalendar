@@ -307,7 +307,7 @@ app.post('/api/updateuserinfo', authenticateToken, async function (req, res) {
 async function getTaskListFromUsername(inUsername) {
     let user = await UserDetails.findOne({ username: inUsername }).populate({
         path: 'taskList',
-        match: { $or: [ { completed: false }, { completed: null } ] },
+        match: { $or: [{ completed: false }, { completed: null }] },
         options: { sort: { dueDate: 1 } },
     });
 
@@ -923,7 +923,7 @@ async function generateTaskEvents(inUser) {
     const twoWeeksFromNow = new Date(currentTime.getTime() + 14 * 24 * 60 * 60 * 1000);
     const sortedTasks = await TaskDetails.find({
         userRef: inUser._id,
-        $or: [ { completed: false }, { completed: null } ],
+        $or: [{ completed: false }, { completed: null }],
     }).sort({ dueDate: 1 });
 
     // Query the EventDetails sorted in order of when they appear, up to 2 weeks from now
@@ -959,124 +959,131 @@ async function generateTaskEvents(inUser) {
             // Else check if we are outside of the user's working hours and days
         } else {
 
-            // Get user's starting time and date for today
-            let startOfWorking = new Date(workingStartTime);
-            // Set start of working time to today's date
-            startOfWorking.setFullYear(currentExaminedTime.getFullYear());
-            startOfWorking.setMonth(currentExaminedTime.getMonth());
-            startOfWorking.setDate(currentExaminedTime.getDate());
-            startOfWorking.setHours(workingStartTime.getHours());
-            startOfWorking.setMinutes(workingStartTime.getMinutes());
-            startOfWorking.setSeconds(workingStartTime.getSeconds());
-
-            // Get the user's end of working time and date
-            let endOfWorking = new Date();
-            endOfWorking.setTime(startOfWorking.getTime() + workingDuration * 60 * 60 * 1000);
-
-            // Get time between working hour boundaries
-            let timeBetweenStartOfWorking = currentExaminedTime.getTime() - startOfWorking.getTime();
-            let timeBetweenEndOfWorking = currentExaminedTime.getTime() - endOfWorking.getTime();
-
-            // Check if we are before the start of working hours
-            if (timeBetweenStartOfWorking < 0) {
-                // Move to the start of working hours
-                currentExaminedTime = startOfWorking;
-
-                // Check if we are after the end of working hours
-            } else if (timeBetweenEndOfWorking >= 0) {
-                // Move to the start of the next working day
-                currentExaminedTime.setTime(startOfWorking.getTime() + 24 * 60 * 60 * 1000);
-
+            // Check if we are not in a working day
+            if (!workingDays.includes(currentExaminedTime.toLocaleDateString('en-US', { weekday: 'long' }))) {
+                // Move ahead 24 hours
+                currentExaminedTime.setTime(currentExaminedTime.getTime() + 24 * 60 * 60 * 1000);
             } else {
-                // Get the amount of time between the current examined time and the next event
-                let timeBetween = 999 * 24 * 60 * 60 * 1000;
-                if (nextEvent) {
-                    timeBetween = nextEvent.startDate.getTime() - currentExaminedTime.getTime();
-                }
 
-                let timeToEndOfWorkingHours = endOfWorking.getTime() - currentExaminedTime.getTime();
+                // Get user's starting time and date for today
+                let startOfWorking = new Date(workingStartTime);
+                // Set start of working time to today's date
+                startOfWorking.setFullYear(currentExaminedTime.getFullYear());
+                startOfWorking.setMonth(currentExaminedTime.getMonth());
+                startOfWorking.setDate(currentExaminedTime.getDate());
+                startOfWorking.setHours(workingStartTime.getHours());
+                startOfWorking.setMinutes(workingStartTime.getMinutes());
+                startOfWorking.setSeconds(workingStartTime.getSeconds());
 
-                if (timeBetween > timeToEndOfWorkingHours) {
-                    timeBetween = timeToEndOfWorkingHours;
-                }
+                // Get the user's end of working time and date
+                let endOfWorking = new Date();
+                endOfWorking.setTime(startOfWorking.getTime() + workingDuration * 60 * 60 * 1000);
 
-                // Determine if a task can fit into that timeslot (Starting with the earliest tasks first)
-                let insertedTask = false;
-                for (let k = 0; k < sortedTasks.length; k++) {
-                    let task = sortedTasks[k];
-                    const taskDuration = task.duration * 60 * 1000;
-                    const breakUpTaskChunkDuration = task.breakUpTask ? task.breakUpTaskChunkDuration * 60 * 1000 : 0;
-                    if (currentExaminedTime.getTime() > task.startDate.getTime()) {
-                        if (timeBetween >= taskDuration) {
-                            // Create a new task event from the task
+                // Get time between working hour boundaries
+                let timeBetweenStartOfWorking = currentExaminedTime.getTime() - startOfWorking.getTime();
+                let timeBetweenEndOfWorking = currentExaminedTime.getTime() - endOfWorking.getTime();
 
-                            if (task.chunkNumber) {
-                                task.chunkNumber++;
+                // Check if we are before the start of working hours
+                if (timeBetweenStartOfWorking < 0) {
+                    // Move to the start of working hours
+                    currentExaminedTime = startOfWorking;
+
+                    // Check if we are after the end of working hours
+                } else if (timeBetweenEndOfWorking >= 0) {
+                    // Move to the start of the next working day
+                    currentExaminedTime.setTime(startOfWorking.getTime() + 24 * 60 * 60 * 1000);
+
+                } else {
+                    // Get the amount of time between the current examined time and the next event
+                    let timeBetween = 999 * 24 * 60 * 60 * 1000;
+                    if (nextEvent) {
+                        timeBetween = nextEvent.startDate.getTime() - currentExaminedTime.getTime();
+                    }
+
+                    let timeToEndOfWorkingHours = endOfWorking.getTime() - currentExaminedTime.getTime();
+
+                    if (timeBetween > timeToEndOfWorkingHours) {
+                        timeBetween = timeToEndOfWorkingHours;
+                    }
+
+                    // Determine if a task can fit into that timeslot (Starting with the earliest tasks first)
+                    let insertedTask = false;
+                    for (let k = 0; k < sortedTasks.length; k++) {
+                        let task = sortedTasks[k];
+                        const taskDuration = task.duration * 60 * 1000;
+                        const breakUpTaskChunkDuration = task.breakUpTask ? task.breakUpTaskChunkDuration * 60 * 1000 : 0;
+                        if (currentExaminedTime.getTime() > task.startDate.getTime()) {
+                            if (timeBetween >= taskDuration) {
+                                // Create a new task event from the task
+
+                                if (task.chunkNumber) {
+                                    task.chunkNumber++;
+                                }
+
+                                const taskEvent = new EventDetails({
+                                    title: task.chunkNumber ? task.title + " (" + task.chunkNumber + ")" : task.title,
+                                    startDate: currentExaminedTime,
+                                    endDate: new Date(currentExaminedTime.getTime() + taskDuration),
+                                    notes: task.notes,
+                                    type: 'task',
+                                    userRef: inUser._id,
+                                    taskRef: task._id,
+                                });
+                                await taskEvent.save();
+
+                                // Remove the task from the list
+                                sortedTasks.splice(k, 1);
+
+                                // Update the task's scheduledDate to be the current time.
+                                task.scheduledDate = currentExaminedTime;
+                                await task.save();
+
+                                // Set the examined time to the endDate of this last task
+                                currentExaminedTime = taskEvent.endDate;
+                                insertedTask = true;
+                                break;
+                            } else if (task.breakUpTask ? timeBetween >= breakUpTaskChunkDuration : false) {
+                                // Chunk out the task 
+
+                                // Get how many chunks could fit into the timeBetween
+                                const numChunks = Math.floor(timeBetween / breakUpTaskChunkDuration);
+
+                                const chunkDuration = numChunks * breakUpTaskChunkDuration;
+                                const chunkDurationMins = chunkDuration / 1000 / 60;
+
+                                // Modify task to show it's a chunk
+                                task.chunkNumber = task.chunkNumber ? task.chunkNumber + 1 : 1;
+                                task.duration = task.duration - chunkDurationMins;
+
+                                const taskEvent = new EventDetails({
+                                    title: task.title + " (" + task.chunkNumber + ")",
+                                    startDate: currentExaminedTime,
+                                    endDate: new Date(currentExaminedTime.getTime() + chunkDuration),
+                                    notes: task.notes,
+                                    type: 'task-chunk',
+                                    userRef: inUser._id,
+                                    taskRef: task._id,
+                                });
+                                await taskEvent.save();
+
+                                // Set the examined time to the endDate of this last task
+                                currentExaminedTime = taskEvent.endDate;
+                                insertedTask = true;
+                                break;
                             }
-
-                            const taskEvent = new EventDetails({
-                                title: task.chunkNumber ? task.title + " (" + task.chunkNumber + ")" : task.title,
-                                startDate: currentExaminedTime,
-                                endDate: new Date(currentExaminedTime.getTime() + taskDuration),
-                                notes: task.notes,
-                                type: 'task',
-                                userRef: inUser._id,
-                                taskRef: task._id,
-                            });
-                            await taskEvent.save();
-
-                            // Remove the task from the list
-                            sortedTasks.splice(k, 1);
-
-                            // Update the task's scheduledDate to be the current time.
-                            task.scheduledDate = currentExaminedTime;
-                            await task.save();
-
-                            // Set the examined time to the endDate of this last task
-                            currentExaminedTime = taskEvent.endDate;
-                            insertedTask = true;
-                            break;
-                        } else if (task.breakUpTask ? timeBetween >= breakUpTaskChunkDuration : false) {
-                            // Chunk out the task 
-
-                            // Get how many chunks could fit into the timeBetween
-                            const numChunks = Math.floor(timeBetween / breakUpTaskChunkDuration);
-
-                            const chunkDuration = numChunks * breakUpTaskChunkDuration;
-                            const chunkDurationMins = chunkDuration / 1000 / 60;
-
-                            // Modify task to show it's a chunk
-                            task.chunkNumber = task.chunkNumber ? task.chunkNumber + 1 : 1;
-                            task.duration = task.duration - chunkDurationMins;
-
-                            const taskEvent = new EventDetails({
-                                title: task.title + " (" + task.chunkNumber + ")",
-                                startDate: currentExaminedTime,
-                                endDate: new Date(currentExaminedTime.getTime() + chunkDuration),
-                                notes: task.notes,
-                                type: 'task-chunk',
-                                userRef: inUser._id,
-                                taskRef: task._id,
-                            });
-                            await taskEvent.save();
-
-                            // Set the examined time to the endDate of this last task
-                            currentExaminedTime = taskEvent.endDate;
-                            insertedTask = true;
-                            break;
                         }
                     }
-                }
 
-                // If no task was inserted, check if we have to go next to one of these destinations: [endOfWorkingHours, nextEventStartTime] whichever is earliest
-                if (!insertedTask) {
-                    let nextCurrentTime = endOfWorking;
-                    if (nextEvent ? nextEvent.startDate.getTime() <= nextCurrentTime.getTime() : false) {
-                        nextCurrentTime = nextEvent.startDate;
+                    // If no task was inserted, check if we have to go next to one of these destinations: [endOfWorkingHours, nextEventStartTime] whichever is earliest
+                    if (!insertedTask) {
+                        let nextCurrentTime = endOfWorking;
+                        if (nextEvent ? nextEvent.startDate.getTime() <= nextCurrentTime.getTime() : false) {
+                            nextCurrentTime = nextEvent.startDate;
+                        }
+
+                        // Move to the next destination
+                        currentExaminedTime = nextCurrentTime;
                     }
-
-                    // Move to the next destination
-                    currentExaminedTime = nextCurrentTime;
                 }
             }
         }
