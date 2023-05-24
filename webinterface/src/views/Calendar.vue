@@ -527,7 +527,6 @@ export default {
         const currentCell = calendarCells[cellIndex];
         const currentInnerDiv = currentCell.children[0];
         currentInnerDiv.style.setProperty('background', 'rgb(64,65,112)', 'important');
-        console.log(currentCell);
       }
     },
   },
