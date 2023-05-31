@@ -12,10 +12,15 @@
           <div v-for="date in tasksDatesArray" :key="date">
             <h4>{{ date }}</h4>
             <ul>
-              <li v-for="task in taskGroupedByDate[date]" :key="task._id"
-                v-bind:class="{ 'late-task': getTaskDaysBetweenDeadlineAndSchedule(task) < 0, 'on-track-task': getTaskDaysBetweenDeadlineAndSchedule(task) > 0, 'due-that-day-task': getTaskDaysBetweenDeadlineAndSchedule(task) == 0 }"
-                v-on:click="openEditTaskModal(task)">
-                {{ task.title }} : {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
+              <li v-for="task in taskGroupedByDate[date]" :key="task._id" v-bind:class="{
+                  'late-task': getTaskDaysBetweenDeadlineAndSchedule(task) < 0,
+                  'on-track-task':
+                    getTaskDaysBetweenDeadlineAndSchedule(task) > 0,
+                  'due-that-day-task':
+                    getTaskDaysBetweenDeadlineAndSchedule(task) == 0,
+                }" v-on:click="openEditTaskModal(task)">
+                {{ task.title }} :
+                {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
               </li>
             </ul>
           </div>
@@ -175,6 +180,19 @@ export default {
             eventDetails.tags ? eventDetails.tags.type.includes("task") : false
           ) {
             this.openEditTaskModalById(eventDetails.tags.taskId);
+          }
+        },
+        eventDeleteHandling: "Update",
+        onEventDeleted: async (args) => {
+          try {
+            const response = await this.$http.post("/api/deleteEvent", {
+              eventId: args.e.data.id
+            });
+            if (!response.data.success) {
+              console.error(response.data.error);
+            }
+          } catch (error) {
+            console.error(error);
           }
         },
       },
@@ -520,13 +538,17 @@ export default {
       let cellIndex = rowIndex * 7 + columnIndex;
 
       // Get all the calendar cells
-      const calendarCells = document.querySelectorAll('.calendar_default_cell');
+      const calendarCells = document.querySelectorAll(".calendar_default_cell");
 
       // Highlight the current time cell's inner div
       if (calendarCells[cellIndex]) {
         const currentCell = calendarCells[cellIndex];
         const currentInnerDiv = currentCell.children[0];
-        currentInnerDiv.style.setProperty('background', 'rgb(64,65,112)', 'important');
+        currentInnerDiv.style.setProperty(
+          "background",
+          "rgb(64,65,112)",
+          "important"
+        );
       }
     },
   },
