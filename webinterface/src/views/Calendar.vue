@@ -12,10 +12,20 @@
           <div v-for="date in tasksDatesArray" :key="date">
             <h4>{{ date }}</h4>
             <ul>
-              <li v-for="task in taskGroupedByDate[date]" :key="task._id"
-                v-bind:class="{ 'late-task': getTaskDaysBetweenDeadlineAndSchedule(task) < 0, 'on-track-task': getTaskDaysBetweenDeadlineAndSchedule(task) > 0, 'due-that-day-task': getTaskDaysBetweenDeadlineAndSchedule(task) == 0 }"
-                v-on:click="openEditTaskModal(task)">
-                {{ task.title }} : {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
+              <li
+                v-for="task in taskGroupedByDate[date]"
+                :key="task._id"
+                v-bind:class="{
+                  'late-task': getTaskDaysBetweenDeadlineAndSchedule(task) < 0,
+                  'on-track-task':
+                    getTaskDaysBetweenDeadlineAndSchedule(task) > 0,
+                  'due-that-day-task':
+                    getTaskDaysBetweenDeadlineAndSchedule(task) == 0,
+                }"
+                v-on:click="openEditTaskModal(task)"
+              >
+                {{ task.title }} :
+                {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
               </li>
             </ul>
           </div>
@@ -31,8 +41,12 @@
         </div>
       </div>
     </div>
-    <b-modal id="task-modal" ref="addtaskmodal" @ok="resolveTaskModal"
-      :title="this.selectedTask ? 'Edit Task' : 'Add Task'">
+    <b-modal
+      id="task-modal"
+      ref="addtaskmodal"
+      @ok="resolveTaskModal"
+      :title="this.selectedTask ? 'Edit Task' : 'Add Task'"
+    >
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-body">
@@ -40,40 +54,78 @@
             <form ref="form" @submit.stop.prevent="handleSubmit">
               <div class="form-group">
                 <label for="task-title">Task Title</label>
-                <input type="text" v-model="input.taskTitle" class="form-control" id="task-title"
-                  placeholder="Enter task title" />
+                <input
+                  type="text"
+                  v-model="input.taskTitle"
+                  class="form-control"
+                  id="task-title"
+                  placeholder="Enter task title"
+                />
               </div>
               <div class="form-group">
                 <label for="task-due-date">Due Date</label>
-                <b-calendar v-model="input.taskDueDate" class="mb-2"></b-calendar>
+                <b-calendar
+                  v-model="input.taskDueDate"
+                  class="mb-2"
+                ></b-calendar>
               </div>
               <div class="form-group">
                 <label for="task-duration">Duration</label>
-                <input type="number" v-model="input.taskDuration" class="form-control" id="task-duration" />
+                <input
+                  type="number"
+                  v-model="input.taskDuration"
+                  class="form-control"
+                  id="task-duration"
+                />
               </div>
               <div class="form-group">
-                <b-form-checkbox type="number" v-model="input.taskBreakUpTask" class="form-control"
-                  id="task-break-up-task">Break Up Task Into Chunks</b-form-checkbox>
+                <b-form-checkbox
+                  type="number"
+                  v-model="input.taskBreakUpTask"
+                  class="form-control"
+                  id="task-break-up-task"
+                  >Break Up Task Into Chunks</b-form-checkbox
+                >
               </div>
               <div v-if="input.taskBreakUpTask" class="form-group">
-                <label for="task-break-up-task-chunk-duration">Chunk Duration</label>
-                <input type="number" v-model="input.taskBreakUpTaskChunkDuration" class="form-control"
-                  id="task-break-up-task-chunk-duration" />
+                <label for="task-break-up-task-chunk-duration"
+                  >Chunk Duration</label
+                >
+                <input
+                  type="number"
+                  v-model="input.taskBreakUpTaskChunkDuration"
+                  class="form-control"
+                  id="task-break-up-task-chunk-duration"
+                />
               </div>
               <div class="form-group">
                 <label for="task-start-date">Start Date</label>
-                <b-form-datepicker v-model="input.taskStartDate" class="mb-2"></b-form-datepicker>
+                <b-form-datepicker
+                  v-model="input.taskStartDate"
+                  class="mb-2"
+                ></b-form-datepicker>
               </div>
               <div class="form-group">
                 <label for="task-notes">Notes</label>
-                <input type="text" v-model="input.taskNotes" class="form-control" id="task-notes"
-                  placeholder="Enter task notes" />
+                <input
+                  type="text"
+                  v-model="input.taskNotes"
+                  class="form-control"
+                  id="task-notes"
+                  placeholder="Enter task notes"
+                />
               </div>
               <div v-if="this.selectedTask">
-                <button class="btn btn-primary" v-on:click="completeTask(selectedTask._id)">
+                <button
+                  class="btn btn-primary"
+                  v-on:click="completeTask(selectedTask._id)"
+                >
                   Complete
                 </button>
-                <button class="btn btn-danger" v-on:click="deleteTask(selectedTask._id)">
+                <button
+                  class="btn btn-danger"
+                  v-on:click="deleteTask(selectedTask._id)"
+                >
                   Delete
                 </button>
               </div>
@@ -175,6 +227,19 @@ export default {
             eventDetails.tags ? eventDetails.tags.type.includes("task") : false
           ) {
             this.openEditTaskModalById(eventDetails.tags.taskId);
+          }
+        },
+        eventDeleteHandling: "Update",
+        onEventDeleted: async (args) => {
+           try {
+            const response = await this.$http.post("/api/deleteEvent", {
+              eventId: args.e.data.id
+            });
+            if (!response.data.success) {
+              console.error(response.data.error);
+            }
+          } catch (error) {
+            console.error(error);
           }
         },
       },
@@ -308,7 +373,7 @@ export default {
       // Do same for startDate
       let inputStartDate = this.changeShortCalendarFormatToDate(
         this.input.taskStartDate ||
-        this.changeDateToShortCalendarFormat(new Date())
+          this.changeDateToShortCalendarFormat(new Date())
       );
 
       // Make taskDueDate at the end of the day by adding 23 hours, 59 minutes, 59 seconds
@@ -520,14 +585,17 @@ export default {
       let cellIndex = rowIndex * 7 + columnIndex;
 
       // Get all the calendar cells
-      const calendarCells = document.querySelectorAll('.calendar_default_cell');
+      const calendarCells = document.querySelectorAll(".calendar_default_cell");
 
       // Highlight the current time cell's inner div
       if (calendarCells[cellIndex]) {
         const currentCell = calendarCells[cellIndex];
         const currentInnerDiv = currentCell.children[0];
-        currentInnerDiv.style.setProperty('background', 'rgb(64,65,112)', 'important');
-        console.log(currentCell);
+        currentInnerDiv.style.setProperty(
+          "background",
+          "rgb(64,65,112)",
+          "important"
+        );
       }
     },
   },
@@ -578,7 +646,7 @@ export default {
     let endDate = new Date();
     endDate.setTime(
       startDate.getTime() +
-      this.$store.state.user.workingDuration * 60 * 60 * 1000
+        this.$store.state.user.workingDuration * 60 * 60 * 1000
     );
 
     this.config.businessBeginsHour =
