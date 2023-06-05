@@ -4,7 +4,9 @@
     <div class="calendar-box">
       <div class="task-controls">
         <h2>Controls</h2>
-        <b-button v-on:click="openAddTaskModal">Add Task</b-button>
+        <b-button v-on:click="$refs.addTaskModal.openAddTaskModal()"
+          >Add Task</b-button
+        >
         <b-button v-on:click="scheduleTasks">Schedule</b-button>
         <b-button v-on:click="syncCalendar">Sync Calendar</b-button>
         <div class="task-list">
@@ -12,13 +14,18 @@
           <div v-for="date in tasksDatesArray" :key="date">
             <h4>{{ date }}</h4>
             <ul>
-              <li v-for="task in taskGroupedByDate[date]" :key="task._id" v-bind:class="{
+              <li
+                v-for="task in taskGroupedByDate[date]"
+                :key="task._id"
+                v-bind:class="{
                   'late-task': getTaskDaysBetweenDeadlineAndSchedule(task) < 0,
                   'on-track-task':
                     getTaskDaysBetweenDeadlineAndSchedule(task) > 0,
                   'due-that-day-task':
                     getTaskDaysBetweenDeadlineAndSchedule(task) == 0,
-                }" v-on:click="openEditTaskModal(task)">
+                }"
+                v-on:click="$refs.addTaskModal.openEditTaskModal(task)"
+              >
                 {{ task.title }} :
                 {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
               </li>
@@ -36,67 +43,26 @@
         </div>
       </div>
     </div>
-    <b-modal id="task-modal" ref="addtaskmodal" @ok="resolveTaskModal"
-      :title="this.selectedTask ? 'Edit Task' : 'Add Task'">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-body">
-            <div v-if="input.error">{{ input.error }}</div>
-            <form ref="form" @submit.stop.prevent="handleSubmit">
-              <div class="form-group">
-                <label for="task-title">Task Title</label>
-                <input type="text" v-model="input.taskTitle" class="form-control" id="task-title"
-                  placeholder="Enter task title" />
-              </div>
-              <div class="form-group">
-                <label for="task-due-date">Due Date</label>
-                <b-calendar v-model="input.taskDueDate" class="mb-2"></b-calendar>
-              </div>
-              <div class="form-group">
-                <label for="task-duration">Duration</label>
-                <input type="number" v-model="input.taskDuration" class="form-control" id="task-duration" />
-              </div>
-              <div class="form-group">
-                <b-form-checkbox type="number" v-model="input.taskBreakUpTask" class="form-control"
-                  id="task-break-up-task">Break Up Task Into Chunks</b-form-checkbox>
-              </div>
-              <div v-if="input.taskBreakUpTask" class="form-group">
-                <label for="task-break-up-task-chunk-duration">Chunk Duration</label>
-                <input type="number" v-model="input.taskBreakUpTaskChunkDuration" class="form-control"
-                  id="task-break-up-task-chunk-duration" />
-              </div>
-              <div class="form-group">
-                <label for="task-start-date">Start Date</label>
-                <b-form-datepicker v-model="input.taskStartDate" class="mb-2"></b-form-datepicker>
-              </div>
-              <div class="form-group">
-                <label for="task-notes">Notes</label>
-                <input type="text" v-model="input.taskNotes" class="form-control" id="task-notes"
-                  placeholder="Enter task notes" />
-              </div>
-              <div v-if="this.selectedTask">
-                <button class="btn btn-primary" v-on:click="completeTask(selectedTask._id)">
-                  Complete
-                </button>
-                <button class="btn btn-danger" v-on:click="deleteTask(selectedTask._id)">
-                  Delete
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    </b-modal>
+    <AddTaskModal
+      :taskList="taskList"
+      :projectList="projectList"
+      ref="addTaskModal"
+      @refreshTaskList="refreshTaskList"
+      @refreshProjectList="refreshProjectList"
+    />
   </div>
 </template>
 
 <script>
 import { DayPilot, DayPilotCalendar } from "@daypilot/daypilot-lite-vue";
+import AddTaskModal from "../components/AddTaskModal.vue";
+import { helperFunctions } from "../js/helperFunctions.js";
 
 export default {
   name: "Calendar",
   components: {
     DayPilotCalendar,
+    AddTaskModal,
   },
   data() {
     return {
@@ -144,7 +110,9 @@ export default {
           if (
             eventDetails.tags ? eventDetails.tags.type.includes("task") : false
           ) {
-            this.openEditTaskModalById(eventDetails.tags.taskId);
+            this.$refs.addTaskModal.openEditTaskModalById(
+              eventDetails.tags.taskId
+            );
           } else {
             try {
               const response = await this.$http.post("/api/updateEvent", {
@@ -179,14 +147,16 @@ export default {
           if (
             eventDetails.tags ? eventDetails.tags.type.includes("task") : false
           ) {
-            this.openEditTaskModalById(eventDetails.tags.taskId);
+            this.$refs.addTaskModal.openEditTaskModalById(
+              eventDetails.tags.taskId
+            );
           }
         },
         eventDeleteHandling: "Update",
         onEventDeleted: async (args) => {
           try {
             const response = await this.$http.post("/api/deleteEvent", {
-              eventId: args.e.data.id
+              eventId: args.e.data.id,
             });
             if (!response.data.success) {
               console.error(response.data.error);
@@ -198,16 +168,7 @@ export default {
       },
       user: this.$store.state.user,
       taskList: null,
-      input: {
-        taskTitle: null,
-        taskDueDate: null,
-        taskDuration: null,
-        taskNotes: null,
-        taskStartDate: this.changeDateToShortCalendarFormat(new Date()),
-        taskBreakUpTask: false,
-        taskBreakUpTaskChunkDuration: 30,
-        error: null,
-      },
+      projectList: null,
       showModal: false,
       currentDate: new Date(),
       selectedTask: null,
@@ -219,6 +180,13 @@ export default {
       const taskDataResponse = await this.$http.get("/api/getUserTasks/");
       this.taskList = taskDataResponse.data.taskList;
       if (!taskDataResponse.data.success) {
+        console.error("Task retrieval error");
+      }
+    },
+    async loadProjects() {
+      const projectDataResponse = await this.$http.get("/api/getUserProjects/");
+      this.projectList = projectDataResponse.data.projectList;
+      if (!projectDataResponse.data.success) {
         console.error("Task retrieval error");
       }
     },
@@ -290,114 +258,12 @@ export default {
     },
     async loadData() {
       this.loadTasks();
+      this.loadProjects();
       this.loadCalendarEvents();
     },
     async syncCalendar() {
       const taskDataResponse = await this.$http.get("/api/synccalendar/");
       this.loadCalendarEvents();
-    },
-    async addTask(bvModalEvent) {
-      // Prevent modal from closing
-      bvModalEvent.preventDefault();
-
-      this.input.error = "";
-
-      if (!this.input.taskTitle) {
-        this.input.error = "Need task title";
-      } else if (!this.input.taskDueDate) {
-        this.input.error = "Need task due date";
-      } else if (!this.input.taskDuration) {
-        this.input.error = "Need duration";
-      }
-
-      if (this.input.error) {
-        return;
-      }
-
-      this.$nextTick(() => {
-        this.$refs.addtaskmodal.hide();
-      });
-
-      // this.input.taskDueDate comes in format '2023-03-01', convert that to start of the day in this timezone
-      let inputDueDate = this.changeShortCalendarFormatToDate(
-        this.input.taskDueDate
-      );
-
-      // Do same for startDate
-      let inputStartDate = this.changeShortCalendarFormatToDate(
-        this.input.taskStartDate ||
-        this.changeDateToShortCalendarFormat(new Date())
-      );
-
-      // Make taskDueDate at the end of the day by adding 23 hours, 59 minutes, 59 seconds
-      inputDueDate = new Date(
-        new Date(inputDueDate).getTime() + 86399000
-      ).toISOString();
-
-      try {
-        const response = await this.$http.post("/api/createTask/", {
-          title: this.input.taskTitle,
-          dueDate: inputDueDate,
-          duration: this.input.taskDuration,
-          startDate: inputStartDate,
-          notes: this.input.taskNotes,
-          breakUpTask: this.input.taskBreakUpTask,
-          breakUpTaskChunkDuration: this.input.taskBreakUpTaskChunkDuration,
-        });
-        this.taskList = response.data.taskList;
-
-        Object.keys(this.input).forEach((i) => (this.input[i] = null));
-      } catch (error) {
-        console.error(error);
-      }
-    },
-    async editTask(bvModalEvent) {
-      bvModalEvent.preventDefault();
-
-      // Set all of the input to the current task
-      this.selectedTask.title = this.input.taskTitle;
-      this.selectedTask.dueDate = this.changeShortCalendarFormatToDate(
-        this.input.taskDueDate
-      );
-      this.selectedTask.duration = this.input.taskDuration;
-      this.selectedTask.notes = this.input.taskNotes;
-      this.selectedTask.startDate = this.changeShortCalendarFormatToDate(
-        this.input.taskStartDate
-      );
-      this.selectedTask.breakUpTask = this.input.taskBreakUpTask;
-      this.selectedTask.breakUpTaskChunkDuration =
-        this.input.taskBreakUpTaskChunkDuration;
-
-      try {
-        const response = await this.$http.post("/api/editTask/", {
-          task: this.selectedTask,
-        });
-        this.$nextTick(() => {
-          this.$refs.addtaskmodal.hide();
-        });
-      } catch (error) {
-        console.error(error);
-      }
-    },
-    async deleteTask(taskId) {
-      try {
-        const response = await this.$http.post(`/api/deleteTask`, { taskId });
-        // refresh task list after deletion
-        this.taskList = response.data.taskList;
-        this.$bvModal.hide("task-modal");
-      } catch (error) {
-        console.error(error);
-      }
-    },
-    async completeTask(taskId) {
-      try {
-        const response = await this.$http.post(`/api/completeTask`, { taskId });
-        // refresh task list after deletion
-        this.taskList = response.data.taskList;
-        this.$bvModal.hide("task-modal");
-      } catch (error) {
-        console.error(error);
-      }
     },
     addDays(date, days) {
       var result = new Date(date);
@@ -425,58 +291,6 @@ export default {
         this.loadData();
       } catch (error) {
         console.error(error);
-      }
-    },
-    changeShortCalendarFormatToDate(inString) {
-      let returnDate = new Date(inString + "T00:00:00").toISOString();
-      return returnDate;
-    },
-    changeDateToShortCalendarFormat(inDate) {
-      let returnDate =
-        inDate.getFullYear() +
-        "-" +
-        ("0" + (inDate.getMonth() + 1)).slice(-2) +
-        "-" +
-        ("0" + inDate.getDate()).slice(-2);
-
-      return returnDate;
-    },
-    openAddTaskModal() {
-      this.selectedTask = null;
-
-      // Make all of this.input null
-      Object.keys(this.input).forEach((i) => (this.input[i] = null));
-      this.$bvModal.show("task-modal");
-    },
-    openEditTaskModal(inputTask) {
-      this.selectedTask = inputTask;
-
-      // Make all this.input be that of the task's
-      this.input.taskTitle = inputTask.title;
-      this.input.taskDueDate = this.changeDateToShortCalendarFormat(
-        new Date(inputTask.dueDate)
-      );
-      this.input.taskDuration = inputTask.duration;
-      this.input.taskStartDate = this.changeDateToShortCalendarFormat(
-        new Date(inputTask.startDate)
-      );
-      this.input.taskNotes = inputTask.notes;
-      this.input.taskBreakUpTask = inputTask.breakUpTask;
-      this.input.taskBreakUpTaskChunkDuration =
-        inputTask.breakUpTaskChunkDuration;
-
-      this.$bvModal.show("task-modal");
-    },
-    openEditTaskModalById(inTaskId) {
-      // Find the task with the right Id
-      let foundTask = this.taskList.find((object) => object._id == inTaskId);
-      this.openEditTaskModal(foundTask);
-    },
-    resolveTaskModal(bvModalEvent) {
-      if (this.selectedTask) {
-        this.editTask(bvModalEvent);
-      } else {
-        this.addTask(bvModalEvent);
       }
     },
     getTaskDaysBetweenDeadlineAndSchedule(inTask) {
@@ -508,10 +322,6 @@ export default {
       } else {
         return null;
       }
-    },
-    handleSubmit() {
-      // DO nothing on general modal submit
-      return null;
     },
     getTaskDate(task) {
       const taskDate = new Date(task.scheduledDate);
@@ -550,6 +360,12 @@ export default {
           "important"
         );
       }
+    },
+    refreshTaskList(inputList) {
+      this.taskList = inputList;
+    },
+    refreshProjectList(inputList) {
+      this.projectList = inputList;
     },
   },
   computed: {
@@ -599,7 +415,7 @@ export default {
     let endDate = new Date();
     endDate.setTime(
       startDate.getTime() +
-      this.$store.state.user.workingDuration * 60 * 60 * 1000
+        this.$store.state.user.workingDuration * 60 * 60 * 1000
     );
 
     this.config.businessBeginsHour =

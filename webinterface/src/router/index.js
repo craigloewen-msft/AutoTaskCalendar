@@ -58,6 +58,14 @@ const routes = [
     meta: {
       requiresAuth: true
     }
+  },
+  {
+    path: '/managetasks',
+    name: 'ManageTasks',
+    component: () => import(/* webpackChunkName: "about" */ '../views/ManageTasks.vue'),
+    meta: {
+      requiresAuth: true
+    }
   }
 ]
 

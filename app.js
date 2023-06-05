@@ -63,6 +63,12 @@ UserDetail.virtual('eventList', {
     foreignField: 'userRef'
 });
 
+UserDetail.virtual('projectList', {
+    ref: 'projectInfo',
+    localField: '_id',
+    foreignField: 'userRef'
+});
+
 const TaskDetail = new Schema({
     title: String,
     dueDate: Date,
@@ -74,6 +80,7 @@ const TaskDetail = new Schema({
     completed: Boolean,
     scheduledDate: Date,
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
+    projectRef: { type: Schema.Types.ObjectId, ref: 'projectInfo' },
 })
 
 // Add a new schema for events
@@ -88,12 +95,25 @@ const EventDetail = new Schema({
     taskRef: { type: Schema.Types.ObjectId, ref: 'taskInfo' },
 });
 
+const ProjectDetail = new Schema({
+    name: String,
+    userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
+});
+
+ProjectDetail.virtual('taskList', {
+    ref: 'taskInfo',
+    localField: '_id',
+    foreignField: 'projectRef'
+});
+
+
 mongoose.connect(mongooseConnectionString, { useNewUrlParser: true, useUnifiedTopology: true });
 
 UserDetail.plugin(passportLocalMongoose);
 const UserDetails = mongoose.model('userInfo', UserDetail, 'userInfo');
 const TaskDetails = mongoose.model('taskInfo', TaskDetail, 'taskInfo');
 const EventDetails = mongoose.model('eventInfo', EventDetail, 'eventInfo');
+const ProjectDetails = mongoose.model('projectInfo', ProjectDetail, 'projectInfo');
 
 const JWTTimeout = 4 * 604800; // 28 Days
 
@@ -391,42 +411,6 @@ app.post('/api/editTask', authenticateToken, async (req, res) => {
         return res.json({ success: false });
     }
 
-});
-
-app.post('/api/updateTask', authenticateToken, async (req, res) => {
-    // Check if user is logged in
-
-    let user = await UserDetails.findOne({ username: req.user.id });
-
-    if (!req.user || !user) {
-        return res.send(returnFailure('Not logged in'));
-    }
-
-    const { taskId, title, dueDate, notes } = req.body;
-    if (!taskId) {
-        return res.send(returnFailure('Task id is required'));
-    }
-
-    try {
-        const task = await TaskDetails.findOne({ _id: taskId, userRef: user._id });
-        if (!task) {
-            return res.send(returnFailure('Task not found'));
-        }
-        if (title) {
-            task.title = title;
-        }
-        if (dueDate) {
-            task.dueDate = dueDate;
-        }
-        if (notes) {
-            task.notes = notes;
-        }
-
-        await task.save();
-        res.send({ success: true, task: task });
-    } catch (err) {
-        res.send(returnFailure('Error updating task'));
-    }
 });
 
 app.post('/api/deleteTask', authenticateToken, async (req, res) => {
@@ -785,6 +769,138 @@ app.get("/api/getUserEvents/:date", authenticateToken, async (req, res) => {
     }
 });
 
+// Project management routes
+
+// - Helper functions
+
+async function createProject(userId, name) {
+    try {
+        // Create the new project
+        const project = new ProjectDetails({
+            name: name,
+            userRef: userId
+        });
+        await project.save();
+        return project;
+    } catch (error) {
+        console.error(error);
+        throw new Error("Error creating project");
+    }
+}
+
+app.post('/api/editProject', authenticateToken, async (req, res) => {
+
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    try {
+        let { project } = req.body;
+        let actualProject = await ProjectDetails.findByIdAndUpdate(project._id, project);
+        return res.json({ success: true });
+    } catch (error) {
+        console.error(error);
+        return res.json({ success: false });
+    }
+
+});
+
+async function deleteProject(projectId, userId) {
+    try {
+        // Get every task that has this project as a reference and make it null
+        const tasks = await TaskDetails.find({ projectRef: projectId, userRef: userId });
+        for (let task of tasks) {
+            task.projectRef = null;
+            await task.save();
+        }
+
+        // Delete the project
+        const project = await ProjectDetails.findOne({ _id: projectId, userRef: userId });
+        if (!project) {
+            throw new Error("Project not found");
+        }
+        await project.remove();
+    } catch (err) {
+        throw new Error("Error deleting project");
+    }
+}
+
+async function getProjectsListFromUsername(username) {
+  try {
+    const user = await UserDetails.findOne({ username }).populate({
+      path: 'projectList',
+      options: { sort: { createdAt: -1 } },
+    });
+
+    return user.projectList;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+app.post('/api/createProject', authenticateToken, async (req, res) => {
+    // Check if user is logged in
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    const { name } = req.body;
+    if (!name) {
+        return res.send(returnFailure('Name is required'));
+    }
+
+    try {
+        const project = await createProject(user._id, name);
+        const projectList = await getProjectsListFromUsername(req.user.id);
+        return res.json({ success: true, projectList });
+    } catch (error) {
+        console.error(error);
+        return res.json({ success: false });
+    }
+});
+
+app.post('/api/deleteProject', authenticateToken, async (req, res) => {
+    // Check if user is logged in
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    const { projectId } = req.body;
+    if (!projectId) {
+        return res.send(returnFailure('Project id is required'));
+    }
+
+    try {
+        await deleteProject(projectId, user._id);
+        // Return the updated project list
+        const projectList = await ProjectDetails.find({ userRef: user._id });
+        return res.json({ success: true, projectList });
+    } catch (err) {
+        res.send(returnFailure(err.message));
+    }
+});
+
+app.get('/api/getUserProjects', authenticateToken, async (req, res) => {
+  try {
+    const projectList = await getProjectsListFromUsername(req.user.id);
+
+    if (!projectList) {
+      return res.send(returnFailure('User not found'));
+    }
+
+    return res.json({ success: true, projectList });
+  } catch (error) {
+    console.error(error);
+    return res.json({ success: false });
+  }
+});
 
 // Google Calendar API functions
 
