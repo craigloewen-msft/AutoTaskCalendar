@@ -111,6 +111,8 @@ export default {
         const response = await this.$http.get("api/getCalendars");
         if (response.data.success) {
           this.userCalendarList = response.data.calendars;
+          // Add selected calendars to input
+          this.input.selectedCalendars = this.userCalendarList.filter(obj => obj.selected).map(obj => obj.id);
         }
       } catch (error) {
         console.error(error);
