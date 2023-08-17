@@ -15,7 +15,7 @@
         </div>
         <div class="col-md-5">
           <img
-            src="https://storage.googleapis.com/kaggle-datasets-images/10116/14254/15677e366344f4680954aa6dad902386/dataset-card.jpg?t=2018-01-18-17-36-19"
+            src="about.jpg"
             class="img-responsive"
           />
         </div>
