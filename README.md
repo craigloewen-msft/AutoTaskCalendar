@@ -1,4 +1,4 @@
-This repository's goal is to make a web interface to more easily triage, manage and respond to Github Issues.
+This repository's goal is to make a web interface to manage your daily tasks and automatically schedule them on your calendar.
 
 ## Use codespaces 
 
