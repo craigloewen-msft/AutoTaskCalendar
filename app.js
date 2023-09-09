@@ -168,7 +168,10 @@ function authenticateToken(req, res, next) {
 
 // User management routes
 
+
+// 
 app.post('/api/login', (req, res, next) => {
+    // 
     passport.authenticate('local',
         (err, user, info) => {
             if (err) {
@@ -196,6 +199,10 @@ app.post('/api/login', (req, res, next) => {
 
         })(req, res, next);
 });
+
+// Add new user function
+
+
 
 app.get('/api/user/:username/', authenticateToken, (req, res) => {
     try {
