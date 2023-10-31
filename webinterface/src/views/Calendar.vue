@@ -53,7 +53,7 @@
             <div v-if="input.error">{{ input.error }}</div>
             <form ref="form" @submit.stop.prevent="handleSubmit">
               <div class="form-group">
-                <label for="task-title">Task Title</label>
+                <label for="task-title">Task Title*</label>
                 <input
                   type="text"
                   v-model="input.taskTitle"
@@ -63,14 +63,14 @@
                 />
               </div>
               <div class="form-group">
-                <label for="task-due-date">Due Date</label>
+                <label for="task-due-date">Due Date*</label>
                 <b-calendar
                   v-model="input.taskDueDate"
                   class="mb-2"
                 ></b-calendar>
               </div>
               <div class="form-group">
-                <label for="task-duration">Duration</label>
+                <label for="task-duration">Duration*</label>
                 <input
                   type="number"
                   v-model="input.taskDuration"
@@ -104,6 +104,17 @@
                   v-model="input.taskStartDate"
                   class="mb-2"
                 ></b-form-datepicker>
+              </div>
+              <div class="form-group">
+                <label for="task-repeat">Repeat</label>
+                <select v-model="input.repeat" class="form-control" id="task-repeat">
+                  <option disabled value="">Please select one</option>
+                  <option value="">None</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
               </div>
               <div class="form-group">
                 <label for="task-notes">Notes</label>
@@ -254,6 +265,7 @@ export default {
         taskBreakUpTask: false,
         taskBreakUpTaskChunkDuration: 30,
         error: null,
+        repeat: null,
       },
       showModal: false,
       currentDate: new Date(),
@@ -390,6 +402,7 @@ export default {
           notes: this.input.taskNotes,
           breakUpTask: this.input.taskBreakUpTask,
           breakUpTaskChunkDuration: this.input.taskBreakUpTaskChunkDuration,
+          repeat: this.input.repeat,
         });
         this.taskList = response.data.taskList;
 
@@ -414,6 +427,8 @@ export default {
       this.selectedTask.breakUpTask = this.input.taskBreakUpTask;
       this.selectedTask.breakUpTaskChunkDuration =
         this.input.taskBreakUpTaskChunkDuration;
+
+      this.selectedTask.repeat = this.input.repeat;
 
       try {
         const response = await this.$http.post("/api/editTask/", {
@@ -511,6 +526,8 @@ export default {
       this.input.taskBreakUpTask = inputTask.breakUpTask;
       this.input.taskBreakUpTaskChunkDuration =
         inputTask.breakUpTaskChunkDuration;
+
+      this.input.repeat = inputTask.repeat;
 
       this.$bvModal.show("task-modal");
     },

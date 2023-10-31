@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken');
 const connectEnsureLogin = require('connect-ensure-login');
 const { google } = require('googleapis');
 const process = require('process');
+const moment = require('moment');
 // Custom requires
 // Get config
 const config = fs.existsSync('./config.js') ? require('./config') : require('./defaultconfig');
@@ -73,6 +74,7 @@ const TaskDetail = new Schema({
     breakUpTaskChunkDuration: Number,
     completed: Boolean,
     scheduledDate: Date,
+    repeat: String,
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
 })
 
@@ -347,7 +349,7 @@ app.post('/api/createTask', authenticateToken, async (req, res) => {
         return res.send(returnFailure('Not logged in'));
     }
 
-    const { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration } = req.body;
+    const { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration, taskRepeat } = req.body;
     if (!title || !dueDate || !duration || !startDate || breakUpTask ? !breakUpTaskChunkDuration : false) {
         return res.send(returnFailure('Title, duration, and due date are required'));
     }
@@ -366,6 +368,7 @@ app.post('/api/createTask', authenticateToken, async (req, res) => {
             userRef: user._id,
             breakUpTask: breakUpTask,
             breakUpTaskChunkDuration: breakUpTaskChunkDuration,
+            repeat: taskRepeat,
         });
         await task.save();
         // Return the updated task list
@@ -398,42 +401,6 @@ app.post('/api/editTask', authenticateToken, async (req, res) => {
         return res.json({ success: false });
     }
 
-});
-
-app.post('/api/updateTask', authenticateToken, async (req, res) => {
-    // Check if user is logged in
-
-    let user = await UserDetails.findOne({ username: req.user.id });
-
-    if (!req.user || !user) {
-        return res.send(returnFailure('Not logged in'));
-    }
-
-    const { taskId, title, dueDate, notes } = req.body;
-    if (!taskId) {
-        return res.send(returnFailure('Task id is required'));
-    }
-
-    try {
-        const task = await TaskDetails.findOne({ _id: taskId, userRef: user._id });
-        if (!task) {
-            return res.send(returnFailure('Task not found'));
-        }
-        if (title) {
-            task.title = title;
-        }
-        if (dueDate) {
-            task.dueDate = dueDate;
-        }
-        if (notes) {
-            task.notes = notes;
-        }
-
-        await task.save();
-        res.send({ success: true, task: task });
-    } catch (err) {
-        res.send(returnFailure('Error updating task'));
-    }
 });
 
 app.post('/api/deleteTask', authenticateToken, async (req, res) => {
@@ -483,6 +450,41 @@ app.post('/api/completeTask', authenticateToken, async (req, res) => {
         }
         task.completed = true;
         await task.save();
+
+        // Check if task is a repeating task
+        if (task.repeat) {
+            // Create a new task based on the completed task
+            const newTask = new TaskDetails({
+                // Copy all properties of the original task
+                ...task._doc,
+                // Set the new task as not completed
+                completed: false,
+                // Generate a new id for the new task
+                _id: mongoose.Types.ObjectId(),
+            });
+
+            switch (task.repeat) {
+                case 'daily':
+                    newTask.startDate = moment(task.startDate).add(1, 'days').toDate();
+                    newTask.dueDate = moment(task.dueDate).add(1, 'days').toDate();
+                    break;
+                case 'weekly':
+                    newTask.startDate = moment(task.startDate).add(1, 'weeks').toDate();
+                    newTask.dueDate = moment(task.dueDate).add(1, 'weeks').toDate();
+                    break;
+                case 'monthly':
+                    newTask.startDate = moment(task.startDate).add(1, 'months').toDate();
+                    newTask.dueDate = moment(task.dueDate).add(1, 'months').toDate();
+                    break;
+                case 'yearly':
+                    newTask.startDate = moment(task.startDate).add(1, 'years').toDate();
+                    newTask.dueDate = moment(task.dueDate).add(1, 'years').toDate();
+                    break;
+            }
+
+            await newTask.save();
+        }
+
         // Return the updated task list
         const returnTaskList = await getTaskListFromUsername(req.user.id);
         return res.json({ success: true, taskList: returnTaskList });
@@ -529,7 +531,6 @@ async function getEventListFromUsername(inUsername) {
     let user = await UserDetails.findOne({ username: inUsername }).populate('eventList');
     return user.eventList;
 }
-
 
 async function createEvent(userId, title, startDate, endDate, notes, type) {
     try {
