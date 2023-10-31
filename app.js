@@ -76,7 +76,7 @@ const TaskDetail = new Schema({
     scheduledDate: Date,
     repeat: String,
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
-})
+});
 
 // Add a new schema for events
 const EventDetail = new Schema({
@@ -340,6 +340,51 @@ async function refreshGoogleCalendarAccessToken(inUser) {
     return true;
 }
 
+const completeTask = async (task, user) => {
+
+    if (!task) {
+        return { success: false, message: 'Task not found' };
+    }
+    task.completed = true;
+    await task.save();
+
+    // Check if task is a repeating task
+    if (task.repeat) {
+        // Create a new task based on the completed task
+        const newTask = new TaskDetails({
+            // Copy all properties of the original task
+            ...task._doc,
+            // Set the new task as not completed
+            completed: false,
+            // Generate a new id for the new task
+            _id: mongoose.Types.ObjectId(),
+        });
+
+        switch (task.repeat) {
+            case 'daily':
+                newTask.startDate = moment(task.startDate).add(1, 'days').toDate();
+                newTask.dueDate = moment(task.dueDate).add(1, 'days').toDate();
+                break;
+            case 'weekly':
+                newTask.startDate = moment(task.startDate).add(1, 'weeks').toDate();
+                newTask.dueDate = moment(task.dueDate).add(1, 'weeks').toDate();
+                break;
+            case 'monthly':
+                newTask.startDate = moment(task.startDate).add(1, 'months').toDate();
+                newTask.dueDate = moment(task.dueDate).add(1, 'months').toDate();
+                break;
+            case 'yearly':
+                newTask.startDate = moment(task.startDate).add(1, 'years').toDate();
+                newTask.dueDate = moment(task.dueDate).add(1, 'years').toDate();
+                break;
+        }
+
+        await newTask.save();
+    }
+
+    return { success: true };
+}
+
 app.post('/api/createTask', authenticateToken, async (req, res) => {
     // Check if user is logged in
 
@@ -445,44 +490,10 @@ app.post('/api/completeTask', authenticateToken, async (req, res) => {
 
     try {
         const task = await TaskDetails.findOne({ _id: taskId, userRef: user._id });
-        if (!task) {
-            return res.send(returnFailure('Task not found'));
-        }
-        task.completed = true;
-        await task.save();
+        const result = await completeTask(task, user);
 
-        // Check if task is a repeating task
-        if (task.repeat) {
-            // Create a new task based on the completed task
-            const newTask = new TaskDetails({
-                // Copy all properties of the original task
-                ...task._doc,
-                // Set the new task as not completed
-                completed: false,
-                // Generate a new id for the new task
-                _id: mongoose.Types.ObjectId(),
-            });
-
-            switch (task.repeat) {
-                case 'daily':
-                    newTask.startDate = moment(task.startDate).add(1, 'days').toDate();
-                    newTask.dueDate = moment(task.dueDate).add(1, 'days').toDate();
-                    break;
-                case 'weekly':
-                    newTask.startDate = moment(task.startDate).add(1, 'weeks').toDate();
-                    newTask.dueDate = moment(task.dueDate).add(1, 'weeks').toDate();
-                    break;
-                case 'monthly':
-                    newTask.startDate = moment(task.startDate).add(1, 'months').toDate();
-                    newTask.dueDate = moment(task.dueDate).add(1, 'months').toDate();
-                    break;
-                case 'yearly':
-                    newTask.startDate = moment(task.startDate).add(1, 'years').toDate();
-                    newTask.dueDate = moment(task.dueDate).add(1, 'years').toDate();
-                    break;
-            }
-
-            await newTask.save();
+        if (!result.success) {
+            return res.send(returnFailure(result.message));
         }
 
         // Return the updated task list
@@ -491,6 +502,43 @@ app.post('/api/completeTask', authenticateToken, async (req, res) => {
     } catch (err) {
         res.send(returnFailure('Error deleting task'));
     }
+});
+
+app.post('/api/completeTaskChunk', authenticateToken, async (req, res) => {
+    // Check if user is logged in
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    const { taskId, chunkDuration } = req.body;
+    if (!taskId || !chunkDuration) {
+        return res.send(returnFailure('Task id and chunkDuration are required'));
+    }
+
+    const task = await TaskDetails.findOne({ _id: taskId, userRef: user._id });
+
+    if (!task) {
+        return res.send(returnFailure('Task not found'));
+    }
+
+    // Subtract chunkDuration from task's total duration
+    task.duration -= chunkDuration;
+
+    // If duration is less than or equal to 0, complete the task
+    if (task.duration <= 0) {
+        const result = await completeTask(task, user);
+
+        if (!result.success) {
+            return res.send(returnFailure(result.message));
+        }
+    } else {
+        await task.save();
+    }
+
+    const returnTaskList = await getTaskListFromUsername(req.user.id);
+    return res.json({ success: true, taskList: returnTaskList });
 });
 
 app.get("/api/getUserTasks", authenticateToken, async (req, res) => {
@@ -949,6 +997,9 @@ async function generateTaskEvents(inUser) {
     const workingDuration = inUser.workingDuration;
     const workingDays = inUser.workingDays;
 
+    // Store task chunk info in a dictionary
+    let taskChunkInfoList = {};
+
     let eventIndex = 0;
     while (sortedTasks.length > 0) {
         let nextEvent = null;
@@ -1018,22 +1069,22 @@ async function generateTaskEvents(inUser) {
                     let insertedTask = false;
                     for (let k = 0; k < sortedTasks.length; k++) {
                         let task = sortedTasks[k];
-                        const taskDuration = task.duration * 60 * 1000;
+                        const taskDuration = taskChunkInfoList[task._id] ? taskChunkInfoList[task._id].remainingDuration : task.duration * 60 * 1000;
                         const breakUpTaskChunkDuration = task.breakUpTask ? task.breakUpTaskChunkDuration * 60 * 1000 : 0;
                         if (currentExaminedTime.getTime() > task.startDate.getTime()) {
                             if (timeBetween >= taskDuration) {
                                 // Create a new task event from the task
 
-                                if (task.chunkNumber) {
-                                    task.chunkNumber++;
+                                if (taskChunkInfoList[task._id]) {
+                                    taskChunkInfoList[task._id].chunkNumber++;
                                 }
 
                                 const taskEvent = new EventDetails({
-                                    title: task.chunkNumber ? task.title + " (" + task.chunkNumber + ")" : task.title,
+                                    title: taskChunkInfoList[task._id] ? task.title + " (" + taskChunkInfoList[task._id].chunkNumber + ")" : task.title,
                                     startDate: currentExaminedTime,
                                     endDate: new Date(currentExaminedTime.getTime() + taskDuration),
                                     notes: task.notes,
-                                    type: 'task',
+                                    type: taskChunkInfoList[task._id] ? 'task-chunk' : 'task',
                                     userRef: inUser._id,
                                     taskRef: task._id,
                                 });
@@ -1060,11 +1111,17 @@ async function generateTaskEvents(inUser) {
                                 const chunkDurationMins = chunkDuration / 1000 / 60;
 
                                 // Modify task to show it's a chunk
-                                task.chunkNumber = task.chunkNumber ? task.chunkNumber + 1 : 1;
-                                task.duration = task.duration - chunkDurationMins;
+                                let taskChunkInfo = taskChunkInfoList[task._id];
+
+                                if (!taskChunkInfo) {
+                                    taskChunkInfo = { chunkNumber: 0, remainingDuration: taskDuration };
+                                    taskChunkInfoList[task._id] = taskChunkInfo;
+                                }
+                                taskChunkInfo.chunkNumber++;
+                                taskChunkInfo.remainingDuration -= chunkDuration;
 
                                 const taskEvent = new EventDetails({
-                                    title: task.title + " (" + task.chunkNumber + ")",
+                                    title: task.title + " (" + taskChunkInfo.chunkNumber + ")",
                                     startDate: currentExaminedTime,
                                     endDate: new Date(currentExaminedTime.getTime() + chunkDuration),
                                     notes: task.notes,

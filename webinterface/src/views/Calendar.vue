@@ -45,6 +45,7 @@
       id="task-modal"
       ref="addtaskmodal"
       @ok="resolveTaskModal"
+      @hidden="resetTaskModal"
       :title="this.selectedTask ? 'Edit Task' : 'Add Task'"
     >
       <div class="modal-dialog">
@@ -107,7 +108,11 @@
               </div>
               <div class="form-group">
                 <label for="task-repeat">Repeat</label>
-                <select v-model="input.repeat" class="form-control" id="task-repeat">
+                <select
+                  v-model="input.repeat"
+                  class="form-control"
+                  id="task-repeat"
+                >
                   <option disabled value="">Please select one</option>
                   <option value="">None</option>
                   <option value="daily">Daily</option>
@@ -202,7 +207,7 @@ export default {
           if (
             eventDetails.tags ? eventDetails.tags.type.includes("task") : false
           ) {
-            this.openEditTaskModalById(eventDetails.tags.taskId);
+            this.openEditTaskModalFromEvent(eventDetails);
           } else {
             try {
               const response = await this.$http.post("/api/updateEvent", {
@@ -237,14 +242,14 @@ export default {
           if (
             eventDetails.tags ? eventDetails.tags.type.includes("task") : false
           ) {
-            this.openEditTaskModalById(eventDetails.tags.taskId);
+            this.openEditTaskModalFromEvent(eventDetails);
           }
         },
         eventDeleteHandling: "Update",
         onEventDeleted: async (args) => {
-           try {
+          try {
             const response = await this.$http.post("/api/deleteEvent", {
-              eventId: args.e.data.id
+              eventId: args.e.data.id,
             });
             if (!response.data.success) {
               console.error(response.data.error);
@@ -270,6 +275,7 @@ export default {
       showModal: false,
       currentDate: new Date(),
       selectedTask: null,
+      selectedEvent: null,
       taskModalShow: false,
     };
   },
@@ -453,7 +459,17 @@ export default {
     },
     async completeTask(taskId) {
       try {
-        const response = await this.$http.post(`/api/completeTask`, { taskId });
+        let response;
+        if (this.selectedEvent.tags.type === "task-chunk") {
+          const chunkDuration =
+            (this.selectedEvent.end.getTime() - this.selectedEvent.start.getTime()) / 60000; // convert milliseconds to minutes
+          response = await this.$http.post(`/api/completeTaskChunk`, {
+            taskId,
+            chunkDuration,
+          });
+        } else {
+          response = await this.$http.post(`/api/completeTask`, { taskId });
+        }
         // refresh task list after deletion
         this.taskList = response.data.taskList;
         this.$bvModal.hide("task-modal");
@@ -513,7 +529,7 @@ export default {
     openEditTaskModal(inputTask) {
       this.selectedTask = inputTask;
 
-      // Make all this.input be that of the task's
+      // Make all this input be that of the task's
       this.input.taskTitle = inputTask.title;
       this.input.taskDueDate = this.changeDateToShortCalendarFormat(
         new Date(inputTask.dueDate)
@@ -531,7 +547,9 @@ export default {
 
       this.$bvModal.show("task-modal");
     },
-    openEditTaskModalById(inTaskId) {
+    openEditTaskModalFromEvent(eventDetails) {
+      let inTaskId = eventDetails.tags.taskId;
+      this.selectedEvent = eventDetails;
       // Find the task with the right Id
       let foundTask = this.taskList.find((object) => object._id == inTaskId);
       this.openEditTaskModal(foundTask);
@@ -542,6 +560,9 @@ export default {
       } else {
         this.addTask(bvModalEvent);
       }
+    },
+    resetTaskModal() {
+      this.selectedEvent = null;
     },
     getTaskDaysBetweenDeadlineAndSchedule(inTask) {
       let dueDate = new Date(inTask.dueDate);
