@@ -1169,12 +1169,10 @@ async function setupPythonWorker() {
     sock.connect('tcp://127.0.0.1:4242');
     console.log('Connected to Python worker');
 
-    setInterval(async () => {
-        await sock.send('World');
-        const [result] = await sock.receive();
+    await sock.send('World');
+    const [result] = await sock.receive();
 
-        console.log('Received reply: ', result.toString());
-    }, 1000); // 1000 milliseconds = 1 second
+    console.log('Received reply: ', result.toString());
 }
 
 // Error handle if the worker isn't running
