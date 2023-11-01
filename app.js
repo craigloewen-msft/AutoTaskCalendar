@@ -10,6 +10,8 @@ const connectEnsureLogin = require('connect-ensure-login');
 const { google } = require('googleapis');
 const process = require('process');
 const moment = require('moment');
+const zmq = require('zeromq');
+const { spawn } = require('child_process');
 // Custom requires
 // Get config
 const config = fs.existsSync('./config.js') ? require('./config') : require('./defaultconfig');
@@ -17,6 +19,10 @@ const config = fs.existsSync('./config.js') ? require('./config') : require('./d
 // Configure Vue Specific set up
 const app = express();
 app.use(express.static(__dirname + "/dist"));
+
+// Set up Python Worker socket (Full set up done later in file)
+const pythonServer = spawn('python3', ['./pythonWorker/server.py']);
+const sock = new zmq.Request;
 
 // Set up Dev or Production
 let mongooseConnectionString = '';
@@ -1156,3 +1162,26 @@ async function generateTaskEvents(inUser) {
 
     return;
 }
+
+// Python Worker related functions
+
+async function setupPythonWorker() {
+    sock.connect('tcp://127.0.0.1:4242');
+    console.log('Connected to Python worker');
+
+    setInterval(async () => {
+        await sock.send('World');
+        const [result] = await sock.receive();
+
+        console.log('Received reply: ', result.toString());
+    }, 1000); // 1000 milliseconds = 1 second
+}
+
+// Error handle if the worker isn't running
+pythonServer.on('exit', (code, signal) => {
+    if (code !== 0) {
+        console.error(`Python server exited with code: ${code}, signal: ${signal}`);
+    }
+});
+
+setupPythonWorker();
