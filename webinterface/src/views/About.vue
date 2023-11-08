@@ -8,16 +8,16 @@
         </div>
       </div>
       <div class="row">
-        <div class="col-md-4">
+        <div class="col-md-7">
           <p>
             This site allows you to auto schedule your tasks into your calendar.
-          </p>
+            </p>
         </div>
-        <div class="col-md-4 text-center">
-          <img src="ubuntu.png" class="img-responsive" />
-        </div>
-        <div class="col-md-4 text-right">
-          <p>안녕하세요</p>
+        <div class="col-md-5">
+          <img
+            src="about.jpg"
+            class="img-responsive"
+          />
         </div>
       </div>
     </b-container>
