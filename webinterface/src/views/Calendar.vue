@@ -460,7 +460,7 @@ export default {
     async completeTask(taskId) {
       try {
         let response;
-        if (this.selectedEvent.tags.type === "task-chunk") {
+        if (this.selectedEvent?.tags.type === "task-chunk") {
           const chunkDuration =
             (this.selectedEvent.end.getTime() - this.selectedEvent.start.getTime()) / 60000; // convert milliseconds to minutes
           response = await this.$http.post(`/api/completeTaskChunk`, {

@@ -924,7 +924,6 @@ app.get("/api/getCalendars", authenticateToken, async (req, res) => {
 
         return res.json({ success: true, calendars });
     } catch (err) {
-        console.error(err);
         return res.send(returnFailure(err.message));
     }
 });
