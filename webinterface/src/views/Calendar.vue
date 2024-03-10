@@ -4,9 +4,12 @@
     <div class="calendar-box">
       <div class="task-controls">
         <h2>Controls</h2>
+        <div class="task-controls-buttons">
         <b-button v-on:click="openAddTaskModal">Add Task</b-button>
+        <b-button v-on:click="openFollowUpModal(null)">Add Follow Up</b-button>
         <b-button v-on:click="scheduleTasks">Schedule</b-button>
         <b-button v-on:click="syncCalendar">Sync Calendar</b-button>
+        </div>
         <div class="task-list">
           <h2>Task List</h2>
           <div v-for="date in tasksDatesArray" :key="date">
@@ -131,7 +134,13 @@
                   placeholder="Enter task notes"
                 />
               </div>
-              <div v-if="this.selectedTask">
+              <div v-if="this.selectedTask" class="task-controls-buttons">
+                <button
+                  class="btn btn-primary"
+                  v-on:click="openFollowUpModal(selectedTask)"
+                >
+                  Set Follow Up
+                </button>
                 <button
                   class="btn btn-primary"
                   v-on:click="completeTask(selectedTask._id)"
@@ -146,6 +155,36 @@
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      </div>
+    </b-modal>
+    <b-modal
+      id="followup-modal"
+      ref="followupmodal"
+      @ok="resolveFollowUpModal"
+      @hidden="resetFollowUpModal"
+      :title="this.selectedTask ? 'Set follow up' : 'Add follow up'"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-body">
+            <div v-if="input.error">{{ input.error }}</div>
+            <label for="task-title">Task Title*</label>
+            <input
+              type="text"
+              v-model="input.taskTitle"
+              class="form-control"
+              id="task-title"
+              placeholder="Enter task title"
+            />
+            <label for="task-duration">Follow up after these many days:</label>
+            <input
+              type="number"
+              v-model="input.followUpDays"
+              class="form-control"
+              id="task-duration"
+            />
           </div>
         </div>
       </div>
@@ -271,6 +310,7 @@ export default {
         taskBreakUpTaskChunkDuration: 30,
         error: null,
         repeat: null,
+        followUpDays: null,
       },
       showModal: false,
       currentDate: new Date(),
@@ -417,6 +457,48 @@ export default {
         console.error(error);
       }
     },
+    async createFollowUp(bvModalEvent) {
+      // Prevent modal from closing
+      bvModalEvent.preventDefault();
+
+      this.input.error = "";
+
+      if (!this.input.taskTitle) {
+        this.input.error = "Need task title";
+      } else if (!this.input.followUpDays) {
+        this.input.error = "Need follow up days";
+      }
+
+      if (this.input.error) {
+        return;
+      }
+
+      // Get follow up date
+      let followUpDate = new Date();
+      followUpDate.setDate(
+        followUpDate.getDate() + parseInt(this.input.followUpDays, 10)
+      );
+
+      // Set time to 12 AM for that date
+      followUpDate.setHours(0, 0, 0, 0);
+
+      try {
+        const response = await this.$http.post("/api/setFollowUp/", {
+          title: this.input.taskTitle,
+          followUpDate: followUpDate,
+          taskID: this.selectedTask?._id,
+        });
+        this.taskList = response.data.taskList;
+
+        Object.keys(this.input).forEach((i) => (this.input[i] = null));
+      } catch (error) {
+        console.error(error);
+      }
+
+      this.$nextTick(() => {
+        this.$refs.followupmodal.hide();
+      });
+    },
     async editTask(bvModalEvent) {
       bvModalEvent.preventDefault();
 
@@ -462,7 +544,9 @@ export default {
         let response;
         if (this.selectedEvent?.tags.type === "task-chunk") {
           const chunkDuration =
-            (this.selectedEvent.end.getTime() - this.selectedEvent.start.getTime()) / 60000; // convert milliseconds to minutes
+            (this.selectedEvent.end.getTime() -
+              this.selectedEvent.start.getTime()) /
+            60000; // convert milliseconds to minutes
           response = await this.$http.post(`/api/completeTaskChunk`, {
             taskId,
             chunkDuration,
@@ -526,6 +610,22 @@ export default {
       Object.keys(this.input).forEach((i) => (this.input[i] = null));
       this.$bvModal.show("task-modal");
     },
+    openFollowUpModal(inputTask) {
+      this.selectedTask = inputTask;
+
+      // Make all of this.input null
+      Object.keys(this.input).forEach((i) => (this.input[i] = null));
+
+      if (inputTask) {
+        this.input.taskTitle = inputTask.title;
+      }
+
+      this.$nextTick(() => {
+        this.$refs.addtaskmodal.hide();
+      });
+      
+      this.$bvModal.show("followup-modal");
+    },
     openEditTaskModal(inputTask) {
       this.selectedTask = inputTask;
 
@@ -561,7 +661,13 @@ export default {
         this.addTask(bvModalEvent);
       }
     },
+    resolveFollowUpModal(bvModalEvent) {
+      this.createFollowUp(bvModalEvent);
+    },
     resetTaskModal() {
+      this.selectedEvent = null;
+    },
+    resetFollowUpModal() {
       this.selectedEvent = null;
     },
     getTaskDaysBetweenDeadlineAndSchedule(inTask) {
@@ -749,5 +855,10 @@ export default {
 
 .due-that-day-task {
   color: rgb(255, 255, 199);
+}
+
+.task-controls-buttons * {
+  margin-right: 5px;
+  margin-top: 5px;
 }
 </style>

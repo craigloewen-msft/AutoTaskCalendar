@@ -549,6 +549,59 @@ app.get("/api/getUserTasks", authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/api/setFollowUp', authenticateToken, async (req, res) => {
+    let user = await UserDetails.findOne({ username: req.user.id });
+
+    if (!req.user || !user) {
+        return res.send(returnFailure('Not logged in'));
+    }
+
+    const { title, followUpDate, taskID } = req.body;
+    if (!title || !followUpDate) {
+        return res.send(returnFailure('Title, and followUpDate are required'));
+    }
+
+    try {
+
+        // If taskID exists get task and complete it
+        if (taskID) {
+            let inputTask = await TaskDetails.findOne({ _id: taskID });
+
+            if (inputTask) {
+                // Complete task
+                const result = await completeTask(inputTask, user);
+
+                if (!result.success) {
+                    return res.send(returnFailure(result.message));
+                }
+            } else {
+                throw new Error("Task not found");
+            }
+        }
+
+        // Create the new follow up task
+        const task = new TaskDetails({
+            title: title,
+            dueDate: followUpDate,
+            notes: "",
+            duration: 20,
+            startDate: followUpDate,
+            userRef: user._id,
+            breakUpTask: false,
+            breakUpTaskChunkDuration: null,
+            repeat: null,
+        });
+        let saveResult = await task.save();
+        // Return the updated task list
+        const returnTaskList = await getTaskListFromUsername(req.user.id);
+
+        return res.json({ success: true, taskList: returnTaskList });
+    } catch (error) {
+        console.error(error);
+        return res.json({ success: false });
+    }
+});
+
 app.get("/api/scheduletasks", authenticateToken, async (req, res) => {
     try {
         let user = await UserDetails.findOne({ username: req.user.id });

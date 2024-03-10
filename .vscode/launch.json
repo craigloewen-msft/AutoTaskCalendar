@@ -2,12 +2,25 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Launch Edge against localhost",
+            "url": "http://localhost:8080",
+            "webRoot": "${workspaceFolder}/webinterface/src",
+        },
+        {
             "type": "node",
             "request": "attach",
             "name": "Node: Nodemon",
             "processId": "${command:PickProcess}",
             "restart": true,
             "protocol": "inspector",
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Node and Browser",
+            "configurations": ["Node: Nodemon", "Launch Edge against localhost"]
         }
     ]
 }
