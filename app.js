@@ -75,6 +75,7 @@ const TaskDetail = new Schema({
     completed: Boolean,
     scheduledDate: Date,
     repeat: String,
+    isBacklog: Boolean,
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
 });
 
@@ -387,14 +388,20 @@ app.post('/api/createTask', authenticateToken, async (req, res) => {
         return res.send(returnFailure('Not logged in'));
     }
 
-    const { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration, taskRepeat } = req.body;
-    if (!title || !dueDate || !duration || !startDate || breakUpTask ? !breakUpTaskChunkDuration : false) {
-        return res.send(returnFailure('Title, duration, and due date are required'));
+    const { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration, taskRepeat, isBacklog } = req.body;
+    
+    // For backlog tasks, dueDate is optional
+    if (!title || !duration || !startDate || breakUpTask ? !breakUpTaskChunkDuration : false) {
+        return res.send(returnFailure('Title, duration, and start date are required'));
+    }
+    
+    if (!isBacklog && !dueDate) {
+        return res.send(returnFailure('Due date is required for non-backlog tasks'));
     }
 
     try {
         // Make the due date at the end of the specified day:
-        let taskDate = new Date(req.body.dueDate);
+        let taskDate = dueDate ? new Date(req.body.dueDate) : null;
 
         // Create the new task
         const task = new TaskDetails({
@@ -407,6 +414,7 @@ app.post('/api/createTask', authenticateToken, async (req, res) => {
             breakUpTask: breakUpTask,
             breakUpTaskChunkDuration: breakUpTaskChunkDuration,
             repeat: taskRepeat,
+            isBacklog: isBacklog || false,
         });
         await task.save();
         // Return the updated task list
@@ -1022,10 +1030,24 @@ async function generateTaskEvents(inUser) {
 
     // Get the TaskDetails sorted in order of their deadlines, earliest first. Only get tasks that have deadlines less than 2 weeks from now
     const twoWeeksFromNow = new Date(currentTime.getTime() + 14 * 24 * 60 * 60 * 1000);
-    const sortedTasks = await TaskDetails.find({
+    
+    // Separate regular tasks and backlog tasks
+    const regularTasks = await TaskDetails.find({
+        userRef: inUser._id,
+        $and: [
+            { $or: [{ completed: false }, { completed: null }] },
+            { $or: [{ isBacklog: false }, { isBacklog: null }] }
+        ]
+    }).sort({ dueDate: 1 });
+    
+    const backlogTasks = await TaskDetails.find({
         userRef: inUser._id,
         $or: [{ completed: false }, { completed: null }],
-    }).sort({ dueDate: 1 });
+        isBacklog: true,
+    }).sort({ startDate: 1 });
+    
+    // Combine regular tasks first, then backlog tasks
+    const sortedTasks = [...regularTasks, ...backlogTasks];
 
     // Query the EventDetails sorted in order of when they appear, up to 2 weeks from now
     const sortedEvents = await EventDetails.find({

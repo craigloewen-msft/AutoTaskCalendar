@@ -19,16 +19,16 @@
                 v-for="task in taskGroupedByDate[date]"
                 :key="task._id"
                 v-bind:class="{
-                  'late-task': getTaskDaysBetweenDeadlineAndSchedule(task) < 0,
-                  'on-track-task':
+                  'late-task': !task.isBacklog && getTaskDaysBetweenDeadlineAndSchedule(task) < 0,
+                  'on-track-task': !task.isBacklog &&
                     getTaskDaysBetweenDeadlineAndSchedule(task) > 0,
-                  'due-that-day-task':
+                  'due-that-day-task': !task.isBacklog &&
                     getTaskDaysBetweenDeadlineAndSchedule(task) == 0,
+                  'backlog-task': task.isBacklog
                 }"
                 v-on:click="openEditTaskModal(task)"
               >
-                {{ task.title }} :
-                {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
+                {{ task.title }}{{ task.isBacklog ? ' [BACKLOG]' : ' : ' + getTaskDaysBetweenDeadlineAndSchedule(task) }}
               </li>
             </ul>
           </div>
@@ -67,6 +67,14 @@
                 />
               </div>
               <div class="form-group">
+                <b-form-checkbox
+                  v-model="input.taskIsBacklog"
+                  class="form-control"
+                  id="task-is-backlog"
+                  >Mark as Backlog Task</b-form-checkbox
+                >
+              </div>
+              <div v-if="!input.taskIsBacklog" class="form-group">
                 <label for="task-due-date">Due Date*</label>
                 <b-calendar
                   v-model="input.taskDueDate"
@@ -135,6 +143,12 @@
                 />
               </div>
               <div v-if="this.selectedTask" class="task-controls-buttons">
+                <button
+                  class="btn btn-secondary"
+                  v-on:click="toggleBacklog(selectedTask)"
+                >
+                  {{ selectedTask.isBacklog ? 'Remove from Backlog' : 'Move to Backlog' }}
+                </button>
                 <button
                   class="btn btn-primary"
                   v-on:click="openFollowUpModal(selectedTask)"
@@ -311,6 +325,7 @@ export default {
         error: null,
         repeat: null,
         followUpDays: null,
+        taskIsBacklog: false,
       },
       showModal: false,
       currentDate: new Date(),
@@ -409,8 +424,8 @@ export default {
 
       if (!this.input.taskTitle) {
         this.input.error = "Need task title";
-      } else if (!this.input.taskDueDate) {
-        this.input.error = "Need task due date";
+      } else if (!this.input.taskIsBacklog && !this.input.taskDueDate) {
+        this.input.error = "Need task due date for non-backlog tasks";
       } else if (!this.input.taskDuration) {
         this.input.error = "Need duration";
       }
@@ -424,20 +439,22 @@ export default {
       });
 
       // this.input.taskDueDate comes in format '2023-03-01', convert that to start of the day in this timezone
-      let inputDueDate = this.changeShortCalendarFormatToDate(
-        this.input.taskDueDate
-      );
+      let inputDueDate = null;
+      if (this.input.taskDueDate) {
+        inputDueDate = this.changeShortCalendarFormatToDate(
+          this.input.taskDueDate
+        );
+        // Make taskDueDate at the end of the day by adding 23 hours, 59 minutes, 59 seconds
+        inputDueDate = new Date(
+          new Date(inputDueDate).getTime() + 86399000
+        ).toISOString();
+      }
 
       // Do same for startDate
       let inputStartDate = this.changeShortCalendarFormatToDate(
         this.input.taskStartDate ||
           this.changeDateToShortCalendarFormat(new Date())
       );
-
-      // Make taskDueDate at the end of the day by adding 23 hours, 59 minutes, 59 seconds
-      inputDueDate = new Date(
-        new Date(inputDueDate).getTime() + 86399000
-      ).toISOString();
 
       try {
         const response = await this.$http.post("/api/createTask/", {
@@ -449,6 +466,7 @@ export default {
           breakUpTask: this.input.taskBreakUpTask,
           breakUpTaskChunkDuration: this.input.taskBreakUpTaskChunkDuration,
           repeat: this.input.repeat,
+          isBacklog: this.input.taskIsBacklog,
         });
         this.taskList = response.data.taskList;
 
@@ -504,9 +522,9 @@ export default {
 
       // Set all of the input to the current task
       this.selectedTask.title = this.input.taskTitle;
-      this.selectedTask.dueDate = this.changeShortCalendarFormatToDate(
+      this.selectedTask.dueDate = this.input.taskDueDate ? this.changeShortCalendarFormatToDate(
         this.input.taskDueDate
-      );
+      ) : null;
       this.selectedTask.duration = this.input.taskDuration;
       this.selectedTask.notes = this.input.taskNotes;
       this.selectedTask.startDate = this.changeShortCalendarFormatToDate(
@@ -517,6 +535,7 @@ export default {
         this.input.taskBreakUpTaskChunkDuration;
 
       this.selectedTask.repeat = this.input.repeat;
+      this.selectedTask.isBacklog = this.input.taskIsBacklog;
 
       try {
         const response = await this.$http.post("/api/editTask/", {
@@ -557,6 +576,31 @@ export default {
         // refresh task list after deletion
         this.taskList = response.data.taskList;
         this.$bvModal.hide("task-modal");
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    async toggleBacklog(task) {
+      try {
+        // Toggle the isBacklog status
+        task.isBacklog = !task.isBacklog;
+        
+        // Update the input to reflect the change
+        this.input.taskIsBacklog = task.isBacklog;
+        
+        // If moving to backlog, clear the due date
+        if (task.isBacklog) {
+          task.dueDate = null;
+          this.input.taskDueDate = null;
+        }
+        
+        // Save the updated task
+        const response = await this.$http.post("/api/editTask/", {
+          task: task,
+        });
+        
+        // Refresh the task list
+        this.loadTasks();
       } catch (error) {
         console.error(error);
       }
@@ -631,9 +675,9 @@ export default {
 
       // Make all this input be that of the task's
       this.input.taskTitle = inputTask.title;
-      this.input.taskDueDate = this.changeDateToShortCalendarFormat(
+      this.input.taskDueDate = inputTask.dueDate ? this.changeDateToShortCalendarFormat(
         new Date(inputTask.dueDate)
-      );
+      ) : null;
       this.input.taskDuration = inputTask.duration;
       this.input.taskStartDate = this.changeDateToShortCalendarFormat(
         new Date(inputTask.startDate)
@@ -644,6 +688,7 @@ export default {
         inputTask.breakUpTaskChunkDuration;
 
       this.input.repeat = inputTask.repeat;
+      this.input.taskIsBacklog = inputTask.isBacklog || false;
 
       this.$bvModal.show("task-modal");
     },
@@ -705,6 +750,9 @@ export default {
       return null;
     },
     getTaskDate(task) {
+      if (task.isBacklog && !task.scheduledDate) {
+        return "Backlog";
+      }
       const taskDate = new Date(task.scheduledDate);
       return taskDate.toLocaleDateString("en-US", {
         weekday: "long",
@@ -855,6 +903,11 @@ export default {
 
 .due-that-day-task {
   color: rgb(255, 255, 199);
+}
+
+.backlog-task {
+  color: rgb(150, 150, 150);
+  font-style: italic;
 }
 
 .task-controls-buttons * {
