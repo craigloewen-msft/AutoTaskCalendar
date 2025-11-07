@@ -171,7 +171,7 @@ return res.json(returnFailure('Error message'));
 5. Update frontend API calls in Vue components
 
 ### Modifying Scheduling Algorithm
-- Main function: `generateTaskEvents()` starting at line 1020
+- Main function: `generateTaskEvents()` in `app.js`
 - Test thoroughly as it affects task placement
 - Consider edge cases: overnight events, holidays, task dependencies
 - Clear old task events before generating new ones
@@ -206,7 +206,7 @@ return res.json(returnFailure('Error message'));
 /
 ├── app.js                    # Main backend application
 ├── defaultconfig.js          # Default configuration (template)
-├── config.js                 # Local config (not committed)
+├── config.js                 # Local config (create from defaultconfig.js, not committed)
 ├── package.json              # Backend dependencies
 ├── webinterface/             # Vue.js frontend
 │   ├── src/
