@@ -21,9 +21,9 @@
 	// "forwardPorts": [3000, 27017],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	// "postCreateCommand": "yarn install",
+	"postCreateCommand": "sudo chown -R node:node /workspace && npm install && cd webinterface && npm install",
 
-	"onCreateCommand": "npm install && cd webinterface && npm install",
+	// "onCreateCommand": "npm install && cd webinterface && npm install",
 
 	// Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "node",
