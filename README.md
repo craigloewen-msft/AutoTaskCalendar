@@ -1,5 +1,19 @@
 This repository's goal is to make a web interface to manage your daily tasks and automatically schedule them on your calendar.
 
+## Testing
+
+To verify the website builds correctly, run:
+
+```bash
+npm test
+```
+
+This will run a simple test that:
+- Checks that required files exist
+- Validates JavaScript syntax
+- Runs the build process
+- Verifies the dist directory is created successfully
+
 ## Use codespaces 
 
 This project is set up with codespaces. If you launch the project with codespaces and then run `npm run dev` in the root directory you will get set up immediately. 
