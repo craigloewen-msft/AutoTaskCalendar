@@ -1,24 +1,35 @@
 <template>
   <div>
-    <h1>Calendar</h1>
-    <div class="calendar-box">
-      <div class="task-controls">
-        <h2>Controls</h2>
-        <div class="task-controls-buttons">
-        <b-button v-on:click="openAddTaskModal">Add Task</b-button>
-        <b-button v-on:click="openFollowUpModal(null)">Add Follow Up</b-button>
-        <b-button v-on:click="scheduleTasks">Schedule</b-button>
-        <b-button v-on:click="syncCalendar">Sync Calendar</b-button>
+    <div class="calendar-page">
+      <div class="page-header-section">
+        <h1 class="page-title">My Calendar</h1>
+        <div class="header-actions">
+          <b-button variant="primary" v-on:click="openAddTaskModal" class="action-btn" aria-label="Add new task">
+            <span class="btn-icon" aria-hidden="true">+</span> Add Task
+          </b-button>
+          <b-button variant="outline-primary" v-on:click="openFollowUpModal(null)" class="action-btn" aria-label="Add follow up">
+            <span class="btn-icon" aria-hidden="true">↻</span> Follow Up
+          </b-button>
+          <b-button variant="success" v-on:click="scheduleTasks" class="action-btn" aria-label="Schedule tasks">
+            <span class="btn-icon" aria-hidden="true">📅</span> Schedule Tasks
+          </b-button>
+          <b-button variant="info" v-on:click="syncCalendar" class="action-btn" aria-label="Sync calendar with Google">
+            <span class="btn-icon" aria-hidden="true">⟳</span> Sync Calendar
+          </b-button>
         </div>
-        <div class="task-list">
-          <h2>Task List</h2>
-          <div v-for="date in tasksDatesArray" :key="date">
-            <h4>{{ date }}</h4>
-            <ul>
+      </div>
+      <div class="calendar-box">
+        <div class="task-controls">
+          <div class="task-list">
+            <h3 class="sidebar-title">Tasks</h3>
+          <div v-for="date in tasksDatesArray" :key="date" class="task-group">
+            <h4 class="task-date-header">{{ date }}</h4>
+            <ul class="task-items">
               <li
                 v-for="task in taskGroupedByDate[date]"
                 :key="task._id"
                 v-bind:class="{
+                  'task-item': true,
                   'late-task': !task.isBacklog && getTaskDaysBetweenDeadlineAndSchedule(task) < 0,
                   'on-track-task': !task.isBacklog &&
                     getTaskDaysBetweenDeadlineAndSchedule(task) > 0,
@@ -28,20 +39,27 @@
                 }"
                 v-on:click="openEditTaskModal(task)"
               >
-                {{ task.title }}{{ task.isBacklog ? ' [BACKLOG]' : ' : ' + getTaskDaysBetweenDeadlineAndSchedule(task) }}
+                <span class="task-title">{{ task.title }}</span>
+                <span class="task-badge" v-if="task.isBacklog">BACKLOG</span>
+                <span class="task-days" v-else>{{ getTaskDaysBetweenDeadlineAndSchedule(task) }}</span>
               </li>
             </ul>
           </div>
         </div>
       </div>
-      <div class="main-calendar">
+        <div class="main-calendar">
         <div class="calendar-controls">
-          <button v-on:click="nextWeek">N</button>
-          <button v-on:click="prevWeek">P</button>
+          <button class="nav-btn" v-on:click="prevWeek" title="Previous Week">
+            <span class="nav-icon">◀</span> Previous
+          </button>
+          <button class="nav-btn" v-on:click="nextWeek" title="Next Week">
+            Next <span class="nav-icon">▶</span>
+          </button>
         </div>
-        <div class="calendar">
+        <div class="calendar-container">
           <DayPilotCalendar :config="config" ref="calendar" id="dp" />
         </div>
+      </div>
       </div>
     </div>
     <b-modal
@@ -222,6 +240,7 @@ export default {
         businessBeginsHour: 10,
         businessEndsHour: 18,
         cellDuration: 15,
+        theme: "calendar_transparent",
         startDate: new DayPilot.Date().firstDayOfWeek(),
         onTimeRangeSelected: async (args) => {
           const modal = await DayPilot.Modal.prompt(
@@ -384,10 +403,10 @@ export default {
           ("0" + eventEndDate.getSeconds()).slice(-2) +
           "Z";
 
-        let eventColor = "green";
+        let eventColor = "#A27CF9";
         let eventTags = null;
         if (event.type.includes("task")) {
-          eventColor = "#333";
+          eventColor = "#7B43F8";
           eventTags = {};
           eventTags.taskId = event.taskRef;
           if (event.type.includes("task-chunk")) {
@@ -856,18 +875,65 @@ export default {
 };
 </script>
 
-<style>
-.main-calendar {
-  /* Flex box style */
-  display: flex;
-  flex-direction: row;
+<style scoped>
+.calendar-page {
+  padding: 20px;
+  max-width: 1800px;
+  margin: 0 auto;
 }
 
-.calendar_default_event_inner {
-  background: #2e78d6;
-  color: white !important;
-  border-radius: 5px !important;
-  opacity: 0.9;
+.page-header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 0px;
+}
+
+.page-title {
+  font-size: 32px;
+  font-weight: 600;
+  margin: 0;
+  color: #764ba2;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.btn-icon {
+  font-size: 18px;
+}
+
+.main-calendar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: rgba(30, 30, 35, 0.6);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .calendar_default_rowheader_inner,
@@ -875,43 +941,346 @@ export default {
 .calendar_default_corner_inner,
 .calendar_default_colheader_inner,
 .calendar_default_alldayheader_inner {
-  background: rgb(38, 38, 39) !important;
-  color: rgb(211, 211, 212) !important;
+  background: rgba(45, 45, 55, 0.9) !important;
+  color: rgb(220, 220, 225) !important;
+  font-weight: 600;
+  border-right: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
 }
 
 .calendar_default_cell_inner {
-  background: rgb(71, 71, 72) !important;
+  background: rgba(55, 55, 65, 0.5) !important;
 }
 
 .calendar_default_cell_business .calendar_default_cell_inner {
-  background: rgb(111, 111, 112) !important;
+  background: rgba(75, 75, 85, 0.6) !important;
+}
+
+/* Comprehensive dark mode overrides for DayPilot calendar */
+#dp {
+  color: rgb(220, 220, 225) !important;
+}
+
+#dp .calendar_default_cell,
+#dp .calendar_transparent_cell {
+  border-right: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+#dp .calendar_default_cell_inner,
+#dp .calendar_transparent_cell_inner {
+  border: none !important;
+}
+
+/* Make sure events are visible with proper backgrounds */
+:deep(.calendar_default_event),
+:deep(.calendar_transparent_event) {
+  opacity: 1 !important;
+  border-radius: 6px;
+  background: #8b5cf6 !important;
+}
+
+:deep(.calendar_default_event_inner),
+:deep(.calendar_transparent_event_inner) {
+  color: white !important;
+  border-radius: 6px 6px 0 0 !important;
+  opacity: 1 !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  padding: 6px 8px !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+:deep(.calendar_default_event_bar),
+:deep(.calendar_transparent_event_bar) {
+  opacity: 1 !important;
+  background: inherit;
+}
+
+:deep(.calendar_default_event_bar_inner),
+:deep(.calendar_transparent_event_bar_inner) {
+  border: none !important;
+  opacity: 1 !important;
+  background: inherit;
+}
+
+.calendar_default_main {
+  background-color: rgba(40, 40, 50, 0.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+.calendar_default_cell,
+.calendar_default_cell_inner {
+  background: rgba(55, 55, 65, 0.5) !important;
+}
+
+.calendar_default_divider,
+.calendar_default_divider_horizontal {
+  background-color: rgba(255, 255, 255, 0.3) !important;
+  height: 1px !important;
+}
+
+.calendar_default_divider_horizontal {
+  width: 100% !important;
+}
+
+.calendar_default_scrollable {
+  background-color: rgba(40, 40, 50, 0.8) !important;
+}
+
+.calendar_transparent_main {
+  background-color: rgba(40, 40, 50, 0.9) !important;
+}
+
+.calendar_transparent_cell,
+.calendar_transparent_cell_inner {
+  background: rgba(55, 55, 65, 0.5) !important;
+}
+
+.calendar_transparent_rowheader_inner,
+.calendar_transparent_cornerright_inner,
+.calendar_transparent_corner_inner,
+.calendar_transparent_colheader_inner,
+.calendar_transparent_alldayheader_inner {
+  background: rgba(45, 45, 55, 0.9) !important;
+  color: rgb(220, 220, 225) !important;
+  font-weight: 600;
+  border-right: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+.calendar_transparent_cell_business .calendar_transparent_cell_inner {
+  background: rgba(75, 75, 85, 0.6) !important;
 }
 
 .calendar-box {
   display: flex;
-  flex-direction: row;
+  gap: 20px;
+  min-height: 600px;
 }
 
 .task-controls {
-  min-width: 280px;
-  padding: 0 5;
+  min-width: 320px;
+  max-width: 320px;
+  background: rgba(30, 30, 35, 0.6);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.sidebar-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 20px 0;
+  color: #e0e0e0;
+}
+
+.task-list {
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+}
+
+.task-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.task-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.task-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.task-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.task-group {
+  margin-bottom: 24px;
+}
+
+.task-date-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.task-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-left: 3px solid transparent;
+}
+
+.task-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border-left-width: 4px;
+}
+
+.task-title {
+  flex: 1;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.task-badge,
+.task-days {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
 }
 
 .late-task {
-  color: rgb(255, 25, 0);
+  border-left-color: #ef4444;
+}
+
+.late-task .task-title {
+  color: #fca5a5;
+}
+
+.late-task .task-days {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
 }
 
 .due-that-day-task {
-  color: rgb(255, 255, 199);
+  border-left-color: #f59e0b;
+}
+
+.due-that-day-task .task-title {
+  color: #fcd34d;
+}
+
+.due-that-day-task .task-days {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+.on-track-task {
+  border-left-color: #10b981;
+}
+
+.on-track-task .task-days {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
 }
 
 .backlog-task {
-  color: rgb(150, 150, 150);
+  border-left-color: #6b7280;
+  opacity: 0.7;
+}
+
+.backlog-task .task-title {
+  color: #9ca3af;
   font-style: italic;
+}
+
+.backlog-task .task-badge {
+  background: rgba(107, 114, 128, 0.2);
+  color: #9ca3af;
+}
+
+.calendar-controls {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.nav-btn {
+  flex: 1;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.nav-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+}
+
+.nav-btn:active {
+  transform: translateY(0);
+}
+
+.nav-icon {
+  font-size: 14px;
+}
+
+.calendar-container {
+  flex: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .task-controls-buttons * {
   margin-right: 5px;
   margin-top: 5px;
+}
+
+/* Force grid lines with deep selectors */
+:deep(.calendar_default_cell) {
+  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
+}
+
+:deep(.calendar_transparent_cell) {
+  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
+}
+
+:deep(.calendar_default_cell_inner) {
+  border: none !important;
+}
+
+:deep(.calendar_transparent_cell_inner) {
+  border: none !important;
+}
+
+:deep(.calendar_default_rowheader),
+:deep(.calendar_transparent_rowheader) {
+  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+}
+
+:deep(.calendar_default_colheader),
+:deep(.calendar_transparent_colheader) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
 }
 </style>
