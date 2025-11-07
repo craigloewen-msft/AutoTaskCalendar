@@ -155,27 +155,6 @@ return res.json(returnFailure('Error message'));
 - Creates/updates local event records
 - Removes events no longer in Google Calendar
 
-## Common Tasks
-
-### Adding a New Task Field
-1. Update `TaskDetail` schema in `app.js`
-2. Add field to task creation/edit endpoints
-3. Update frontend forms in `webinterface/src/`
-4. Test with MongoDB to ensure proper storage
-
-### Adding a New API Endpoint
-1. Add route handler in `app.js`
-2. Use `authenticateToken` middleware for protected routes
-3. Follow existing patterns for user lookup and error handling
-4. Return consistent response format
-5. Update frontend API calls in Vue components
-
-### Modifying Scheduling Algorithm
-- Main function: `generateTaskEvents()` in `app.js`
-- Test thoroughly as it affects task placement
-- Consider edge cases: overnight events, holidays, task dependencies
-- Clear old task events before generating new ones
-
 ## Important Considerations
 
 ### Date/Time Handling
@@ -195,10 +174,7 @@ return res.json(returnFailure('Error message'));
 - Don't expose internal errors to clients
 
 ### Testing
-- Test authentication flows thoroughly
-- Verify task scheduling logic with various scenarios
-- Test Google Calendar integration with real OAuth tokens
-- Check mobile responsiveness in frontend
+- Run `npm run build` to test and ensure the website builds correctly
 
 ## File Organization
 
