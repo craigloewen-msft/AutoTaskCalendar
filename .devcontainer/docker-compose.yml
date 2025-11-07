@@ -5,11 +5,6 @@ services:
     build: 
       context: .
       dockerfile: Dockerfile
-      args:
-        # Update 'VARIANT' to pick an LTS version of Node.js: 18, 16, 14.
-        # Append -bullseye or -buster to pin to an OS version.
-        # Use -bullseye variants on local arm64/Apple Silicon.
-        VARIANT: 14-buster
     volumes:
       - ..:/workspace:cached
 
@@ -20,7 +15,7 @@ services:
     network_mode: service:db
 
     # Uncomment the next line to use a non-root user for all processes.
-    # user: node
+    user: node
 
     # Use "forwardPorts" in **devcontainer.json** to forward an app port locally. 
     # (Adding the "ports" property to this file will not forward from a Codespace.)

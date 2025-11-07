@@ -121,7 +121,7 @@ app.use(session({
 }));
 
 const port = hostPort;
-app.listen(port, () => console.log('App listening on port ' + port));
+app.listen(port, '0.0.0.0', () => console.log('App listening on port ' + port + ' on all interfaces'));
 
 const passport = require('passport');
 const { application } = require('express');
