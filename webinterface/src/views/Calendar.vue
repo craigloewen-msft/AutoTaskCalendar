@@ -1,24 +1,35 @@
 <template>
   <div>
-    <h1>Calendar</h1>
-    <div class="calendar-box">
-      <div class="task-controls">
-        <h2>Controls</h2>
-        <div class="task-controls-buttons">
-        <b-button v-on:click="openAddTaskModal">Add Task</b-button>
-        <b-button v-on:click="openFollowUpModal(null)">Add Follow Up</b-button>
-        <b-button v-on:click="scheduleTasks">Schedule</b-button>
-        <b-button v-on:click="syncCalendar">Sync Calendar</b-button>
+    <div class="calendar-page">
+      <div class="page-header-section">
+        <h1 class="page-title">My Calendar</h1>
+        <div class="header-actions">
+          <b-button variant="primary" v-on:click="openAddTaskModal" class="action-btn">
+            <span class="btn-icon">+</span> Add Task
+          </b-button>
+          <b-button variant="outline-primary" v-on:click="openFollowUpModal(null)" class="action-btn">
+            <span class="btn-icon">↻</span> Follow Up
+          </b-button>
+          <b-button variant="success" v-on:click="scheduleTasks" class="action-btn">
+            <span class="btn-icon">📅</span> Schedule
+          </b-button>
+          <b-button variant="info" v-on:click="syncCalendar" class="action-btn">
+            <span class="btn-icon">⟳</span> Sync
+          </b-button>
         </div>
-        <div class="task-list">
-          <h2>Task List</h2>
-          <div v-for="date in tasksDatesArray" :key="date">
-            <h4>{{ date }}</h4>
-            <ul>
+      </div>
+      <div class="calendar-box">
+        <div class="task-controls">
+          <div class="task-list">
+            <h3 class="sidebar-title">Tasks</h3>
+          <div v-for="date in tasksDatesArray" :key="date" class="task-group">
+            <h4 class="task-date-header">{{ date }}</h4>
+            <ul class="task-items">
               <li
                 v-for="task in taskGroupedByDate[date]"
                 :key="task._id"
                 v-bind:class="{
+                  'task-item': true,
                   'late-task': !task.isBacklog && getTaskDaysBetweenDeadlineAndSchedule(task) < 0,
                   'on-track-task': !task.isBacklog &&
                     getTaskDaysBetweenDeadlineAndSchedule(task) > 0,
@@ -28,7 +39,9 @@
                 }"
                 v-on:click="openEditTaskModal(task)"
               >
-                {{ task.title }}{{ task.isBacklog ? ' [BACKLOG]' : ' : ' + getTaskDaysBetweenDeadlineAndSchedule(task) }}
+                <span class="task-title">{{ task.title }}</span>
+                <span class="task-badge" v-if="task.isBacklog">BACKLOG</span>
+                <span class="task-days" v-else>{{ getTaskDaysBetweenDeadlineAndSchedule(task) }}</span>
               </li>
             </ul>
           </div>
@@ -36,10 +49,14 @@
       </div>
       <div class="main-calendar">
         <div class="calendar-controls">
-          <button v-on:click="nextWeek">N</button>
-          <button v-on:click="prevWeek">P</button>
+          <button class="nav-btn" v-on:click="prevWeek" title="Previous Week">
+            <span class="nav-icon">◀</span> Previous
+          </button>
+          <button class="nav-btn" v-on:click="nextWeek" title="Next Week">
+            Next <span class="nav-icon">▶</span>
+          </button>
         </div>
-        <div class="calendar">
+        <div class="calendar-container">
           <DayPilotCalendar :config="config" ref="calendar" id="dp" />
         </div>
       </div>
@@ -856,18 +873,76 @@ export default {
 };
 </script>
 
-<style>
-.main-calendar {
-  /* Flex box style */
+<style scoped>
+.calendar-page {
+  padding: 20px;
+  max-width: 1800px;
+  margin: 0 auto;
+}
+
+.page-header-section {
   display: flex;
-  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.page-title {
+  font-size: 32px;
+  font-weight: 600;
+  margin: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.btn-icon {
+  font-size: 18px;
+}
+
+.main-calendar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: rgba(30, 30, 35, 0.6);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .calendar_default_event_inner {
-  background: #2e78d6;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white !important;
-  border-radius: 5px !important;
-  opacity: 0.9;
+  border-radius: 8px !important;
+  opacity: 0.95;
+  border: none !important;
+  padding: 8px !important;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .calendar_default_rowheader_inner,
@@ -875,39 +950,214 @@ export default {
 .calendar_default_corner_inner,
 .calendar_default_colheader_inner,
 .calendar_default_alldayheader_inner {
-  background: rgb(38, 38, 39) !important;
-  color: rgb(211, 211, 212) !important;
+  background: rgba(45, 45, 55, 0.9) !important;
+  color: rgb(220, 220, 225) !important;
+  font-weight: 600;
+  border-color: rgba(255, 255, 255, 0.05) !important;
 }
 
 .calendar_default_cell_inner {
-  background: rgb(71, 71, 72) !important;
+  background: rgba(55, 55, 65, 0.5) !important;
+  border-color: rgba(255, 255, 255, 0.05) !important;
 }
 
 .calendar_default_cell_business .calendar_default_cell_inner {
-  background: rgb(111, 111, 112) !important;
+  background: rgba(75, 75, 85, 0.6) !important;
 }
 
 .calendar-box {
   display: flex;
-  flex-direction: row;
+  gap: 20px;
+  min-height: 600px;
 }
 
 .task-controls {
-  min-width: 280px;
-  padding: 0 5;
+  min-width: 320px;
+  max-width: 320px;
+  background: rgba(30, 30, 35, 0.6);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.sidebar-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 20px 0;
+  color: #e0e0e0;
+}
+
+.task-list {
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+}
+
+.task-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.task-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.task-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.task-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.task-group {
+  margin-bottom: 24px;
+}
+
+.task-date-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.task-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-left: 3px solid transparent;
+}
+
+.task-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.task-title {
+  flex: 1;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.task-badge,
+.task-days {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
 }
 
 .late-task {
-  color: rgb(255, 25, 0);
+  border-left-color: #ef4444;
+}
+
+.late-task .task-title {
+  color: #fca5a5;
+}
+
+.late-task .task-days {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
 }
 
 .due-that-day-task {
-  color: rgb(255, 255, 199);
+  border-left-color: #f59e0b;
+}
+
+.due-that-day-task .task-title {
+  color: #fcd34d;
+}
+
+.due-that-day-task .task-days {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+.on-track-task {
+  border-left-color: #10b981;
+}
+
+.on-track-task .task-days {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
 }
 
 .backlog-task {
-  color: rgb(150, 150, 150);
+  border-left-color: #6b7280;
+  opacity: 0.7;
+}
+
+.backlog-task .task-title {
+  color: #9ca3af;
   font-style: italic;
+}
+
+.backlog-task .task-badge {
+  background: rgba(107, 114, 128, 0.2);
+  color: #9ca3af;
+}
+
+.calendar-controls {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.nav-btn {
+  flex: 1;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.nav-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+}
+
+.nav-btn:active {
+  transform: translateY(0);
+}
+
+.nav-icon {
+  font-size: 14px;
+}
+
+.calendar-container {
+  flex: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .task-controls-buttons * {
