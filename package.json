@@ -17,7 +17,8 @@
   },
   "scripts": {
     "build": "cd webinterface; npm install; npm run build; cd ..; rm -rf ./dist; mv ./webinterface/dist .",
-    "dev": "concurrently --kill-others \"nodemon --inspect app.js\" \"cd webinterface; npm run serve\""
+    "dev": "concurrently --kill-others \"nodemon --inspect app.js\" \"cd webinterface; npm run serve\"",
+    "test": "node test-build.js"
   },
   "devDependencies": {
     "concurrently": "^7.1.0"
