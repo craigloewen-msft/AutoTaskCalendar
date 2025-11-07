@@ -33,16 +33,19 @@ for (const file of requiredFiles) {
 // Test 2: Validate JavaScript syntax in main app
 console.log('\nTest 2: Validating JavaScript syntax...');
 try {
+  // Try to load app.js to check for syntax errors
+  // Note: This may have side effects if app.js executes code at module level
   require('./app.js');
   console.log('✓ app.js syntax is valid');
 } catch (error) {
-  // Ignore runtime errors, we only care about syntax
+  // Only fail on syntax errors, not runtime errors
   if (error instanceof SyntaxError) {
     console.error('✗ ERROR: Syntax error in app.js');
     console.error(error.message);
     exitCode = 1;
   } else {
-    console.log('✓ app.js syntax is valid');
+    // Runtime errors during import are expected since we're not setting up the environment
+    console.log('✓ app.js syntax is valid (runtime initialization skipped)');
   }
 }
 
@@ -52,7 +55,7 @@ try {
   execSync('npm run build', { 
     stdio: 'inherit',
     cwd: __dirname,
-    timeout: 300000 // 5 minute timeout
+    timeout: 180000 // 3 minute timeout for build process
   });
 
   // Check if the dist directory was created
