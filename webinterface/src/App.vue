@@ -93,7 +93,7 @@ export default {
         content:
           "Easily manage your Github issues using this tool. This is a great way to never lose track of a Github issue again.",
       },
-      { name: "kewyords", content: "manage, github, issues" },
+      { name: "keywords", content: "manage, github, issues" },
     ],
   },
 };
@@ -120,6 +120,7 @@ export default {
 .navbar-brand {
   font-weight: 700;
   font-size: 1.5rem;
+  color: #764ba2;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;

@@ -4,17 +4,17 @@
       <div class="page-header-section">
         <h1 class="page-title">My Calendar</h1>
         <div class="header-actions">
-          <b-button variant="primary" v-on:click="openAddTaskModal" class="action-btn">
-            <span class="btn-icon">+</span> Add Task
+          <b-button variant="primary" v-on:click="openAddTaskModal" class="action-btn" aria-label="Add new task">
+            <span class="btn-icon" aria-hidden="true">+</span> Add Task
           </b-button>
-          <b-button variant="outline-primary" v-on:click="openFollowUpModal(null)" class="action-btn">
-            <span class="btn-icon">↻</span> Follow Up
+          <b-button variant="outline-primary" v-on:click="openFollowUpModal(null)" class="action-btn" aria-label="Add follow up">
+            <span class="btn-icon" aria-hidden="true">↻</span> Follow Up
           </b-button>
-          <b-button variant="success" v-on:click="scheduleTasks" class="action-btn">
-            <span class="btn-icon">📅</span> Schedule
+          <b-button variant="success" v-on:click="scheduleTasks" class="action-btn" aria-label="Schedule tasks">
+            <span class="btn-icon" aria-hidden="true">📅</span> Schedule
           </b-button>
-          <b-button variant="info" v-on:click="syncCalendar" class="action-btn">
-            <span class="btn-icon">⟳</span> Sync
+          <b-button variant="info" v-on:click="syncCalendar" class="action-btn" aria-label="Sync calendar with Google">
+            <span class="btn-icon" aria-hidden="true">⟳</span> Sync
           </b-button>
         </div>
       </div>
@@ -893,6 +893,7 @@ export default {
   font-size: 32px;
   font-weight: 600;
   margin: 0;
+  color: #764ba2;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
