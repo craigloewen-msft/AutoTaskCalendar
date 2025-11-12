@@ -240,7 +240,6 @@ export default {
         businessBeginsHour: 10,
         businessEndsHour: 18,
         cellDuration: 15,
-        theme: "calendar_transparent",
         startDate: new DayPilot.Date().firstDayOfWeek(),
         onTimeRangeSelected: async (args) => {
           const modal = await DayPilot.Modal.prompt(
@@ -406,7 +405,7 @@ export default {
         let eventColor = "#A27CF9";
         let eventTags = null;
         if (event.type.includes("task")) {
-          eventColor = "#7B43F8";
+          eventColor = "#3D217C";
           eventTags = {};
           eventTags.taskId = event.taskRef;
           if (event.type.includes("task-chunk")) {
@@ -959,25 +958,14 @@ export default {
 /* Comprehensive dark mode overrides for DayPilot calendar */
 #dp {
   color: rgb(220, 220, 225) !important;
-}
-
-#dp .calendar_default_cell,
-#dp .calendar_transparent_cell {
-  border-right: 1px solid rgba(255, 255, 255, 0.3) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
-}
-
-#dp .calendar_default_cell_inner,
-#dp .calendar_transparent_cell_inner {
-  border: none !important;
-}
-
-/* Make sure events are visible with proper backgrounds */
-:deep(.calendar_default_event),
-:deep(.calendar_transparent_event) {
-  opacity: 1 !important;
-  border-radius: 6px;
-  background: #8b5cf6 !important;
+  /* Override DayPilot CSS variables for dark theme */
+  --dp-calendar-cell-bg-color: rgba(55, 55, 65, 0.5);
+  --dp-calendar-cell-business-bg-color: rgba(75, 75, 85, 0.6);
+  --dp-calendar-header-bg-color: rgba(45, 45, 55, 0.9);
+  --dp-calendar-border-color: rgba(255, 255, 255, 0.3);
+  --dp-calendar-bg-color: rgba(40, 40, 50, 0.9);
+  --dp-calendar-event-bar-bg-color: rgb(68, 0, 85);
+  --dp-calendar-event-bar-color: rgb(120, 0, 163);
 }
 
 :deep(.calendar_default_event_inner),
@@ -993,57 +981,12 @@ export default {
   text-overflow: ellipsis !important;
 }
 
-:deep(.calendar_default_event_bar),
-:deep(.calendar_transparent_event_bar) {
-  opacity: 1 !important;
-  background: inherit;
-}
-
-:deep(.calendar_default_event_bar_inner),
-:deep(.calendar_transparent_event_bar_inner) {
-  border: none !important;
-  opacity: 1 !important;
-  background: inherit;
-}
-
-.calendar_default_main {
-  background-color: rgba(40, 40, 50, 0.9) !important;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
-}
-
-.calendar_default_cell,
-.calendar_default_cell_inner {
-  background: rgba(55, 55, 65, 0.5) !important;
-}
-
-.calendar_default_divider,
-.calendar_default_divider_horizontal {
-  background-color: rgba(255, 255, 255, 0.3) !important;
-  height: 1px !important;
-}
-
-.calendar_default_divider_horizontal {
-  width: 100% !important;
-}
-
-.calendar_default_scrollable {
-  background-color: rgba(40, 40, 50, 0.8) !important;
-}
-
-.calendar_transparent_main {
-  background-color: rgba(40, 40, 50, 0.9) !important;
-}
-
-.calendar_transparent_cell,
-.calendar_transparent_cell_inner {
-  background: rgba(55, 55, 65, 0.5) !important;
-}
-
-.calendar_transparent_rowheader_inner,
-.calendar_transparent_cornerright_inner,
-.calendar_transparent_corner_inner,
-.calendar_transparent_colheader_inner,
-.calendar_transparent_alldayheader_inner {
+/* Headers dark theme */
+:deep(.calendar_default_rowheader_inner),
+:deep(.calendar_default_cornerright_inner),
+:deep(.calendar_default_corner_inner),
+:deep(.calendar_default_colheader_inner),
+:deep(.calendar_default_alldayheader_inner) {
   background: rgba(45, 45, 55, 0.9) !important;
   color: rgb(220, 220, 225) !important;
   font-weight: 600;
@@ -1051,8 +994,33 @@ export default {
   border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
 }
 
-.calendar_transparent_cell_business .calendar_transparent_cell_inner {
-  background: rgba(75, 75, 85, 0.6) !important;
+/* Force grid lines with deep selectors */
+:deep(.calendar_default_cell) {
+  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
+}
+
+:deep(.calendar_transparent_cell) {
+  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
+}
+
+:deep(.calendar_default_cell_inner) {
+  border: none !important;
+}
+
+:deep(.calendar_transparent_cell_inner) {
+  border: none !important;
+}
+
+:deep(.calendar_default_rowheader),
+:deep(.calendar_transparent_rowheader) {
+  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+}
+
+:deep(.calendar_default_colheader),
+:deep(.calendar_transparent_colheader) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
 }
 
 .calendar-box {
@@ -1253,34 +1221,5 @@ export default {
 .task-controls-buttons * {
   margin-right: 5px;
   margin-top: 5px;
-}
-
-/* Force grid lines with deep selectors */
-:deep(.calendar_default_cell) {
-  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
-}
-
-:deep(.calendar_transparent_cell) {
-  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
-}
-
-:deep(.calendar_default_cell_inner) {
-  border: none !important;
-}
-
-:deep(.calendar_transparent_cell_inner) {
-  border: none !important;
-}
-
-:deep(.calendar_default_rowheader),
-:deep(.calendar_transparent_rowheader) {
-  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
-}
-
-:deep(.calendar_default_colheader),
-:deep(.calendar_transparent_colheader) {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
 }
 </style>
