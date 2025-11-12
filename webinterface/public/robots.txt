@@ -1,0 +1,16 @@
+# robots.txt for AutoTaskCalendar
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /user/
+Disallow: /calendar
+Disallow: /login
+Disallow: /register
+Disallow: /logout
+
+# Allow indexing of public pages
+Allow: /$
+Allow: /about
+
+# Sitemap location (update with actual domain when deployed)
+Sitemap: https://autotaskcalendar.com/sitemap.xml

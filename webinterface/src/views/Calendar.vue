@@ -871,6 +871,20 @@ export default {
       this.highlightCurrentTimeCell();
     }, 1 * 5 * 1000); // 1 minutes in milliseconds
   },
+  metaInfo: {
+    title: "My Calendar - Manage Your Tasks",
+    meta: [
+      {
+        name: "description",
+        content: "View and manage your automatically scheduled tasks in your calendar. Add tasks, sync with Google Calendar, and track your productivity.",
+      },
+      { 
+        name: "keywords", 
+        content: "my calendar, task view, scheduled tasks, manage tasks, calendar sync" 
+      },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  },
 };
 </script>
 
