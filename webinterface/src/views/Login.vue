@@ -82,9 +82,6 @@ export default {
       //   axios.get(devEndPoint).then(response => (this.userdata = response.data));
     },
   },
-  mounted: function () {
-    this.$gtag.pageview(this.$route);
-  },
 };
 </script>
 

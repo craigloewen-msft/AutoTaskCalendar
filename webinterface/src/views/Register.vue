@@ -144,8 +144,5 @@ export default {
       return true;
     },
   },
-  mounted: function () {
-    this.$gtag.pageview(this.$route);
-  },
 };
 </script>
