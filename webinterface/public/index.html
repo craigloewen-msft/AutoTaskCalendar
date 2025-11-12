@@ -1,17 +1,47 @@
 <!DOCTYPE html>
-<html lang="">
+<html lang="en">
 
 <head>
-  <meta charset="utf2.0">
+  <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width,initial-scale=2.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <link rel="icon" href="<%= BASE_URL %>favicon.ico">
-  <title>AutoTaskCalendar</title>
+  
+  <!-- Primary Meta Tags -->
+  <title>AutoTaskCalendar - Intelligent Task Scheduling & Management</title>
+  <meta name="title" content="AutoTaskCalendar - Intelligent Task Scheduling & Management">
+  <meta name="description" content="Automatically schedule your tasks into your calendar with intelligent planning. Free task management with Google Calendar integration and smart auto-scheduling.">
+  
+  <!-- Schema.org Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "AutoTaskCalendar",
+    "description": "Automatically schedule your tasks into your calendar with intelligent planning and Google Calendar integration",
+    "url": "https://autotaskcalendar.com",
+    "applicationCategory": "ProductivityApplication",
+    "operatingSystem": "Web Browser",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "Automatic task scheduling",
+      "Google Calendar integration",
+      "Smart planning based on working hours",
+      "Recurring tasks support",
+      "Task chunking",
+      "Work-life balance management"
+    ]
+  }
+  </script>
 </head>
 
 <body>
   <noscript>
-    <strong>We're sorry but <%= htmlWebpackPlugin.options.title %> doesn't work properly without JavaScript enabled.
+    <strong>We're sorry but AutoTaskCalendar doesn't work properly without JavaScript enabled.
         Please enable it to continue.</strong>
   </noscript>
   <div id="app"></div>
@@ -22,7 +52,7 @@
         <div class="col">
           <span class="text-muted">AutoTaskCalendar v1.2</span>
         </div>
-        <div class="col2.0 footer-box-right">
+        <div class="col-auto footer-box-right">
           <a href="https://github.com/craigloewen-msft/AutoTaskCalendar">Open Sourced at:
               AutoTaskCalendar</a>
         </div>

@@ -85,6 +85,25 @@ export default {
   mounted: function () {
     this.$gtag.pageview(this.$route);
   },
+  metaInfo: {
+    title: "Login - Access Your Task Calendar",
+    meta: [
+      {
+        name: "description",
+        content: "Sign in to AutoTaskCalendar to access your tasks, view your automatically scheduled calendar, and manage your productivity.",
+      },
+      { 
+        name: "keywords", 
+        content: "login, sign in, task calendar, access account, task manager login" 
+      },
+      { name: "robots", content: "noindex, nofollow" },
+      { property: "og:title", content: "Login to AutoTaskCalendar" },
+      { 
+        property: "og:description", 
+        content: "Sign in to access your automatically scheduled task calendar." 
+      },
+    ],
+  },
 };
 </script>
 

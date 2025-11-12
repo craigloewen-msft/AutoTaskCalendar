@@ -147,5 +147,28 @@ export default {
   mounted: function () {
     this.$gtag.pageview(this.$route);
   },
+  metaInfo: {
+    title: "Register - Start Scheduling Tasks Automatically",
+    meta: [
+      {
+        name: "description",
+        content: "Create your free AutoTaskCalendar account to start automatically scheduling tasks, integrating with Google Calendar, and managing your productivity effortlessly.",
+      },
+      { 
+        name: "keywords", 
+        content: "register, sign up, create account, free task manager, task calendar registration, productivity account" 
+      },
+      { property: "og:title", content: "Register for AutoTaskCalendar - Free Task Scheduling" },
+      { 
+        property: "og:description", 
+        content: "Create your free account and start scheduling tasks automatically with intelligent planning." 
+      },
+      { name: "twitter:title", content: "Register for AutoTaskCalendar - Free Task Scheduling" },
+      { 
+        name: "twitter:description", 
+        content: "Create your free account and start scheduling tasks automatically with intelligent planning." 
+      },
+    ],
+  },
 };
 </script>

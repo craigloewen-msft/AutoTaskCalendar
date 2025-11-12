@@ -46,6 +46,29 @@ export default {
   mounted: function () {
     this.$gtag.pageview(this.$route);
   },
+  metaInfo: {
+    title: "Home - Automatic Task Scheduling Made Easy",
+    meta: [
+      {
+        name: "description",
+        content: "AutoTaskCalendar automatically schedules your tasks into your calendar. Free to use, intelligent planning, and seamless Google Calendar integration. Start managing your tasks smarter today.",
+      },
+      { 
+        name: "keywords", 
+        content: "free task manager, automatic task scheduling, calendar management, productivity tool, task organizer, time management, Google Calendar sync" 
+      },
+      { property: "og:title", content: "AutoTaskCalendar - Automatic Task Scheduling Made Easy" },
+      { 
+        property: "og:description", 
+        content: "Free task management with automatic scheduling. Integrate with Google Calendar and let AutoTaskCalendar organize your work intelligently." 
+      },
+      { name: "twitter:title", content: "AutoTaskCalendar - Automatic Task Scheduling Made Easy" },
+      { 
+        name: "twitter:description", 
+        content: "Free task management with automatic scheduling. Integrate with Google Calendar and let AutoTaskCalendar organize your work intelligently." 
+      },
+    ],
+  },
 };
 </script>
 

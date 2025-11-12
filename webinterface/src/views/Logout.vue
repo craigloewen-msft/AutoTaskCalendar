@@ -16,5 +16,11 @@ export default {
       this.$router.push("/");
     });
   },
+  metaInfo: {
+    title: "Logging Out",
+    meta: [
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  },
 };
 </script>

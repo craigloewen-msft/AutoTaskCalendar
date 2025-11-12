@@ -87,14 +87,44 @@ export default {
     );
   },
   metaInfo: {
+    title: "AutoTaskCalendar - Intelligent Task Scheduling & Management",
+    titleTemplate: "%s | AutoTaskCalendar",
     meta: [
       {
         name: "description",
         content:
-          "Easily manage your Github issues using this tool. This is a great way to never lose track of a Github issue again.",
+          "AutoTaskCalendar automatically schedules your tasks into your calendar. Smart task management with Google Calendar integration, automatic scheduling, and intelligent planning for optimal productivity.",
       },
-      { name: "keywords", content: "manage, github, issues" },
+      { 
+        name: "keywords", 
+        content: "task management, calendar, auto schedule, productivity, task scheduler, Google Calendar, time management, task planner, automatic scheduling, work organization" 
+      },
+      { name: "author", content: "AutoTaskCalendar" },
+      { name: "viewport", content: "width=device-width, initial-scale=1.0" },
+      { charset: "utf-8" },
+      // Open Graph / Facebook
+      { property: "og:type", content: "website" },
+      { property: "og:title", content: "AutoTaskCalendar - Intelligent Task Scheduling & Management" },
+      { 
+        property: "og:description", 
+        content: "Automatically schedule your tasks into your calendar with smart planning and Google Calendar integration." 
+      },
+      { property: "og:site_name", content: "AutoTaskCalendar" },
+      // Twitter Card
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "AutoTaskCalendar - Intelligent Task Scheduling & Management" },
+      { 
+        name: "twitter:description", 
+        content: "Automatically schedule your tasks into your calendar with smart planning and Google Calendar integration." 
+      },
+      // Additional SEO
+      { name: "robots", content: "index, follow" },
+      { name: "googlebot", content: "index, follow" },
+      { name: "theme-color", content: "#667eea" },
     ],
+    link: [
+      { rel: "canonical", href: "https://autotaskcalendar.com" }
+    ]
   },
 };
 </script>
