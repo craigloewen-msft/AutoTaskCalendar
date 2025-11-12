@@ -1,6 +1,6 @@
 <template>
   <div class="pageContent">
-    <b-container class="user-form-box">
+    <BContainer class="user-form-box">
       <h1>Register page</h1>
       <p v-if="failuretext">{{ failuretext }}</p>
       <input
@@ -37,17 +37,21 @@
       <button class="btn btn-primary btn-lg btn-block" v-on:click="register">
         Register
       </button>
-    </b-container>
+    </BContainer>
   </div>
 </template>
 
 <script>
 import axios from "axios";
+import { BContainer } from 'bootstrap-vue-next';
 
 let devEndPoint = "/api/";
 
 export default {
   name: "Register",
+  components: {
+    BContainer
+  },
   data() {
     return {
       failuretext: null,
@@ -58,8 +62,6 @@ export default {
         passwordconfirm: "",
       },
     };
-  },
-  components: {
   },
   methods: {
     register: function () {

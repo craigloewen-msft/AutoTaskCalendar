@@ -18,7 +18,7 @@
       </div>
     </div>
 
-    <b-container class="section-slides">
+    <BContainer class="section-slides">
       <header class="section-header">
         <p>Make it easy to manage what you need to do</p>
       </header>
@@ -26,17 +26,19 @@
       <div class="row">
         <div class="col">It's free to register and use!</div>
       </div>
-    </b-container>
+    </BContainer>
   </div>
 </template>
 
 <script>
 // @ is an alias to /src
 // import HelloWorld from '@/components/HelloWorld.vue'
+import { BContainer } from 'bootstrap-vue-next';
 
 export default {
   name: "Home",
   components: {
+    BContainer
   },
   computed: {
     user: function () {

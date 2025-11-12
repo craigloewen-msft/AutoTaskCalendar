@@ -1,9 +1,6 @@
-import Vue from 'vue'
-import VueRouter from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import Home from '../views/Home.vue'
 import store from "../store.js"
-
-Vue.use(VueRouter)
 
 const routes = [
   {
@@ -61,9 +58,8 @@ const routes = [
   }
 ]
 
-const router = new VueRouter({
-  // mode: 'history',
-  base: process.env.BASE_URL,
+const router = createRouter({
+  history: createWebHashHistory(process.env.BASE_URL),
   linkActiveClass: "active",
   routes
 })
@@ -73,7 +69,7 @@ router.beforeEach(async (to, from, next) => {
   let loginCheckPromise = null;
 
   if (store.getters.isLoggedIn) {
-    let lastLoginDate = store.getters.lastLoginDate;
+    let lastLoginDate = store.state.lastLoginDate;
     let expireLoginDate = new Date(lastLoginDate);
     expireLoginDate = new Date(expireLoginDate.setDate(expireLoginDate.getDate() + 14));
     if (new Date() > expireLoginDate) {

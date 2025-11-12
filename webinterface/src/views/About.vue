@@ -1,6 +1,6 @@
 <template>
   <div class="pageContent">
-    <b-container>
+    <BContainer>
       <!-- Hero Section -->
       <div class="about-hero">
         <div class="hero-icon">📅</div>
@@ -9,10 +9,10 @@
       </div>
 
       <!-- Main Content -->
-      <b-row class="content-section">
-        <b-col lg="10" xl="8" class="mx-auto">
+      <BRow class="content-section">
+        <BCol lg="10" xl="8" class="mx-auto">
           <!-- What is it Section -->
-          <b-card class="feature-card mb-4">
+          <BCard class="feature-card mb-4">
             <div class="card-icon">✨</div>
             <h2 class="card-title">Smart Task Management</h2>
             <p class="card-text">
@@ -20,10 +20,10 @@
               schedules your tasks into your calendar. Say goodbye to manual planning and 
               hello to optimized productivity.
             </p>
-          </b-card>
+          </BCard>
 
           <!-- Key Features Section -->
-          <b-card class="feature-card mb-4">
+          <BCard class="feature-card mb-4">
             <div class="card-icon">🎯</div>
             <h2 class="card-title">Key Features</h2>
             <div class="features-grid">
@@ -58,10 +58,10 @@
                 <p>Respects your working hours and personal time boundaries</p>
               </div>
             </div>
-          </b-card>
+          </BCard>
 
           <!-- How it Works Section -->
-          <b-card class="feature-card mb-4">
+          <BCard class="feature-card mb-4">
             <div class="card-icon">⚙️</div>
             <h2 class="card-title">How It Works</h2>
             <div class="steps-container">
@@ -94,7 +94,7 @@
                 </div>
               </div>
             </div>
-          </b-card>
+          </BCard>
 
           <!-- Get Started Section -->
           <div class="cta-section">
@@ -103,7 +103,7 @@
               Join AutoTaskCalendar today and experience effortless task management
             </p>
             <div class="cta-buttons">
-              <b-button 
+              <BButton 
                 variant="primary" 
                 size="lg"
                 to="/register"
@@ -111,8 +111,8 @@
               >
                 <span class="button-icon">🚀</span>
                 Get Started
-              </b-button>
-              <b-button 
+              </BButton>
+              <BButton 
                 variant="outline-primary" 
                 size="lg"
                 to="/login"
@@ -120,19 +120,27 @@
               >
                 <span class="button-icon">👤</span>
                 Sign In
-              </b-button>
+              </BButton>
             </div>
           </div>
-        </b-col>
-      </b-row>
-    </b-container>
+        </BCol>
+      </BRow>
+    </BContainer>
   </div>
 </template>
 
 <script>
+import { BContainer, BRow, BCol, BCard, BButton } from 'bootstrap-vue-next';
 
 export default {
   name: "About",
+  components: {
+    BContainer,
+    BRow,
+    BCol,
+    BCard,
+    BButton
+  },
   mounted: function () {
     this.$gtag.pageview(this.$route);
   },

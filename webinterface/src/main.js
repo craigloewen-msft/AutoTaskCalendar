@@ -1,38 +1,29 @@
-import Vue from 'vue'
+import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
-import { BootstrapVue, IconsPlugin } from 'bootstrap-vue'
 import store from './store.js'
 import Axios from 'axios'
-import vueDebounce from 'vue-debounce'
-import VueGtag from "vue-gtag"
-import VueMeta from 'vue-meta'
+import { vueDebounce } from 'vue-debounce'
+import VueGtag from "vue-gtag-next"
+import { createHead } from '@vueuse/head'
+import { createBootstrap } from 'bootstrap-vue-next'
 
-// was commented out, why? 
 import 'bootstrap/dist/css/bootstrap.css'
-import 'bootstrap-vue/dist/bootstrap-vue.css'
+import 'bootstrap-vue-next/dist/bootstrap-vue-next.css'
 
 import './style/darkStyle.scss'
 
-Vue.prototype.$http = Axios;
+const app = createApp(App)
 
-Vue.config.productionTip = false
+app.config.globalProperties.$http = Axios;
 
-Vue.use(BootstrapVue);
-Vue.use(IconsPlugin);
-
-Vue.use(vueDebounce, {
-  listenTo: 'input'
-});
-
-Vue.use(VueGtag, {
+app.use(router)
+app.use(store)
+app.use(createBootstrap())
+app.use(vueDebounce)
+app.use(VueGtag, {
   config: { id: "INSERTTAG" }
-});
+})
+app.use(createHead())
 
-Vue.use(VueMeta);
-
-new Vue({
-  router,
-  store,
-  render: h => h(App)
-}).$mount('#app')
+app.mount('#app')
