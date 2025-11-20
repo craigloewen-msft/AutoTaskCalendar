@@ -45,9 +45,6 @@ export default {
       return this.$store.state.user;
     },
   },
-  mounted: function () {
-    this.$gtag.pageview(this.$route);
-  },
   metaInfo: {
     title: "Home - Automatic Task Scheduling Made Easy",
     meta: [

@@ -146,9 +146,6 @@ export default {
       return true;
     },
   },
-  mounted: function () {
-    this.$gtag.pageview(this.$route);
-  },
   metaInfo: {
     title: "Register - Start Scheduling Tasks Automatically",
     meta: [

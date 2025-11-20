@@ -21,9 +21,31 @@ app.use(router)
 app.use(store)
 app.use(createBootstrap())
 app.use(vueDebounce)
-app.use(VueGtag, {
-  config: { id: "INSERTTAG" }
-})
+
+// Google Analytics Configuration
+// The GA_MEASUREMENT_ID can be set via environment variable VUE_APP_GA_MEASUREMENT_ID
+// If not set, Google Analytics will be disabled (for development/testing)
+const gaMeasurementId = process.env.VUE_APP_GA_MEASUREMENT_ID || null;
+
+if (gaMeasurementId) {
+  app.use(VueGtag, {
+    config: { id: gaMeasurementId },
+    appName: 'AutoTaskCalendar',
+    pageTrackerScreenviewEnabled: true,
+  }, router);
+} else {
+  // In development/testing without GA ID, use a stub implementation
+  if (process.env.NODE_ENV === 'development') {
+    // eslint-disable-next-line no-console
+    console.info('Google Analytics is not configured. Set VUE_APP_GA_MEASUREMENT_ID environment variable to enable tracking.');
+  }
+  app.use(VueGtag, {
+    config: { id: 'GA_MEASUREMENT_ID' },
+    enabled: false,
+    appName: 'AutoTaskCalendar',
+  }, router);
+}
+
 app.use(createHead())
 
 app.mount('#app')

@@ -141,9 +141,6 @@ export default {
     BCard,
     BButton
   },
-  mounted: function () {
-    this.$gtag.pageview(this.$route);
-  },
   metaInfo: {
     title: "About - Smart Task Management Features",
     meta: [

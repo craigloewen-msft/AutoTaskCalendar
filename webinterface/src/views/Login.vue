@@ -84,9 +84,6 @@ export default {
       //   axios.get(devEndPoint).then(response => (this.userdata = response.data));
     },
   },
-  mounted: function () {
-    this.$gtag.pageview(this.$route);
-  },
   metaInfo: {
     title: "Login - Access Your Task Calendar",
     meta: [
