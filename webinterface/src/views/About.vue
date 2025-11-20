@@ -134,16 +134,12 @@ import { BContainer, BRow, BCol, BCard, BButton } from 'bootstrap-vue-next';
 
 export default {
   name: "About",
-<<<<<<< HEAD
   components: {
     BContainer,
     BRow,
     BCol,
     BCard,
     BButton
-  },
-  mounted: function () {
-    this.$gtag.pageview(this.$route);
   },
   metaInfo: {
     title: "About - Smart Task Management Features",
@@ -168,8 +164,6 @@ export default {
       },
     ],
   },
-=======
->>>>>>> 01210f6 (Configure Google Analytics with environment variable support)
 };
 </script>
 

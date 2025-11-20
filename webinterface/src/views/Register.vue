@@ -146,10 +146,6 @@ export default {
       return true;
     },
   },
-<<<<<<< HEAD
-  mounted: function () {
-    this.$gtag.pageview(this.$route);
-  },
   metaInfo: {
     title: "Register - Start Scheduling Tasks Automatically",
     meta: [
@@ -173,7 +169,5 @@ export default {
       },
     ],
   },
-=======
->>>>>>> 01210f6 (Configure Google Analytics with environment variable support)
 };
 </script>

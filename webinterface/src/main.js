@@ -17,22 +17,10 @@ const app = createApp(App)
 
 app.config.globalProperties.$http = Axios;
 
-<<<<<<< HEAD
 app.use(router)
 app.use(store)
 app.use(createBootstrap())
 app.use(vueDebounce)
-app.use(VueGtag, {
-  config: { id: "INSERTTAG" }
-})
-app.use(createHead())
-=======
-Vue.use(BootstrapVue);
-Vue.use(IconsPlugin);
-
-Vue.use(vueDebounce, {
-  listenTo: 'input'
-});
 
 // Google Analytics Configuration
 // The GA_MEASUREMENT_ID can be set via environment variable VUE_APP_GA_MEASUREMENT_ID
@@ -40,7 +28,7 @@ Vue.use(vueDebounce, {
 const gaMeasurementId = process.env.VUE_APP_GA_MEASUREMENT_ID || null;
 
 if (gaMeasurementId) {
-  Vue.use(VueGtag, {
+  app.use(VueGtag, {
     config: { id: gaMeasurementId },
     appName: 'AutoTaskCalendar',
     pageTrackerScreenviewEnabled: true,
@@ -51,12 +39,13 @@ if (gaMeasurementId) {
     // eslint-disable-next-line no-console
     console.info('Google Analytics is not configured. Set VUE_APP_GA_MEASUREMENT_ID environment variable to enable tracking.');
   }
-  Vue.use(VueGtag, {
+  app.use(VueGtag, {
     config: { id: 'GA_MEASUREMENT_ID' },
     enabled: false,
     appName: 'AutoTaskCalendar',
   }, router);
 }
->>>>>>> 01210f6 (Configure Google Analytics with environment variable support)
+
+app.use(createHead())
 
 app.mount('#app')
