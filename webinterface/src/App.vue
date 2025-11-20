@@ -169,17 +169,17 @@ export default {
 
 /* Nav link styling for dark navbar */
 .navbar .nav-link {
-  color: rgba(255, 255, 255, 0.85) !important;
+  color: rgba(255, 255, 255, 0.85);
   font-weight: 500;
   transition: color 0.3s ease;
 }
 
 .navbar .nav-link:hover {
-  color: rgba(255, 255, 255, 1) !important;
+  color: rgba(255, 255, 255, 1);
 }
 
 .navbar .nav-link.router-link-active {
-  color: #667eea !important;
+  color: #667eea;
 }
 
 /* Enhanced button styling */
