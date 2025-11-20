@@ -157,6 +157,11 @@ export default {
   background: rgba(33, 37, 41, 0.95) !important;
 }
 
+/* Align navbar items vertically */
+.navbar .navbar-nav {
+  align-items: center;
+}
+
 .navbar-brand {
   font-weight: 700;
   font-size: 1.5rem;
