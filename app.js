@@ -29,10 +29,12 @@ if (process.env.NODE_ENV == 'production') {
     config.googleOAuthClientID = process.env.googleOAuthClientID;
     config.googleOAuthClientSecret = process.env.googleOAuthClientSecret;
     config.appUrl = process.env.appUrl;
+    config.gaMeasurementId = process.env.GA_MEASUREMENT_ID;
     hostPort = 8080;
 } else {
     mongooseConnectionString = config.devMongoDBConnectionString;
     config.appUrl = "http://localhost:3000";
+    config.gaMeasurementId = config.devGaMeasurementId;
     hostPort = 3000;
 }
 
@@ -167,6 +169,16 @@ function authenticateToken(req, res, next) {
 }
 
 /* ROUTES */
+
+// Public configuration endpoint (no authentication required)
+app.get('/api/config', (req, res) => {
+    res.json({
+        success: true,
+        config: {
+            gaMeasurementId: config.gaMeasurementId || null
+        }
+    });
+});
 
 
 // User management routes

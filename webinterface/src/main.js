@@ -13,39 +13,66 @@ import 'bootstrap-vue-next/dist/bootstrap-vue-next.css'
 
 import './style/darkStyle.scss'
 
-const app = createApp(App)
+// Initialize the app asynchronously to fetch runtime config
+async function initApp() {
+  const app = createApp(App)
 
-app.config.globalProperties.$http = Axios;
+  app.config.globalProperties.$http = Axios;
 
-app.use(router)
-app.use(store)
-app.use(createBootstrap())
-app.use(vueDebounce)
+  app.use(router)
+  app.use(store)
+  app.use(createBootstrap())
+  app.use(vueDebounce)
 
-// Google Analytics Configuration
-// The GA_MEASUREMENT_ID can be set via environment variable VUE_APP_GA_MEASUREMENT_ID
-// If not set, Google Analytics will be disabled (for development/testing)
-const gaMeasurementId = process.env.VUE_APP_GA_MEASUREMENT_ID || null;
-
-if (gaMeasurementId) {
-  app.use(VueGtag, {
-    config: { id: gaMeasurementId },
-    appName: 'AutoTaskCalendar',
-    pageTrackerScreenviewEnabled: true,
-  }, router);
-} else {
-  // In development/testing without GA ID, use a stub implementation
-  if (process.env.NODE_ENV === 'development') {
+  // Google Analytics Configuration
+  // Try to get GA measurement ID from runtime config first, then fall back to build-time env var
+  let gaMeasurementId = null;
+  
+  try {
+    // Fetch runtime configuration from the server
+    const response = await Axios.get('/api/config');
+    if (response.data && response.data.success && response.data.config) {
+      gaMeasurementId = response.data.config.gaMeasurementId;
+    }
+  } catch (error) {
+    // If fetching runtime config fails, fall back to build-time environment variable
     // eslint-disable-next-line no-console
-    console.info('Google Analytics is not configured. Set VUE_APP_GA_MEASUREMENT_ID environment variable to enable tracking.');
+    console.warn('Failed to fetch runtime config, falling back to build-time configuration:', error.message);
   }
-  app.use(VueGtag, {
-    config: { id: 'GA_MEASUREMENT_ID' },
-    enabled: false,
-    appName: 'AutoTaskCalendar',
-  }, router);
+  
+  // Fall back to build-time environment variable if runtime config didn't provide a value
+  if (!gaMeasurementId) {
+    gaMeasurementId = process.env.VUE_APP_GA_MEASUREMENT_ID || null;
+  }
+
+  if (gaMeasurementId) {
+    app.use(VueGtag, {
+      config: { id: gaMeasurementId },
+      appName: 'AutoTaskCalendar',
+      pageTrackerScreenviewEnabled: true,
+    }, router);
+    // eslint-disable-next-line no-console
+    console.info('Google Analytics initialized with ID:', gaMeasurementId);
+  } else {
+    // In development/testing without GA ID, use a stub implementation
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.info('Google Analytics is not configured. Set GA_MEASUREMENT_ID environment variable on the server or VUE_APP_GA_MEASUREMENT_ID at build time to enable tracking.');
+    }
+    app.use(VueGtag, {
+      config: { id: 'GA_MEASUREMENT_ID' },
+      enabled: false,
+      appName: 'AutoTaskCalendar',
+    }, router);
+  }
+
+  app.use(createHead())
+
+  app.mount('#app')
 }
 
-app.use(createHead())
-
-app.mount('#app')
+// Start the app
+initApp().catch(error => {
+  // eslint-disable-next-line no-console
+  console.error('Failed to initialize app:', error);
+});
