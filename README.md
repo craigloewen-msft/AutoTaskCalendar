@@ -41,6 +41,22 @@ See [TEST_CREDENTIALS.md](TEST_CREDENTIALS.md) for more details about the test u
 
 The frontend will hot reload, but the backend won't.
 
+### Google Analytics Configuration
+
+Google Analytics tracking can be configured at runtime or build time:
+
+**Runtime Configuration (Recommended):**
+- For production: Set `GA_MEASUREMENT_ID` as an environment variable on your hosting platform (e.g., Azure Web App)
+- For development: Add `devGaMeasurementId: 'G-XXXXXXXXXX'` to your `config.js` file
+- This allows changing the tracking ID without rebuilding the application
+
+**Build-time Configuration (Legacy):**
+- Set `VUE_APP_GA_MEASUREMENT_ID` environment variable during the build process
+- Or create a `.env.local` file in the `webinterface/` directory (see `.env.local.example`)
+- Requires rebuilding the application to change the tracking ID
+
+If both are configured, runtime configuration takes priority over build-time configuration.
+
 ### Further set up
 * You can replace `defaultconfig.js` with your actual one once you want to go live.
 * You will probably want to generate a github API token. Copy `defaultconfig.js` to `config.js`, and stick that in `ghToken` in `config.js`, so that you don't instantly run into the rate limit.
