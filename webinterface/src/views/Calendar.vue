@@ -4,18 +4,18 @@
       <div class="page-header-section">
         <h1 class="page-title">My Calendar</h1>
         <div class="header-actions">
-          <b-button variant="primary" v-on:click="openAddTaskModal" class="action-btn" aria-label="Add new task">
+          <BButton variant="primary" v-on:click="openAddTaskModal" class="action-btn" aria-label="Add new task">
             <span class="btn-icon" aria-hidden="true">+</span> Add Task
-          </b-button>
-          <b-button variant="outline-primary" v-on:click="openFollowUpModal(null)" class="action-btn" aria-label="Add follow up">
+          </BButton>
+          <BButton variant="outline-primary" v-on:click="openFollowUpModal(null)" class="action-btn" aria-label="Add follow up">
             <span class="btn-icon" aria-hidden="true">↻</span> Follow Up
-          </b-button>
-          <b-button variant="success" v-on:click="scheduleTasks" class="action-btn" aria-label="Schedule tasks">
+          </BButton>
+          <BButton variant="success" v-on:click="scheduleTasks" class="action-btn" aria-label="Schedule tasks">
             <span class="btn-icon" aria-hidden="true">📅</span> Schedule Tasks
-          </b-button>
-          <b-button variant="info" v-on:click="syncCalendar" class="action-btn" aria-label="Sync calendar with Google">
+          </BButton>
+          <BButton variant="info" v-on:click="syncCalendar" class="action-btn" aria-label="Sync calendar with Google">
             <span class="btn-icon" aria-hidden="true">⟳</span> Sync Calendar
-          </b-button>
+          </BButton>
         </div>
       </div>
       <div class="calendar-box">
@@ -62,7 +62,7 @@
       </div>
       </div>
     </div>
-    <b-modal
+    <BModal
       id="task-modal"
       ref="addtaskmodal"
       @ok="resolveTaskModal"
@@ -85,19 +85,19 @@
                 />
               </div>
               <div class="form-group">
-                <b-form-checkbox
+                <BFormCheckbox
                   v-model="input.taskIsBacklog"
                   class="form-control"
                   id="task-is-backlog"
-                  >Mark as Backlog Task</b-form-checkbox
+                  >Mark as Backlog Task</BFormCheckbox
                 >
               </div>
               <div v-if="!input.taskIsBacklog" class="form-group">
                 <label for="task-due-date">Due Date*</label>
-                <b-calendar
+                <BCalendar
                   v-model="input.taskDueDate"
                   class="mb-2"
-                ></b-calendar>
+                ></BCalendar>
               </div>
               <div class="form-group">
                 <label for="task-duration">Duration*</label>
@@ -109,12 +109,12 @@
                 />
               </div>
               <div class="form-group">
-                <b-form-checkbox
+                <BFormCheckbox
                   type="number"
                   v-model="input.taskBreakUpTask"
                   class="form-control"
                   id="task-break-up-task"
-                  >Break Up Task Into Chunks</b-form-checkbox
+                  >Break Up Task Into Chunks</BFormCheckbox
                 >
               </div>
               <div v-if="input.taskBreakUpTask" class="form-group">
@@ -130,10 +130,10 @@
               </div>
               <div class="form-group">
                 <label for="task-start-date">Start Date</label>
-                <b-form-datepicker
+                <BFormDatepicker
                   v-model="input.taskStartDate"
                   class="mb-2"
-                ></b-form-datepicker>
+                ></BFormDatepicker>
               </div>
               <div class="form-group">
                 <label for="task-repeat">Repeat</label>
@@ -190,8 +190,8 @@
           </div>
         </div>
       </div>
-    </b-modal>
-    <b-modal
+    </BModal>
+    <BModal
       id="followup-modal"
       ref="followupmodal"
       @ok="resolveFollowUpModal"
@@ -220,17 +220,23 @@
           </div>
         </div>
       </div>
-    </b-modal>
+    </BModal>
   </div>
 </template>
 
 <script>
 import { DayPilot, DayPilotCalendar } from "@daypilot/daypilot-lite-vue";
+import { BButton, BModal, BFormCheckbox, BCalendar, BFormDatepicker } from 'bootstrap-vue-next';
 
 export default {
   name: "Calendar",
   components: {
     DayPilotCalendar,
+    BButton,
+    BModal,
+    BFormCheckbox,
+    BCalendar,
+    BFormDatepicker
   },
   data() {
     return {

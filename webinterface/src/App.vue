@@ -1,57 +1,73 @@
 <template>
   <div id="app">
-    <b-navbar toggleable="lg" type="dark" variant="dark">
-      <b-container>
+    <BNavbar toggleable="lg" variant="dark">
+      <BContainer>
         <router-link class="navbar-brand" to="/">AutoTaskCalendar</router-link>
 
-        <b-navbar-toggle target="nav-collapse"></b-navbar-toggle>
+        <BNavbarToggle target="nav-collapse"></BNavbarToggle>
 
-        <b-collapse id="nav-collapse" is-nav>
-          <b-navbar-nav v-if="isLoggedIn">
+        <BCollapse id="nav-collapse" is-nav>
+          <BNavbarNav v-if="isLoggedIn">
             <!--- Add in items for logged in only --->
             <Bootstrapnavlinkcustom to="/calendar">Calendar</Bootstrapnavlinkcustom>
-          </b-navbar-nav>
-          <b-navbar-nav>
+          </BNavbarNav>
+          <BNavbarNav>
             <Bootstrapnavlinkcustom to="/about">About</Bootstrapnavlinkcustom>
-          </b-navbar-nav>
-          <b-navbar-nav
+          </BNavbarNav>
+          <BNavbarNav
             v-if="isLoggedIn"
-            class="ml-auto"
-            style="margin-left: auto"
+            class="ms-auto"
             is-nav
           >
             <Bootstrapnavlinkcustom :to="'/user/' + user.username">{{
               user.username
             }}</Bootstrapnavlinkcustom>
             <Bootstrapnavlinkcustom to="/logout">Logout</Bootstrapnavlinkcustom>
-          </b-navbar-nav>
-          <b-navbar-nav
+          </BNavbarNav>
+          <BNavbarNav
             v-if="!isLoggedIn"
-            class="ml-auto"
-            style="margin-left: auto"
+            class="ms-auto"
             is-nav
           >
             <Bootstrapnavlinkcustom to="/login">Login</Bootstrapnavlinkcustom>
             <Bootstrapnavlinkcustom to="/register"
               >Register</Bootstrapnavlinkcustom
             >
-          </b-navbar-nav>
-        </b-collapse>
-      </b-container>
-    </b-navbar>
+          </BNavbarNav>
+        </BCollapse>
+      </BContainer>
+    </BNavbar>
 
     <router-view />
   </div>
 </template>
 
 <script>
-import Bootstrapnavlinkcustom from "./components/BootstrapNavlinkCustom";
-import BootstrapNavlinkCustom from "./components/BootstrapNavlinkCustom.vue";
+import Bootstrapnavlinkcustom from "./components/BootstrapNavlinkCustom.vue";
+import { BNavbar, BNavbarToggle, BCollapse, BNavbarNav, BContainer } from 'bootstrap-vue-next';
+import { useHead } from '@vueuse/head';
 
 export default {
   name: "App",
   components: {
     Bootstrapnavlinkcustom,
+    BNavbar,
+    BNavbarToggle,
+    BCollapse,
+    BNavbarNav,
+    BContainer
+  },
+  setup() {
+    useHead({
+      meta: [
+        {
+          name: "description",
+          content:
+            "Easily manage your Github issues using this tool. This is a great way to never lose track of a Github issue again.",
+        },
+        { name: "keywords", content: "manage, github, issues" },
+      ],
+    });
   },
   computed: {
     isLoggedIn: function () {

@@ -1,6 +1,6 @@
 <template>
   <div class="pageContent">
-    <b-container>
+    <BContainer>
       <div class="user-profile-header">
         <div class="user-avatar">
           <div class="avatar-circle">
@@ -11,56 +11,56 @@
         <p class="user-subtitle">Manage your profile and working hours</p>
       </div>
 
-      <b-row>
-        <b-col lg="8" class="mx-auto">
+      <BRow>
+        <BCol lg="8" class="mx-auto">
           <!-- Working Hours Section -->
-          <b-card class="modern-card mb-4">
+          <BCard class="modern-card mb-4">
             <h3 class="section-title">
               <span class="title-icon">⏰</span>
               Working Hours
             </h3>
             <p class="section-description">Configure your available working time</p>
             
-            <b-row>
-              <b-col md="6" class="mb-3">
-                <b-form-group 
+            <BRow>
+              <BCol md="6" class="mb-3">
+                <BFormGroup 
                   label="Start Time" 
                   label-for="startTime"
                   description="When does your workday begin?"
                 >
-                  <b-form-input 
+                  <BFormInput 
                     id="startTime" 
                     v-model="input.startTime" 
                     type="time"
                     class="modern-input"
                   />
-                </b-form-group>
-              </b-col>
+                </BFormGroup>
+              </BCol>
 
-              <b-col md="6" class="mb-3">
-                <b-form-group 
+              <BCol md="6" class="mb-3">
+                <BFormGroup 
                   label="End Time" 
                   label-for="endTime"
                   description="When does your workday end?"
                 >
-                  <b-form-input 
+                  <BFormInput 
                     id="endTime" 
                     v-model="input.endTime" 
                     type="time"
                     class="modern-input"
                   />
-                </b-form-group>
-              </b-col>
-            </b-row>
+                </BFormGroup>
+              </BCol>
+            </BRow>
 
-            <b-form-group 
+            <BFormGroup 
               label="Working Days" 
               label-for="weekdays"
               description="Select the days you're available to work"
               class="mb-0"
             >
               <div class="weekday-selector">
-                <b-form-checkbox
+                <BFormCheckbox
                   v-for="day in weekdays"
                   :key="day"
                   v-model="input.selectedWeekdays"
@@ -70,13 +70,13 @@
                   button-variant="outline-primary"
                 >
                   {{ day.substring(0, 3) }}
-                </b-form-checkbox>
+                </BFormCheckbox>
               </div>
-            </b-form-group>
-          </b-card>
+            </BFormGroup>
+          </BCard>
 
           <!-- Google Calendar Integration Section -->
-          <b-card class="modern-card mb-4">
+          <BCard class="modern-card mb-4">
             <h3 class="section-title">
               <span class="title-icon">📅</span>
               Calendar Integration
@@ -86,7 +86,7 @@
             <div v-if="userCalendarList.length === 0" class="empty-state">
               <div class="empty-icon">📭</div>
               <p class="empty-text">No calendars connected yet</p>
-              <b-button 
+              <BButton 
                 variant="primary" 
                 size="lg"
                 @click="connectCalendar"
@@ -94,12 +94,12 @@
               >
                 <span class="button-icon">🔗</span>
                 Connect Google Calendar
-              </b-button>
+              </BButton>
             </div>
 
             <div v-else>
               <div class="calendar-list">
-                <b-form-checkbox
+                <BFormCheckbox
                   v-for="calendar in userCalendarList"
                   :key="calendar.id"
                   v-model="input.selectedCalendars"
@@ -109,23 +109,23 @@
                   <div class="calendar-info">
                     <span class="calendar-name">{{ calendar.summary }}</span>
                   </div>
-                </b-form-checkbox>
+                </BFormCheckbox>
               </div>
               
-              <b-button 
+              <BButton 
                 variant="outline-primary" 
                 @click="connectCalendar"
                 class="mt-3"
               >
                 <span class="button-icon">➕</span>
                 Connect Another Calendar
-              </b-button>
+              </BButton>
             </div>
-          </b-card>
+          </BCard>
 
           <!-- Save Button -->
           <div class="text-center">
-            <b-button 
+            <BButton 
               variant="primary" 
               size="lg"
               @click="submitUserUpdates"
@@ -133,20 +133,29 @@
             >
               <span class="button-icon">💾</span>
               Save Changes
-            </b-button>
+            </BButton>
           </div>
-        </b-col>
-      </b-row>
-    </b-container>
+        </BCol>
+      </BRow>
+    </BContainer>
   </div>
 </template>
 
 <script>
 import router from "../router";
+import { BContainer, BRow, BCol, BCard, BButton, BFormGroup, BFormCheckbox } from 'bootstrap-vue-next';
 
 export default {
   name: "User",
-  components: {},
+  components: {
+    BContainer,
+    BRow,
+    BCol,
+    BCard,
+    BButton,
+    BFormGroup,
+    BFormCheckbox
+  },
   data() {
     return {
       user: this.$store.state.user,
