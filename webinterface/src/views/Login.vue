@@ -1,6 +1,6 @@
 <template>
   <div class="pageContent">
-    <b-container class="user-form-box">
+    <BContainer class="user-form-box">
       <h1>Please sign in</h1>
       <p v-if="failuretext">{{ failuretext }}</p>
       <input
@@ -22,16 +22,21 @@
       <button class="btn btn-lg btn-primary btn-block" v-on:click="login">
         Sign in
       </button>
-    </b-container>
+    </BContainer>
   </div>
 </template>
 
 <script>
+import { BContainer } from 'bootstrap-vue-next';
+
 let APIEndpoint = "https://api.coindesk.com/v1/bpi/currentprice.json";
 let devEndPoint = "/api/";
 
 export default {
   name: "Login",
+  components: {
+    BContainer
+  },
   data() {
     return {
       failuretext: null,
@@ -40,9 +45,6 @@ export default {
         password: "",
       },
     };
-  },
-  components: {
-    // HelloWorld
   },
   methods: {
     login: function () {

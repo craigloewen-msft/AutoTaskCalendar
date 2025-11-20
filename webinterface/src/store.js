@@ -1,9 +1,7 @@
-import Vue from 'vue'
-import Vuex from 'vuex'
+import { createStore } from 'vuex'
+import axios from 'axios'
 
-Vue.use(Vuex)
-
-export default new Vuex.Store({
+export default createStore({
     state: {
         status: '',
         token: localStorage.getItem('token') || '',
@@ -42,7 +40,7 @@ export default new Vuex.Store({
                 localStorage.setItem('user', JSON.stringify(logindata.user));
                 localStorage.setItem('lastLoginDate', new Date());
 
-                Vue.prototype.$http.defaults.headers.common['Authorization'] = logindata.token;
+                axios.defaults.headers.common['Authorization'] = logindata.token;
                 commit('auth_success', { token: logindata.token, user: logindata.user });
                 resolve("Success!");
             })
@@ -54,7 +52,7 @@ export default new Vuex.Store({
                 localStorage.setItem('user', JSON.stringify(registerdata.user));
                 localStorage.setItem('lastLoginDate', new Date());
 
-                Vue.prototype.$http.defaults.headers.common['Authorization'] = registerdata.token;
+                axios.defaults.headers.common['Authorization'] = registerdata.token;
                 commit('auth_success', { token: registerdata.token, user: registerdata.user });
                 resolve("Succses!");
             })
@@ -65,7 +63,7 @@ export default new Vuex.Store({
                 localStorage.removeItem('token')
                 localStorage.removeItem('user');
                 localStorage.removeItem('lastLoginDate');
-                delete Vue.prototype.$http.defaults.headers.common['Authorization'];
+                delete axios.defaults.headers.common['Authorization'];
                 resolve();
             })
         },
