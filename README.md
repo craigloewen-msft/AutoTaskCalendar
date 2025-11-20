@@ -78,4 +78,15 @@ This application is integrated with Google Analytics using the modern `vue-gtag`
    - **User Login:** Tracked when a user logs in
    - **User Logout:** Tracked when a user logs out
 
+4. **GitHub Actions Deployment:**
+   
+   For automated deployment via GitHub Actions, add the Google Analytics Measurement ID as a repository secret:
+   
+   - Go to your repository Settings → Secrets and variables → Actions
+   - Click "New repository secret"
+   - Name: `VUE_APP_GA_MEASUREMENT_ID`
+   - Value: Your Google Analytics Measurement ID (e.g., `G-XXXXXXXXXX`)
+   
+   The GitHub Actions workflow will automatically use this secret during the build process.
+
 **Note:** If `VUE_APP_GA_MEASUREMENT_ID` is not set, Google Analytics will be disabled (useful for development and testing).
