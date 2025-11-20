@@ -144,6 +144,29 @@ export default {
   mounted: function () {
     this.$gtag.pageview(this.$route);
   },
+  metaInfo: {
+    title: "About - Smart Task Management Features",
+    meta: [
+      {
+        name: "description",
+        content: "Learn about AutoTaskCalendar's intelligent task scheduling features: automatic scheduling, Google Calendar sync, recurring tasks, task chunking, and smart planning based on your working hours.",
+      },
+      { 
+        name: "keywords", 
+        content: "task management features, calendar integration, auto-scheduling, recurring tasks, task chunking, work-life balance, productivity features" 
+      },
+      { property: "og:title", content: "About AutoTaskCalendar - Smart Task Management Features" },
+      { 
+        property: "og:description", 
+        content: "Discover how AutoTaskCalendar's intelligent scheduling helps you manage tasks efficiently with automatic planning and calendar integration." 
+      },
+      { name: "twitter:title", content: "About AutoTaskCalendar - Smart Task Management Features" },
+      { 
+        name: "twitter:description", 
+        content: "Discover how AutoTaskCalendar's intelligent scheduling helps you manage tasks efficiently with automatic planning and calendar integration." 
+      },
+    ],
+  },
 };
 </script>
 

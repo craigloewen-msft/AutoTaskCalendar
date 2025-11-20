@@ -239,6 +239,22 @@ export default {
   mounted() {
     this.refreshCalendarData();
   },
+  metaInfo() {
+    return {
+      title: `${this.input.username || 'User'} Profile - Settings & Configuration`,
+      meta: [
+        {
+          name: "description",
+          content: "Manage your AutoTaskCalendar profile settings, working hours, Google Calendar integration, and task scheduling preferences.",
+        },
+        { 
+          name: "keywords", 
+          content: "user profile, settings, working hours, calendar preferences, account management" 
+        },
+        { name: "robots", content: "noindex, nofollow" },
+      ],
+    };
+  },
 };
 </script>
 
