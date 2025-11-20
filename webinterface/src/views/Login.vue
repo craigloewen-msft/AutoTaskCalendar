@@ -84,6 +84,7 @@ export default {
       //   axios.get(devEndPoint).then(response => (this.userdata = response.data));
     },
   },
+<<<<<<< HEAD
   mounted: function () {
     this.$gtag.pageview(this.$route);
   },
@@ -106,6 +107,8 @@ export default {
       },
     ],
   },
+=======
+>>>>>>> 01210f6 (Configure Google Analytics with environment variable support)
 };
 </script>
 

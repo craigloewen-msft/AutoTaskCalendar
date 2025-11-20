@@ -134,6 +134,7 @@ import { BContainer, BRow, BCol, BCard, BButton } from 'bootstrap-vue-next';
 
 export default {
   name: "About",
+<<<<<<< HEAD
   components: {
     BContainer,
     BRow,
@@ -167,6 +168,8 @@ export default {
       },
     ],
   },
+=======
+>>>>>>> 01210f6 (Configure Google Analytics with environment variable support)
 };
 </script>
 

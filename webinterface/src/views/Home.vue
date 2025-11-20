@@ -45,6 +45,7 @@ export default {
       return this.$store.state.user;
     },
   },
+<<<<<<< HEAD
   mounted: function () {
     this.$gtag.pageview(this.$route);
   },
@@ -71,6 +72,8 @@ export default {
       },
     ],
   },
+=======
+>>>>>>> 01210f6 (Configure Google Analytics with environment variable support)
 };
 </script>
 
