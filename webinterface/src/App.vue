@@ -7,32 +7,26 @@
         <BNavbarToggle target="nav-collapse"></BNavbarToggle>
 
         <BCollapse id="nav-collapse" is-nav>
-          <BNavbarNav v-if="isLoggedIn">
-            <!--- Add in items for logged in only --->
-            <Bootstrapnavlinkcustom to="/calendar">Calendar</Bootstrapnavlinkcustom>
-          </BNavbarNav>
           <BNavbarNav>
+            <!--- Left-aligned navigation items --->
+            <Bootstrapnavlinkcustom v-if="isLoggedIn" to="/calendar">Calendar</Bootstrapnavlinkcustom>
             <Bootstrapnavlinkcustom to="/about">About</Bootstrapnavlinkcustom>
           </BNavbarNav>
           <BNavbarNav
-            v-if="isLoggedIn"
             class="ms-auto"
             is-nav
           >
-            <Bootstrapnavlinkcustom :to="'/user/' + user.username">{{
-              user.username
-            }}</Bootstrapnavlinkcustom>
-            <Bootstrapnavlinkcustom to="/logout">Logout</Bootstrapnavlinkcustom>
-          </BNavbarNav>
-          <BNavbarNav
-            v-if="!isLoggedIn"
-            class="ms-auto"
-            is-nav
-          >
-            <Bootstrapnavlinkcustom to="/login">Login</Bootstrapnavlinkcustom>
-            <Bootstrapnavlinkcustom to="/register"
-              >Register</Bootstrapnavlinkcustom
-            >
+            <!--- Right-aligned navigation items --->
+            <template v-if="isLoggedIn">
+              <Bootstrapnavlinkcustom :to="'/user/' + user.username">{{
+                user.username
+              }}</Bootstrapnavlinkcustom>
+              <Bootstrapnavlinkcustom to="/logout">Logout</Bootstrapnavlinkcustom>
+            </template>
+            <template v-else>
+              <Bootstrapnavlinkcustom to="/login">Login</Bootstrapnavlinkcustom>
+              <Bootstrapnavlinkcustom to="/register">Register</Bootstrapnavlinkcustom>
+            </template>
           </BNavbarNav>
         </BCollapse>
       </BContainer>
