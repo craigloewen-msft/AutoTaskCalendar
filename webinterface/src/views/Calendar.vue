@@ -577,7 +577,7 @@ export default {
         const response = await this.$http.post(`/api/deleteTask`, { taskId });
         // refresh task list after deletion
         this.taskList = response.data.taskList;
-        this.$bvModal.hide("task-modal");
+        this.$refs.addtaskmodal.hide();
       } catch (error) {
         console.error(error);
       }
@@ -599,7 +599,7 @@ export default {
         }
         // refresh task list after deletion
         this.taskList = response.data.taskList;
-        this.$bvModal.hide("task-modal");
+        this.$refs.addtaskmodal.hide();
       } catch (error) {
         console.error(error);
       }
@@ -676,7 +676,7 @@ export default {
 
       // Make all of this.input null
       Object.keys(this.input).forEach((i) => (this.input[i] = null));
-      this.$bvModal.show("task-modal");
+      this.$refs.addtaskmodal.show();
     },
     openFollowUpModal(inputTask) {
       this.selectedTask = inputTask;
@@ -692,7 +692,7 @@ export default {
         this.$refs.addtaskmodal.hide();
       });
       
-      this.$bvModal.show("followup-modal");
+      this.$refs.followupmodal.show();
     },
     openEditTaskModal(inputTask) {
       this.selectedTask = inputTask;
@@ -714,7 +714,7 @@ export default {
       this.input.repeat = inputTask.repeat;
       this.input.taskIsBacklog = inputTask.isBacklog || false;
 
-      this.$bvModal.show("task-modal");
+      this.$refs.addtaskmodal.show();
     },
     openEditTaskModalFromEvent(eventDetails) {
       let inTaskId = eventDetails.tags.taskId;
