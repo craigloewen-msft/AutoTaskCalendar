@@ -157,9 +157,9 @@ export default {
   background: rgba(33, 37, 41, 0.95) !important;
 }
 
-/* Align navbar items vertically */
+/* Align navbar items vertically to top */
 .navbar .navbar-nav {
-  align-items: center;
+  align-items: flex-start;
 }
 
 .navbar-brand {
