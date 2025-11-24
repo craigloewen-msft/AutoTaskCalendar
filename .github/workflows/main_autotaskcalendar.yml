@@ -49,8 +49,12 @@ jobs:
           # Copy built frontend (from npm run build)
           cp -r dist deploy-package/ || cp -r webinterface/dist deploy-package/dist
           
-          # Copy any other necessary runtime files
-          # cp -r other-necessary-files deploy-package/
+          # Copy necessary backend folders
+          cp -r models deploy-package/
+          cp -r middleware deploy-package/
+          cp -r routes deploy-package/
+          cp -r controllers deploy-package/
+          cp -r utils deploy-package/
           
       - name: Zip to tar
         run: |
