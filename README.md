@@ -41,6 +41,29 @@ See [TEST_CREDENTIALS.md](TEST_CREDENTIALS.md) for more details about the test u
 
 The frontend will hot reload, but the backend won't.
 
+## Automated Testing
+
+This project includes end-to-end tests using Playwright that verify:
+- User login and authentication
+- Task creation and management
+- Automatic task scheduling
+- Calendar display functionality
+
+### Running Tests
+
+```bash
+# Install Playwright browsers (first time only)
+npx playwright install chromium
+
+# Run tests with automatic server management
+npm run test:ci
+
+# Or run tests manually (requires servers to be running)
+npm test
+```
+
+See [tests/e2e/README.md](tests/e2e/README.md) for detailed testing documentation.
+
 ### Further set up
 * You can replace `defaultconfig.js` with your actual one once you want to go live.
 * You will probably want to generate a github API token. Copy `defaultconfig.js` to `config.js`, and stick that in `ghToken` in `config.js`, so that you don't instantly run into the rate limit.

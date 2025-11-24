@@ -3,3 +3,9 @@ node_modules/
 .vscode/
 dist/
 nohup.out
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+tests/e2e/screenshots/*.png
