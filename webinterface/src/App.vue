@@ -9,6 +9,8 @@
         <BNavbarNav>
           <!--- Left-aligned navigation items --->
           <Bootstrapnavlinkcustom v-if="isLoggedIn" to="/calendar">Calendar</Bootstrapnavlinkcustom>
+          <Bootstrapnavlinkcustom v-if="isLoggedIn" to="/completed">Completed Tasks</Bootstrapnavlinkcustom>
+          <Bootstrapnavlinkcustom v-if="isLoggedIn" to="/statistics">Statistics</Bootstrapnavlinkcustom>
           <Bootstrapnavlinkcustom to="/about">About</Bootstrapnavlinkcustom>
         </BNavbarNav>
         <BNavbarNav class="ms-auto">

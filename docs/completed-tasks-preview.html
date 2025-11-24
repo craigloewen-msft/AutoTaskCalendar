@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Completed Tasks - Preview</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            color: #e0e0e0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .page-header {
+            text-align: center;
+            padding: 30px 0;
+        }
+        
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        
+        .filters {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            border-radius: 8px;
+        }
+        
+        .tasks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        
+        .task-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .task-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.3);
+        }
+        
+        .task-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+        
+        .task-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .check-icon {
+            color: #10b981;
+            font-size: 1.1rem;
+        }
+        
+        .badge {
+            background: #3b82f6;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+        }
+        
+        .task-notes {
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+            color: #c0c0c0;
+            line-height: 1.5;
+        }
+        
+        .task-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .meta-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.85rem;
+            color: #a0a0a0;
+        }
+        
+        .meta-icon {
+            margin-right: 8px;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="page-header">
+            <h1 class="page-title">✓ Completed Tasks</h1>
+            <p style="color: #b0b0b0;">Review all your accomplished tasks</p>
+        </div>
+        
+        <div class="filters">
+            <input type="text" placeholder="Search completed tasks...">
+            <select>
+                <option>Recently Completed</option>
+                <option>Title (A-Z)</option>
+                <option>Duration</option>
+                <option>Due Date</option>
+            </select>
+        </div>
+        
+        <div class="tasks-grid">
+            <div class="task-card">
+                <div class="task-card-header">
+                    <div class="task-title">
+                        <span class="check-icon">✓</span>
+                        Complete project documentation
+                    </div>
+                    <span class="badge">weekly</span>
+                </div>
+                <div class="task-notes">
+                    Update all documentation files with latest changes and examples
+                </div>
+                <div class="task-meta">
+                    <div class="meta-item">
+                        <span class="meta-icon">📅</span>
+                        <span>Completed: Nov 20, 2024</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-icon">🎯</span>
+                        <span>Due: Nov 22, 2024</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-icon">⏱️</span>
+                        <span>Duration: 120 mins</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="task-card">
+                <div class="task-card-header">
+                    <div class="task-title">
+                        <span class="check-icon">✓</span>
+                        Code review for PR #123
+                    </div>
+                </div>
+                <div class="task-notes">
+                    Review authentication refactoring changes
+                </div>
+                <div class="task-meta">
+                    <div class="meta-item">
+                        <span class="meta-icon">📅</span>
+                        <span>Completed: Nov 19, 2024</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-icon">🎯</span>
+                        <span>Due: Nov 19, 2024</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-icon">⏱️</span>
+                        <span>Duration: 45 mins</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="task-card">
+                <div class="task-card-header">
+                    <div class="task-title">
+                        <span class="check-icon">✓</span>
+                        Team meeting preparation
+                    </div>
+                    <span class="badge">monthly</span>
+                </div>
+                <div class="task-notes">
+                    Prepare slides and agenda for monthly team sync
+                </div>
+                <div class="task-meta">
+                    <div class="meta-item">
+                        <span class="meta-icon">📅</span>
+                        <span>Completed: Nov 18, 2024</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-icon">🎯</span>
+                        <span>Due: Nov 20, 2024</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-icon">⏱️</span>
+                        <span>Duration: 60 mins</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="task-card">
+                <div class="task-card-header">
+                    <div class="task-title">
+                        <span class="check-icon">✓</span>
+                        Update dependencies
+                    </div>
+                </div>
+                <div class="task-notes">
+                    Update npm packages to latest stable versions
+                </div>
+                <div class="task-meta">
+                    <div class="meta-item">
+                        <span class="meta-icon">📅</span>
+                        <span>Completed: Nov 17, 2024</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-icon">🎯</span>
+                        <span>Due: Nov 18, 2024</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-icon">⏱️</span>
+                        <span>Duration: 30 mins</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
