@@ -94,10 +94,12 @@
               </div>
               <div v-if="!input.taskIsBacklog" class="form-group">
                 <label for="task-due-date">Due Date*</label>
-                <BCalendar
+                <input
+                  type="date"
                   v-model="input.taskDueDate"
-                  class="mb-2"
-                ></BCalendar>
+                  class="form-control date-input"
+                  id="task-due-date"
+                />
               </div>
               <div class="form-group">
                 <label for="task-duration">Duration*</label>
@@ -110,7 +112,6 @@
               </div>
               <div class="form-group">
                 <BFormCheckbox
-                  type="number"
                   v-model="input.taskBreakUpTask"
                   class="form-control"
                   id="task-break-up-task"
@@ -130,10 +131,12 @@
               </div>
               <div class="form-group">
                 <label for="task-start-date">Start Date</label>
-                <BFormDatepicker
+                <input
+                  type="date"
                   v-model="input.taskStartDate"
-                  class="mb-2"
-                ></BFormDatepicker>
+                  class="form-control date-input"
+                  id="task-start-date"
+                />
               </div>
               <div class="form-group">
                 <label for="task-repeat">Repeat</label>
@@ -226,7 +229,7 @@
 
 <script>
 import { DayPilot, DayPilotCalendar } from "@daypilot/daypilot-lite-vue";
-import { BButton, BModal, BFormCheckbox, BCalendar, BFormDatepicker } from 'bootstrap-vue-next';
+import { BButton, BModal, BFormCheckbox } from 'bootstrap-vue-next';
 
 export default {
   name: "Calendar",
@@ -234,9 +237,7 @@ export default {
     DayPilotCalendar,
     BButton,
     BModal,
-    BFormCheckbox,
-    BCalendar,
-    BFormDatepicker
+    BFormCheckbox
   },
   data() {
     return {
@@ -1241,5 +1242,10 @@ export default {
 .task-controls-buttons * {
   margin-right: 5px;
   margin-top: 5px;
+}
+
+/* Fix date input styling for dark theme */
+.date-input {
+  color-scheme: dark;
 }
 </style>
