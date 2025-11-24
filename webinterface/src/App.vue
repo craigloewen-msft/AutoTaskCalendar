@@ -172,8 +172,10 @@ export default {
   color: rgba(255, 255, 255, 1);
 }
 
+.navbar-nav .nav-link.active,
+.navbar-nav .nav-link.show,
 .navbar .nav-link.router-link-active {
-  color: #667eea;
+  color: #667eea !important;
 }
 
 /* Enhanced button styling */
