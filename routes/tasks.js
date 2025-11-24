@@ -15,21 +15,16 @@ function createTaskRoutes(config, authenticateToken) {
 
         let { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration, taskRepeat, isBacklog } = req.body;
 
-        if (!title || !duration) {
-            return res.send(returnFailure('Title and duration are required'));
+        if (!title || !duration || !startDate) {
+            return res.send(returnFailure('Title, duration, and start date are required'));
         }
 
         if (breakUpTask && !breakUpTaskChunkDuration) {
             breakUpTask = false;
         }
 
-        if (isBacklog) {
-            dueDate = null;
-            startDate = startDate || new Date();
-        }
-
-        if (!dueDate && !isBacklog) {
-            return res.send(returnFailure('Due date is required unless this is a backlog task'));
+        if (!isBacklog && !dueDate) {
+            return res.send(returnFailure('Due date is required for non-backlog tasks'));
         }
 
         try {
