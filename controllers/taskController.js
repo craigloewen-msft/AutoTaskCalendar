@@ -16,7 +16,7 @@ async function getCompletedTasksFromUsername(inUsername, limit = null, skip = 0)
     let user = await UserDetails.findOne({ username: inUsername });
     
     if (!user) {
-        return [];
+        return { tasks: [], totalCount: 0 };
     }
 
     // Build query for completed tasks

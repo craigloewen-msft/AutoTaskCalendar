@@ -95,7 +95,7 @@
             </span>
             <span v-else>
               <i class="bi bi-arrow-down-circle me-2"></i>
-              Load More ({{ totalCount - currentSkip }} remaining)
+              Load More ({{ totalCount - completedTasks.length }} remaining)
             </span>
           </button>
         </div>
