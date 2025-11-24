@@ -29,10 +29,29 @@ jobs:
           npm run build --if-present
           npm run test --if-present
 
+      - name: Prepare deployment package
+        run: |
+          # Create a clean deployment directory
+          mkdir -p deploy-package
+          
+          # Copy only necessary files for production
+          cp app.js deploy-package/
+          cp defaultconfig.js deploy-package/
+          cp package.json deploy-package/
+          cp node_modules deploy-package/
+          cp package-lock.json deploy-package/ || true
+          
+          # Copy built frontend (from npm run build)
+          cp -r dist deploy-package/ || cp -r webinterface/dist deploy-package/dist
+          
+          # Copy any other necessary runtime files
+          # cp -r other-necessary-files deploy-package/
+          
       - name: Zip to tar
         run: |
-          touch build-artifact.tar.gz
-          tar -czf build-artifact.tar.gz --exclude=build-artifact.tar.gz .
+          cd deploy-package
+          tar -czf ../build-artifact.tar.gz .
+          cd ..
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
