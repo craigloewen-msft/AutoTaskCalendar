@@ -81,6 +81,36 @@
         <div v-if="filteredAndSortedTasks.length === 0" class="text-center py-5">
           <p class="text-muted">No tasks match your search.</p>
         </div>
+
+        <!-- Load More Button -->
+        <div v-if="hasMore && !isSearching" class="text-center mt-4">
+          <button 
+            class="btn btn-primary load-more-btn" 
+            @click="loadMoreTasks"
+            :disabled="loadingMore"
+          >
+            <span v-if="loadingMore">
+              <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+              Loading...
+            </span>
+            <span v-else>
+              <i class="bi bi-arrow-down-circle me-2"></i>
+              Load More ({{ totalCount - currentSkip }} remaining)
+            </span>
+          </button>
+        </div>
+
+        <!-- Task count info -->
+        <div v-if="!isSearching" class="text-center mt-3">
+          <small class="text-muted">
+            Showing {{ completedTasks.length }} of {{ totalCount }} completed tasks
+          </small>
+        </div>
+        <div v-else class="text-center mt-3">
+          <small class="text-muted">
+            Found {{ completedTasks.length }} tasks matching "{{ searchQuery }}"
+          </small>
+        </div>
       </div>
     </BContainer>
   </div>
@@ -102,6 +132,7 @@ export default {
     return {
       completedTasks: [],
       loading: true,
+      loadingMore: false,
       searchQuery: '',
       sortBy: 'completedDate',
       sortOptions: [
@@ -109,24 +140,19 @@ export default {
         { value: 'title', text: 'Title (A-Z)' },
         { value: 'duration', text: 'Duration' },
         { value: 'dueDate', text: 'Due Date' }
-      ]
+      ],
+      currentSkip: 0,
+      pageSize: 20,
+      totalCount: 0,
+      hasMore: false,
+      isSearching: false
     };
   },
   computed: {
     filteredAndSortedTasks() {
       let tasks = this.completedTasks;
 
-      // Filter by search query
-      if (this.searchQuery) {
-        const query = this.searchQuery.toLowerCase();
-        tasks = tasks.filter(
-          (task) =>
-            task.title.toLowerCase().includes(query) ||
-            (task.notes && task.notes.toLowerCase().includes(query))
-        );
-      }
-
-      // Sort tasks
+      // Sort tasks (filtering is done by search now)
       tasks = [...tasks].sort((a, b) => {
         switch (this.sortBy) {
           case 'completedDate':
@@ -150,18 +176,83 @@ export default {
   mounted() {
     this.fetchCompletedTasks();
   },
+  watch: {
+    searchQuery(newValue) {
+      // Debounce the search
+      if (this.searchTimeout) {
+        clearTimeout(this.searchTimeout);
+      }
+      this.searchTimeout = setTimeout(() => {
+        this.handleSearch();
+      }, 500);
+    }
+  },
   methods: {
-    async fetchCompletedTasks() {
-      this.loading = true;
+    async fetchCompletedTasks(loadMore = false) {
+      if (loadMore) {
+        this.loadingMore = true;
+      } else {
+        this.loading = true;
+        this.currentSkip = 0;
+        this.completedTasks = [];
+      }
+
       try {
-        const response = await this.$http.get('/api/getCompletedTasks');
+        const response = await this.$http.get('/api/getCompletedTasks', {
+          params: {
+            limit: this.pageSize,
+            skip: this.currentSkip
+          }
+        });
+
         if (response.data.success) {
-          this.completedTasks = response.data.taskList || [];
+          if (loadMore) {
+            this.completedTasks = [...this.completedTasks, ...(response.data.taskList || [])];
+          } else {
+            this.completedTasks = response.data.taskList || [];
+          }
+          this.totalCount = response.data.totalCount || 0;
+          this.hasMore = response.data.hasMore || false;
+          this.currentSkip += (response.data.taskList || []).length;
+          this.isSearching = false;
         }
       } catch (error) {
         console.error('Error fetching completed tasks:', error);
       } finally {
         this.loading = false;
+        this.loadingMore = false;
+      }
+    },
+    async handleSearch() {
+      if (!this.searchQuery || this.searchQuery.trim() === '') {
+        // Reset to normal pagination if search is cleared
+        this.fetchCompletedTasks();
+        return;
+      }
+
+      this.loading = true;
+      this.isSearching = true;
+
+      try {
+        const response = await this.$http.get('/api/searchCompletedTasks', {
+          params: {
+            q: this.searchQuery
+          }
+        });
+
+        if (response.data.success) {
+          this.completedTasks = response.data.taskList || [];
+          this.hasMore = false; // No load more for search results
+        }
+      } catch (error) {
+        console.error('Error searching completed tasks:', error);
+      } finally {
+        this.loading = false;
+      }
+    },
+    loadMoreTasks() {
+      if (!this.loadingMore && this.hasMore) {
+        this.fetchCompletedTasks(true);
       }
     },
     formatDate(dateString) {
@@ -319,6 +410,25 @@ export default {
 .spinner-border {
   width: 3rem;
   height: 3rem;
+}
+
+.load-more-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  padding: 12px 30px;
+  font-size: 1rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.load-more-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+}
+
+.load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 @media (max-width: 768px) {

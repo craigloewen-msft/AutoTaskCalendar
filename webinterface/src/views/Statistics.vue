@@ -75,7 +75,11 @@
                 <i class="bi bi-graph-up-arrow"></i>
                 Tasks Completed Over Time
               </h4>
-              <LineChart :data="lineChartData" :options="lineChartOptions" />
+              <div v-if="Object.keys(statistics.tasksByDay || {}).length === 0" class="empty-chart text-center py-5">
+                <i class="bi bi-graph-up text-muted" style="font-size: 3rem; opacity: 0.3;"></i>
+                <p class="text-muted mt-3">No completed tasks yet. Complete some tasks to see your progress over time!</p>
+              </div>
+              <LineChart v-else :data="lineChartData" :options="lineChartOptions" />
             </div>
           </BCol>
 
@@ -211,6 +215,26 @@ export default {
     lineChartData() {
       const tasksByDay = this.statistics.tasksByDay || {};
       const sortedDates = Object.keys(tasksByDay).sort();
+      
+      // If no data, show empty chart with helpful message
+      if (sortedDates.length === 0) {
+        return {
+          labels: [],
+          datasets: [
+            {
+              label: 'Tasks Completed',
+              data: [],
+              borderColor: '#667eea',
+              backgroundColor: 'rgba(102, 126, 234, 0.2)',
+              tension: 0.4,
+              fill: true,
+              pointRadius: 4,
+              pointHoverRadius: 6
+            }
+          ]
+        };
+      }
+
       const last30Days = sortedDates.slice(-30);
 
       return {
