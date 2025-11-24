@@ -37,10 +37,8 @@ test.describe('AutoTaskCalendar E2E Tests', () => {
     await page.fill('input[name="password"]', TEST_USER.password);
     
     // Click sign in button and wait for navigation
-    await Promise.all([
-      page.waitForNavigation({ waitUntil: 'networkidle' }),
-      page.click('button:has-text("Sign in")'),
-    ]);
+    await page.click('button:has-text("Sign in")');
+    await page.waitForURL(new RegExp(`/user/${TEST_USER.username}`), { waitUntil: 'networkidle' });
     
     // Verify we're logged in and on the user page
     await expect(page).toHaveURL(new RegExp(`/user/${TEST_USER.username}`));
@@ -112,10 +110,8 @@ test.describe('AutoTaskCalendar E2E Tests', () => {
     await page.fill('input[name="password"]', TEST_USER.password);
     
     // Click sign in and wait for navigation
-    await Promise.all([
-      page.waitForNavigation({ waitUntil: 'networkidle' }),
-      page.click('button:has-text("Sign in")'),
-    ]);
+    await page.click('button:has-text("Sign in")');
+    await page.waitForURL(new RegExp(`/user/${TEST_USER.username}`), { waitUntil: 'networkidle' });
     
     // Navigate to calendar
     await page.goto('/#/calendar');
