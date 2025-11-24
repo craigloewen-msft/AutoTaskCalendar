@@ -1,41 +1,30 @@
 <template>
   <div id="app">
     <BNavbar toggleable="lg" variant="dark">
-      <BContainer>
-        <router-link class="navbar-brand" to="/">AutoTaskCalendar</router-link>
+      <router-link class="navbar-brand" to="/">AutoTaskCalendar</router-link>
 
-        <BNavbarToggle target="nav-collapse"></BNavbarToggle>
+      <BNavbarToggle target="nav-collapse"></BNavbarToggle>
 
-        <BCollapse id="nav-collapse" is-nav>
-          <BNavbarNav v-if="isLoggedIn">
-            <!--- Add in items for logged in only --->
-            <Bootstrapnavlinkcustom to="/calendar">Calendar</Bootstrapnavlinkcustom>
-          </BNavbarNav>
-          <BNavbarNav>
-            <Bootstrapnavlinkcustom to="/about">About</Bootstrapnavlinkcustom>
-          </BNavbarNav>
-          <BNavbarNav
-            v-if="isLoggedIn"
-            class="ms-auto"
-            is-nav
-          >
+      <BCollapse id="nav-collapse" is-nav>
+        <BNavbarNav>
+          <!--- Left-aligned navigation items --->
+          <Bootstrapnavlinkcustom v-if="isLoggedIn" to="/calendar">Calendar</Bootstrapnavlinkcustom>
+          <Bootstrapnavlinkcustom to="/about">About</Bootstrapnavlinkcustom>
+        </BNavbarNav>
+        <BNavbarNav class="ms-auto">
+          <!--- Right-aligned navigation items --->
+          <template v-if="isLoggedIn">
             <Bootstrapnavlinkcustom :to="'/user/' + user.username">{{
               user.username
             }}</Bootstrapnavlinkcustom>
             <Bootstrapnavlinkcustom to="/logout">Logout</Bootstrapnavlinkcustom>
-          </BNavbarNav>
-          <BNavbarNav
-            v-if="!isLoggedIn"
-            class="ms-auto"
-            is-nav
-          >
+          </template>
+          <template v-else>
             <Bootstrapnavlinkcustom to="/login">Login</Bootstrapnavlinkcustom>
-            <Bootstrapnavlinkcustom to="/register"
-              >Register</Bootstrapnavlinkcustom
-            >
-          </BNavbarNav>
-        </BCollapse>
-      </BContainer>
+            <Bootstrapnavlinkcustom to="/register">Register</Bootstrapnavlinkcustom>
+          </template>
+        </BNavbarNav>
+      </BCollapse>
     </BNavbar>
 
     <router-view />
@@ -44,7 +33,7 @@
 
 <script>
 import Bootstrapnavlinkcustom from "./components/BootstrapNavlinkCustom.vue";
-import { BNavbar, BNavbarToggle, BCollapse, BNavbarNav, BContainer } from 'bootstrap-vue-next';
+import { BNavbar, BNavbarToggle, BCollapse, BNavbarNav } from 'bootstrap-vue-next';
 import { useHead } from '@vueuse/head';
 
 export default {
@@ -54,8 +43,7 @@ export default {
     BNavbar,
     BNavbarToggle,
     BCollapse,
-    BNavbarNav,
-    BContainer
+    BNavbarNav
   },
   setup() {
     useHead({
@@ -171,6 +159,23 @@ export default {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* Nav link styling for dark navbar */
+.navbar .nav-link {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.navbar .nav-link:hover {
+  color: rgba(255, 255, 255, 1);
+}
+
+.navbar-nav .nav-link.active,
+.navbar-nav .nav-link.show,
+.navbar .nav-link.router-link-active {
+  color: #667eea !important;
 }
 
 /* Enhanced button styling */
