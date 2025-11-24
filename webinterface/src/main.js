@@ -33,17 +33,9 @@ if (gaMeasurementId) {
     appName: 'AutoTaskCalendar',
     pageTrackerScreenviewEnabled: true,
   }, router);
+  console.info('Google Analytics enabled with ID:', gaMeasurementId.substring(0, 5) + '...');
 } else {
-  // In development/testing without GA ID, use a stub implementation
-  if (process.env.NODE_ENV === 'development') {
-    // eslint-disable-next-line no-console
-    console.info('Google Analytics is not configured. Set VUE_APP_GA_MEASUREMENT_ID environment variable to enable tracking.');
-  }
-  app.use(VueGtag, {
-    config: { id: 'GA_MEASUREMENT_ID' },
-    enabled: false,
-    appName: 'AutoTaskCalendar',
-  }, router);
+  console.info('Google Analytics is not configured. Set VUE_APP_GA_MEASUREMENT_ID environment variable to enable tracking.');
 }
 
 app.use(createHead())

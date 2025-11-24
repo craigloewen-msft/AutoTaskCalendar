@@ -16,7 +16,7 @@
     "passport-local-mongoose": "^8.0.0"
   },
   "scripts": {
-    "build": "cd webinterface; npm install; npm run build; cd ..; rm -rf ./dist; mv ./webinterface/dist .",
+    "build": "cd webinterface && npm install && npm run build && cd .. && rm -rf ./dist && mv ./webinterface/dist .",
     "dev": "concurrently --kill-others \"nodemon --inspect app.js\" \"cd webinterface; npm run serve\"",
     "seed": "node seedDatabase.js"
   },
