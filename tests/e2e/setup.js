@@ -30,15 +30,19 @@ async function seedDatabase() {
 async function waitForMongoDB(maxRetries = 10, delayMs = 2000) {
   const mongoose = require('mongoose');
   const fs = require('fs');
-  const config = fs.existsSync('./config.js') ? require('../../config') : require('../../defaultconfig');
+  const path = require('path');
+  
+  // Navigate up from tests/e2e/ to project root
+  const configPath = path.join(__dirname, '../../config.js');
+  const defaultConfigPath = path.join(__dirname, '../../defaultconfig.js');
+  
+  const config = fs.existsSync(configPath) ? require(configPath) : require(defaultConfigPath);
   
   let mongooseConnectionString = config.devMongoDBConnectionString.replace('mongodb://db/', 'mongodb://localhost/');
   
   for (let i = 0; i < maxRetries; i++) {
     try {
-      await mongoose.connect(mongooseConnectionString, { 
-        useNewUrlParser: true, 
-        useUnifiedTopology: true,
+      await mongoose.connect(mongooseConnectionString, {
         serverSelectionTimeoutMS: 5000,
       });
       console.log('MongoDB is ready');

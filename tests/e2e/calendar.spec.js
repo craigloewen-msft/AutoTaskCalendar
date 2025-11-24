@@ -81,8 +81,8 @@ test.describe('AutoTaskCalendar E2E Tests', () => {
     // Click "Schedule Tasks" button
     await page.click('button:has-text("Schedule Tasks")');
     
-    // Wait for scheduling to complete (the button may show a loading state)
-    await page.waitForTimeout(3000);
+    // Wait for scheduling to complete by checking for network idle
+    await page.waitForLoadState('networkidle');
     
     // Verify that events appear on the calendar
     // The calendar uses DayPilot, so we need to check for event elements
