@@ -52,6 +52,7 @@ const TaskDetail = new Schema({
     breakUpTask: Boolean,
     breakUpTaskChunkDuration: Number,
     completed: Boolean,
+    completedDate: Date,
     scheduledDate: Date,
     repeat: String,
     isBacklog: Boolean,
@@ -167,6 +168,23 @@ async function seedDatabase() {
                 userRef: testUser._id
             }
         ];
+
+        // Add completed tasks for testing pagination
+        for (let i = 1; i <= 35; i++) {
+            sampleTasks.push({
+                title: `Completed Task ${i}`,
+                notes: `This is a test completed task number ${i} with some sample notes`,
+                dueDate: moment().subtract(i, 'days').toDate(),
+                startDate: moment().subtract(i + 1, 'days').toDate(),
+                duration: Math.floor(Math.random() * 3) + 1,
+                breakUpTask: false,
+                completed: true,
+                completedDate: moment().subtract(i - 1, 'days').toDate(),
+                repeat: i % 7 === 0 ? 'weekly' : 'none',
+                isBacklog: false,
+                userRef: testUser._id
+            });
+        }
 
         const createdTasks = await TaskDetails.insertMany(sampleTasks);
         console.log(`Created ${createdTasks.length} sample tasks`);
