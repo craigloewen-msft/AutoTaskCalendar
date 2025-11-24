@@ -4,7 +4,7 @@ import router from './router'
 import store from './store.js'
 import Axios from 'axios'
 import { vueDebounce } from 'vue-debounce'
-import VueGtag from "vue-gtag-next"
+import { createGtag } from "vue-gtag"
 import { createHead } from '@vueuse/head'
 import { createBootstrap } from 'bootstrap-vue-next'
 
@@ -28,12 +28,13 @@ app.use(vueDebounce)
 const gaMeasurementId = process.env.VUE_APP_GA_MEASUREMENT_ID || null;
 
 if (gaMeasurementId) {
-  app.use(VueGtag, {
-    config: { id: gaMeasurementId },
-    appName: 'AutoTaskCalendar',
-    pageTrackerScreenviewEnabled: true,
-  }, router);
-  console.info('Google Analytics enabled with ID:', gaMeasurementId.substring(0, 5) + '...');
+  const gtag = createGtag({
+    tagId: gaMeasurementId,
+    pageTracker: {
+      router: router
+    }
+  });
+  app.use(gtag);
 } else {
   console.info('Google Analytics is not configured. Set VUE_APP_GA_MEASUREMENT_ID environment variable to enable tracking.');
 }
