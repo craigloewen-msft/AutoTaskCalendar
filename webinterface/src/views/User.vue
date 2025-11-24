@@ -444,40 +444,40 @@ export default {
 }
 
 /* Override Bootstrap Vue form group labels */
-::v-deep .form-group label {
+:deep(.form-group label) {
   color: #d0d0d0;
   font-weight: 600;
   font-size: 0.95rem;
   margin-bottom: 8px;
 }
 
-::v-deep .form-group .form-text {
+:deep(.form-group .form-text) {
   color: #909090;
   font-size: 0.85rem;
 }
 
-::v-deep .custom-control-label {
+:deep(.custom-control-label) {
   color: #e0e0e0;
   cursor: pointer;
 }
 
-::v-deep .custom-checkbox .custom-control-input:checked ~ .custom-control-label::before {
+:deep(.custom-checkbox .custom-control-input:checked ~ .custom-control-label::before) {
   background-color: #667eea;
   border-color: #667eea;
 }
 
-::v-deep .btn-outline-primary {
+:deep(.btn-outline-primary) {
   border-color: rgba(102, 126, 234, 0.5);
   color: #667eea;
 }
 
-::v-deep .btn-outline-primary:hover {
+:deep(.btn-outline-primary:hover) {
   background-color: #667eea;
   border-color: #667eea;
   color: white;
 }
 
-::v-deep .btn-outline-primary.active {
+:deep(.btn-outline-primary.active) {
   background-color: #667eea;
   border-color: #667eea;
   color: white;

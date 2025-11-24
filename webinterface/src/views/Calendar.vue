@@ -94,10 +94,12 @@
               </div>
               <div v-if="!input.taskIsBacklog" class="form-group">
                 <label for="task-due-date">Due Date*</label>
-                <BCalendar
+                <input
+                  type="date"
                   v-model="input.taskDueDate"
-                  class="mb-2"
-                ></BCalendar>
+                  class="form-control date-input"
+                  id="task-due-date"
+                />
               </div>
               <div class="form-group">
                 <label for="task-duration">Duration*</label>
@@ -110,7 +112,6 @@
               </div>
               <div class="form-group">
                 <BFormCheckbox
-                  type="number"
                   v-model="input.taskBreakUpTask"
                   class="form-control"
                   id="task-break-up-task"
@@ -130,10 +131,12 @@
               </div>
               <div class="form-group">
                 <label for="task-start-date">Start Date</label>
-                <BFormDatepicker
+                <input
+                  type="date"
                   v-model="input.taskStartDate"
-                  class="mb-2"
-                ></BFormDatepicker>
+                  class="form-control date-input"
+                  id="task-start-date"
+                />
               </div>
               <div class="form-group">
                 <label for="task-repeat">Repeat</label>
@@ -226,7 +229,7 @@
 
 <script>
 import { DayPilot, DayPilotCalendar } from "@daypilot/daypilot-lite-vue";
-import { BButton, BModal, BFormCheckbox, BCalendar, BFormDatepicker } from 'bootstrap-vue-next';
+import { BButton, BModal, BFormCheckbox } from 'bootstrap-vue-next';
 
 export default {
   name: "Calendar",
@@ -234,9 +237,7 @@ export default {
     DayPilotCalendar,
     BButton,
     BModal,
-    BFormCheckbox,
-    BCalendar,
-    BFormDatepicker
+    BFormCheckbox
   },
   data() {
     return {
@@ -577,7 +578,7 @@ export default {
         const response = await this.$http.post(`/api/deleteTask`, { taskId });
         // refresh task list after deletion
         this.taskList = response.data.taskList;
-        this.$bvModal.hide("task-modal");
+        this.$refs.addtaskmodal.hide();
       } catch (error) {
         console.error(error);
       }
@@ -599,7 +600,7 @@ export default {
         }
         // refresh task list after deletion
         this.taskList = response.data.taskList;
-        this.$bvModal.hide("task-modal");
+        this.$refs.addtaskmodal.hide();
       } catch (error) {
         console.error(error);
       }
@@ -676,7 +677,7 @@ export default {
 
       // Make all of this.input null
       Object.keys(this.input).forEach((i) => (this.input[i] = null));
-      this.$bvModal.show("task-modal");
+      this.$refs.addtaskmodal.show();
     },
     openFollowUpModal(inputTask) {
       this.selectedTask = inputTask;
@@ -692,7 +693,7 @@ export default {
         this.$refs.addtaskmodal.hide();
       });
       
-      this.$bvModal.show("followup-modal");
+      this.$refs.followupmodal.show();
     },
     openEditTaskModal(inputTask) {
       this.selectedTask = inputTask;
@@ -714,7 +715,7 @@ export default {
       this.input.repeat = inputTask.repeat;
       this.input.taskIsBacklog = inputTask.isBacklog || false;
 
-      this.$bvModal.show("task-modal");
+      this.$refs.addtaskmodal.show();
     },
     openEditTaskModalFromEvent(eventDetails) {
       let inTaskId = eventDetails.tags.taskId;
@@ -1241,5 +1242,10 @@ export default {
 .task-controls-buttons * {
   margin-right: 5px;
   margin-top: 5px;
+}
+
+/* Fix date input styling for dark theme */
+.date-input {
+  color-scheme: dark;
 }
 </style>

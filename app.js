@@ -1068,7 +1068,24 @@ async function generateTaskEvents(inUser) {
     let taskChunkInfoList = {};
 
     let eventIndex = 0;
+    let loopIterations = 0;
+    const maxIterations = 10000; // Safety limit to prevent infinite loops
+    let lastTaskCount = sortedTasks.length;
+    let noProgressIterations = 0;
+    
     while (sortedTasks.length > 0) {
+        loopIterations++;
+        
+        // Safety check: if we've looped too many times or made no progress for too long, break
+        if (loopIterations > maxIterations || noProgressIterations > 100) {
+            console.error('Task scheduling infinite loop detected. Remaining tasks:', sortedTasks.length);
+            // Log the problematic tasks
+            for (let task of sortedTasks) {
+                console.error(`Unschedulable task: "${task.title}" - Duration: ${task.duration} mins, Break up: ${task.breakUpTask}`);
+            }
+            break;
+        }
+        
         let nextEvent = null;
         try {
             nextEvent = sortedEvents[eventIndex];
@@ -1218,6 +1235,14 @@ async function generateTaskEvents(inUser) {
                     }
                 }
             }
+        }
+        
+        // Track progress to detect if we're stuck
+        if (sortedTasks.length === lastTaskCount) {
+            noProgressIterations++;
+        } else {
+            noProgressIterations = 0;
+            lastTaskCount = sortedTasks.length;
         }
     }
 
