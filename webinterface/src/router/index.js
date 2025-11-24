@@ -55,6 +55,22 @@ const routes = [
     meta: {
       requiresAuth: true
     }
+  },
+  {
+    path: '/completed',
+    name: 'CompletedTasks',
+    component: () => import(/* webpackChunkName: "about" */ '../views/CompletedTasks.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/statistics',
+    name: 'Statistics',
+    component: () => import(/* webpackChunkName: "about" */ '../views/Statistics.vue'),
+    meta: {
+      requiresAuth: true
+    }
   }
 ]
 
