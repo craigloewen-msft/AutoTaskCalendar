@@ -59,7 +59,7 @@ const completeTask = async (task, user) => {
             completed: false,
             completedDate: null,
             // Generate a new id for the new task
-            _id: mongoose.Types.ObjectId(),
+            _id: new mongoose.Types.ObjectId(),
         });
 
         switch (task.repeat) {
