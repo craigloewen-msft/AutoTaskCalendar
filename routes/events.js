@@ -137,14 +137,14 @@ function createEventRoutes(config, authenticateToken) {
     router.get('/connectGoogleCallback', async (req, res) => {
         // Check if Google returned an error
         if (req.query.error) {
-            console.error('Google OAuth error:', req.query.error);
-            return res.redirect(`${config.appUrl}?error=${encodeURIComponent(req.query.error)}`);
+            console.error('Google OAuth returned an error during callback');
+            return res.redirect(`${config.appUrl}?error=oauth_error`);
         }
 
         // Check if authorization code is present
         if (!req.query.code) {
             console.error('Missing authorization code in callback');
-            return res.redirect(`${config.appUrl}?error=${encodeURIComponent('Missing authorization code')}`);
+            return res.redirect(`${config.appUrl}?error=missing_code`);
         }
 
         // Get the user's ID from the state parameter
@@ -152,15 +152,15 @@ function createEventRoutes(config, authenticateToken) {
 
         if (!userId) {
             console.error('Missing state parameter in callback');
-            return res.redirect(`${config.appUrl}?error=${encodeURIComponent('Missing state parameter')}`);
+            return res.redirect(`${config.appUrl}?error=invalid_state`);
         }
 
-        // Check if user is logged in
+        // Check if user exists
         let user = await UserDetails.findById(userId);
 
         if (!user) {
-            console.error('User not found for ID:', userId);
-            return res.redirect(`${config.appUrl}?error=${encodeURIComponent('User not found')}`);
+            console.error('User not found during Google OAuth callback');
+            return res.redirect(`${config.appUrl}?error=user_not_found`);
         }
 
         // Exchange the authorization code for an access token
@@ -181,7 +181,7 @@ function createEventRoutes(config, authenticateToken) {
             return res.redirect(`${config.appUrl}`);
         } catch (err) {
             console.error('Failed to exchange authorization code for tokens:', err.message);
-            return res.redirect(`${config.appUrl}?error=${encodeURIComponent('Failed to connect Google account')}`);
+            return res.redirect(`${config.appUrl}?error=token_exchange_failed`);
         }
     });
 
