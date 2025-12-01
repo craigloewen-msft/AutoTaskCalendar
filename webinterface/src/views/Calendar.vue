@@ -602,7 +602,7 @@ export default {
         if (response.data.success) {
           this.taskList = response.data.taskList;
         } else {
-          console.error('Error completing task:', response.data.log);
+          console.error('Error completing task:', response.data.log || 'Unknown error');
         }
         this.$refs.addtaskmodal.hide();
       } catch (error) {
