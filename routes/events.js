@@ -138,8 +138,7 @@ function createEventRoutes(config, authenticateToken) {
         // Check if Google returned an error
         if (req.query.error) {
             // Log the OAuth error type for debugging (Google's error codes are a controlled set)
-            const errorType = req.query.error || 'unknown';
-            console.error('Google OAuth error:', errorType);
+            console.error('Google OAuth error:', req.query.error);
             return res.redirect(`${config.appUrl}?error=oauth_error`);
         }
 
@@ -182,7 +181,7 @@ function createEventRoutes(config, authenticateToken) {
 
             return res.redirect(`${config.appUrl}`);
         } catch (err) {
-            console.error('Failed to exchange authorization code for tokens');
+            console.error('Failed to exchange authorization code for tokens:', err);
             return res.redirect(`${config.appUrl}?error=token_exchange_failed`);
         }
     });
