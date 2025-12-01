@@ -15,17 +15,45 @@ AutoTaskCalendar is a web-based task management system that automatically schedu
 
 ## Architecture
 
-### Backend Structure (`app.js`)
+### Backend Structure
 
-The main application file contains:
-- **User Management**: Registration, login, authentication with JWT
-- **Task Management**: CRUD operations for tasks with features like:
-  - Task chunking (breaking up large tasks)
-  - Repeating tasks (daily, weekly, monthly, yearly)
-  - Backlog tasks (tasks without specific deadlines)
-  - Task completion tracking
-- **Event Management**: Managing calendar events and syncing with Google Calendar
-- **Scheduling Algorithm**: `generateTaskEvents()` function that automatically schedules tasks based on:
+The backend follows a modular MVC-like architecture:
+
+#### Entry Point (`app.js`)
+- Express server setup and configuration
+- MongoDB connection with Mongoose
+- Session management with connect-mongo
+- Passport.js initialization for authentication
+- Route mounting for `/api` endpoints
+
+#### Models (`models/index.js`)
+Database schemas using Mongoose:
+- **UserDetail**: Authentication credentials, working hours configuration, Google OAuth tokens
+- **TaskDetail**: Task metadata, scheduling info, repeat settings, backlog flag
+- **EventDetail**: Calendar events, task-generated events, Google Calendar synced events
+
+#### Routes (`routes/`)
+API endpoint definitions:
+- **auth.js**: User registration, login, logout, profile management, Google OAuth
+- **tasks.js**: Task CRUD operations, completion, scheduling
+- **events.js**: Event management, Google Calendar sync
+
+#### Controllers (`controllers/`)
+Business logic:
+- **taskController.js**: Task list retrieval, task completion with repeat handling, `generateTaskEvents()` scheduling algorithm
+- **eventController.js**: Event operations, Google Calendar synchronization
+
+#### Middleware (`middleware/auth.js`)
+- JWT token authentication via `authenticateToken`
+
+#### Utils (`utils/helpers.js`)
+- `returnFailure()` helper for consistent error responses
+
+### Key Features
+- **Task Chunking**: Breaking up large tasks into smaller chunks
+- **Repeating Tasks**: Daily, weekly, monthly, yearly recurrence
+- **Backlog Tasks**: Tasks without specific deadlines
+- **Task Scheduling**: `generateTaskEvents()` function that automatically schedules tasks based on:
   - User's working hours and days
   - Existing calendar events
   - Task deadlines and priorities
@@ -102,15 +130,25 @@ npm run dev
 
 ### API Patterns
 
-#### Request Authentication
+#### Route Definition (in routes/*.js)
 ```javascript
-app.post('/api/endpoint', authenticateToken, async (req, res) => {
-    let user = await UserDetails.findOne({ username: req.user.id });
-    if (!req.user || !user) {
-        return res.send(returnFailure('Not logged in'));
-    }
-    // ... endpoint logic
-});
+const express = require('express');
+const router = express.Router();
+const { UserDetails } = require('../models');
+const { returnFailure } = require('../utils/helpers');
+
+function createRoutes(config, authenticateToken) {
+    router.post('/endpoint', authenticateToken, async (req, res) => {
+        let user = await UserDetails.findOne({ username: req.user.id });
+        if (!req.user || !user) {
+            return res.send(returnFailure('Not logged in'));
+        }
+        // ... endpoint logic
+    });
+    return router;
+}
+
+module.exports = createRoutes;
 ```
 
 #### Response Format
@@ -125,12 +163,12 @@ return res.json(returnFailure('Error message'));
 ### Task Management Patterns
 
 #### Completing Tasks
-- Use `completeTask(task, user)` helper function
+- Use `completeTask(task, user)` from `controllers/taskController.js`
 - Handles repeating tasks automatically by creating new instances
 - Updates task status and creates follow-up tasks if needed
 
 #### Task Scheduling
-- The `generateTaskEvents()` function is the core scheduling algorithm
+- The `generateTaskEvents()` function in `controllers/taskController.js` is the core scheduling algorithm
 - It considers:
   1. User working hours and days
   2. Existing calendar events
@@ -141,16 +179,16 @@ return res.json(returnFailure('Error message'));
 ### Google Calendar Integration
 
 #### OAuth Flow
-1. User initiates: `GET /api/connectGoogle`
+1. User initiates: `GET /api/connectGoogle` (in `routes/auth.js`)
 2. Callback handler: `GET /api/connectGoogleCallback`
 3. Tokens stored in user document
 
 #### Token Refresh
-- Use `refreshGoogleCalendarAccessToken(user)` when receiving 401 errors
+- Use `refreshGoogleCalendarAccessToken(user)` in `controllers/eventController.js` when receiving 401 errors
 - Automatically retries failed requests after refresh
 
 #### Syncing
-- `syncCalendarsToDatabase()` fetches events from selected Google calendars
+- `syncCalendarsToDatabase()` in `controllers/eventController.js` fetches events from selected Google calendars
 - Syncs events within a time window
 - Creates/updates local event records
 - Removes events no longer in Google Calendar
@@ -180,20 +218,34 @@ return res.json(returnFailure('Error message'));
 
 ```
 /
-├── app.js                    # Main backend application
+├── app.js                    # Express server entry point
 ├── defaultconfig.js          # Default configuration (template)
 ├── config.js                 # Local config (create from defaultconfig.js, not committed)
 ├── package.json              # Backend dependencies
+├── seedDatabase.js           # Database seeding script for testing
+├── models/
+│   └── index.js              # Mongoose schemas (UserDetail, TaskDetail, EventDetail)
+├── routes/
+│   ├── auth.js               # Authentication routes
+│   ├── tasks.js              # Task management routes
+│   └── events.js             # Event management routes
+├── controllers/
+│   ├── taskController.js     # Task business logic and scheduling algorithm
+│   └── eventController.js    # Event business logic and Google sync
+├── middleware/
+│   └── auth.js               # JWT authentication middleware
+├── utils/
+│   └── helpers.js            # Utility functions (returnFailure, etc.)
 ├── webinterface/             # Vue.js frontend
 │   ├── src/
-│   │   ├── components/      # Reusable Vue components
-│   │   ├── views/           # Page views
-│   │   ├── router/          # Vue Router config
-│   │   ├── store.js         # Vuex store
-│   │   └── App.vue          # Root component
-│   └── package.json         # Frontend dependencies
-├── .devcontainer/           # Dev container configuration
-└── .github/                 # GitHub configurations
+│   │   ├── components/       # Reusable Vue components
+│   │   ├── views/            # Page views
+│   │   ├── router/           # Vue Router config
+│   │   ├── store.js          # Vuex store
+│   │   └── App.vue           # Root component
+│   └── package.json          # Frontend dependencies
+├── .devcontainer/            # Dev container configuration
+└── .github/                  # GitHub configurations
 ```
 
 ## Environment Variables (Production)
@@ -208,10 +260,24 @@ return res.json(returnFailure('Error message'));
 
 ## Tips for Copilot
 
+### Code Organization
+- Place new API endpoints in the appropriate route file (`routes/auth.js`, `routes/tasks.js`, `routes/events.js`)
+- Business logic should go in controllers (`controllers/taskController.js`, `controllers/eventController.js`)
+- Database schema changes go in `models/index.js`
+- Reusable utility functions go in `utils/helpers.js`
+
+### Development Workflow
 - When suggesting task-related code, consider the scheduling algorithm implications
 - Remember that tasks can be chunked, repeated, and have flexible deadlines (backlog)
 - Always maintain the existing authentication patterns
 - Keep timezone handling in mind for date/time operations
 - Follow the established error handling patterns with `returnFailure()`
 - When working with Google Calendar API, include token refresh logic
-- Test changes locally before committing, especially scheduling algorithm modifications
+- Test changes with `npm run build` to ensure the website builds correctly
+- Use `npm run seed` to set up test data for local testing
+
+### Common Tasks
+- **Adding a new API endpoint**: Create route in `routes/*.js`, add logic in `controllers/*.js`
+- **Adding a new database field**: Update schema in `models/index.js`
+- **Adding frontend features**: Work in `webinterface/src/` (components, views, store)
+- **Testing locally**: Run `npm run dev` for hot-reload development
