@@ -135,14 +135,32 @@ function createEventRoutes(config, authenticateToken) {
     });
 
     router.get('/connectGoogleCallback', async (req, res) => {
+        // Check if Google returned an error
+        if (req.query.error) {
+            console.error('Google OAuth error:', req.query.error);
+            return res.redirect(`${config.appUrl}?error=${encodeURIComponent(req.query.error)}`);
+        }
+
+        // Check if authorization code is present
+        if (!req.query.code) {
+            console.error('Missing authorization code in callback');
+            return res.redirect(`${config.appUrl}?error=${encodeURIComponent('Missing authorization code')}`);
+        }
+
         // Get the user's ID from the state parameter
         const userId = req.query.state;
+
+        if (!userId) {
+            console.error('Missing state parameter in callback');
+            return res.redirect(`${config.appUrl}?error=${encodeURIComponent('Missing state parameter')}`);
+        }
 
         // Check if user is logged in
         let user = await UserDetails.findById(userId);
 
         if (!user) {
-            return res.send(returnFailure('User not found'));
+            console.error('User not found for ID:', userId);
+            return res.redirect(`${config.appUrl}?error=${encodeURIComponent('User not found')}`);
         }
 
         // Exchange the authorization code for an access token
@@ -162,8 +180,8 @@ function createEventRoutes(config, authenticateToken) {
 
             return res.redirect(`${config.appUrl}`);
         } catch (err) {
-            console.error(err);
-            return res.send(returnFailure('Failed to connect Google account'));
+            console.error('Failed to exchange authorization code for tokens:', err.message);
+            return res.redirect(`${config.appUrl}?error=${encodeURIComponent('Failed to connect Google account')}`);
         }
     });
 
