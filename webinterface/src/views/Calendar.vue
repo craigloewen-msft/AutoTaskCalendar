@@ -598,8 +598,12 @@ export default {
         } else {
           response = await this.$http.post(`/api/completeTask`, { taskId });
         }
-        // refresh task list after deletion
-        this.taskList = response.data.taskList;
+        // Check if the response was successful before updating task list
+        if (response.data.success) {
+          this.taskList = response.data.taskList;
+        } else {
+          console.error('Error completing task:', response.data.log || 'Unknown error');
+        }
         this.$refs.addtaskmodal.hide();
       } catch (error) {
         console.error(error);
