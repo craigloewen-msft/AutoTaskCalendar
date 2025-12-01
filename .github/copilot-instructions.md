@@ -134,7 +134,7 @@ npm run dev
 ```javascript
 const express = require('express');
 const router = express.Router();
-const { UserDetails } = require('../models');
+const { UserDetails, TaskDetails } = require('../models');
 const { returnFailure } = require('../utils/helpers');
 
 function createRoutes(config, authenticateToken) {
