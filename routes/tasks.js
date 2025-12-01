@@ -122,7 +122,8 @@ function createTaskRoutes(config, authenticateToken) {
             const returnTaskList = await getTaskListFromUsername(req.user.id);
             return res.json({ success: true, taskList: returnTaskList });
         } catch (err) {
-            res.send(returnFailure('Error deleting task'));
+            console.error(err);
+            res.send(returnFailure('Error completing task'));
         }
     });
 
