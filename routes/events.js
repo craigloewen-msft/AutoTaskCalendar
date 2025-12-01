@@ -137,7 +137,9 @@ function createEventRoutes(config, authenticateToken) {
     router.get('/connectGoogleCallback', async (req, res) => {
         // Check if Google returned an error
         if (req.query.error) {
-            console.error('Google OAuth returned an error during callback');
+            // Log the OAuth error type for debugging (Google's error codes are a controlled set)
+            const errorType = req.query.error || 'unknown';
+            console.error('Google OAuth error:', errorType);
             return res.redirect(`${config.appUrl}?error=oauth_error`);
         }
 
@@ -180,7 +182,7 @@ function createEventRoutes(config, authenticateToken) {
 
             return res.redirect(`${config.appUrl}`);
         } catch (err) {
-            console.error('Failed to exchange authorization code for tokens:', err.message);
+            console.error('Failed to exchange authorization code for tokens');
             return res.redirect(`${config.appUrl}?error=token_exchange_failed`);
         }
     });
