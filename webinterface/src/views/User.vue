@@ -143,7 +143,7 @@
 
 <script>
 import router from "../router";
-import { BContainer, BRow, BCol, BCard, BButton, BFormGroup, BFormCheckbox } from 'bootstrap-vue-next';
+import { BContainer, BRow, BCol, BCard, BButton, BFormGroup, BFormCheckbox, BFormInput } from 'bootstrap-vue-next';
 
 export default {
   name: "User",
@@ -154,7 +154,8 @@ export default {
     BCard,
     BButton,
     BFormGroup,
-    BFormCheckbox
+    BFormCheckbox,
+    BFormInput
   },
   data() {
     return {
