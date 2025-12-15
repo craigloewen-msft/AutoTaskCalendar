@@ -274,7 +274,7 @@ export default {
                 text: modal.result,
               });
             } else {
-              console.error(response.data.error);
+              console.error(response.data.log);
             }
           } catch (error) {
             console.error(error);
@@ -294,7 +294,7 @@ export default {
                 endDate: new Date(args.newEnd.toString()),
               });
               if (!response.data.success) {
-                console.error(response.data.error);
+                console.error(response.data.log);
               }
             } catch (error) {
               console.error(error);
@@ -309,7 +309,7 @@ export default {
               endDate: new Date(args.newEnd.toString()),
             });
             if (!response.data.success) {
-              console.error(response.data.error);
+              console.error(response.data.log);
             }
           } catch (error) {
             console.error(error);
@@ -330,7 +330,7 @@ export default {
               eventId: args.e.data.id,
             });
             if (!response.data.success) {
-              console.error(response.data.error);
+              console.error(response.data.log);
             }
           } catch (error) {
             console.error(error);
