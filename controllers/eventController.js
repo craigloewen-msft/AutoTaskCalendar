@@ -57,7 +57,7 @@ async function deleteEvent(eventId, userId) {
         if (!event) {
             throw new Error("Event not found");
         }
-        await event.remove();
+        await event.deleteOne();
     } catch (err) {
         throw new Error("Error deleting event");
     }
