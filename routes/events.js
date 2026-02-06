@@ -125,7 +125,6 @@ function createEventRoutes(config, authenticateToken) {
     }
 
     const redirectUri = `${config.appUrl}/api/connectGoogleCallback`;
-    console.log('[Google OAuth] Redirect URI:', redirectUri);
 
     // Generate a URL for the user to connect their Google account
     const oauth2Client = new google.auth.OAuth2(
@@ -150,12 +149,6 @@ function createEventRoutes(config, authenticateToken) {
   });
 
   router.get('/connectGoogleCallback', async (req, res) => {
-    console.log('[Google OAuth] /connectGoogleCallback called');
-    console.log('[Google OAuth] Query params:', {
-      code: req.query.code ? 'PRESENT (length: ' + req.query.code.length + ')' : 'NOT PRESENT',
-      state: req.query.state || 'NOT PRESENT',
-      error: req.query.error || 'none'
-    });
 
     // Check if Google returned an error
     if (req.query.error) {
@@ -186,10 +179,7 @@ function createEventRoutes(config, authenticateToken) {
       return res.redirect(`${config.appUrl}?error=user_not_found`);
     }
 
-    console.log('[Google OAuth] User found, exchanging code for tokens...');
-
     const redirectUri = `${config.appUrl}/api/connectGoogleCallback`;
-    console.log('[Google OAuth] Using redirect URI for token exchange:', redirectUri);
 
     // Exchange the authorization code for an access token
     const oauth2Client = new google.auth.OAuth2(
@@ -200,12 +190,6 @@ function createEventRoutes(config, authenticateToken) {
 
     try {
       const { tokens } = await oauth2Client.getToken(req.query.code);
-      console.log('[Google OAuth] Token exchange successful');
-      console.log('[Google OAuth] Tokens received:', {
-        access_token: tokens.access_token ? 'PRESENT' : 'NOT PRESENT',
-        refresh_token: tokens.refresh_token ? 'PRESENT' : 'NOT PRESENT',
-        expiry_date: tokens.expiry_date || 'not set'
-      });
 
       // Save the access and refresh tokens in the user's document
       user.googleAccessToken = tokens.access_token;
@@ -231,7 +215,6 @@ function createEventRoutes(config, authenticateToken) {
         return res.send(returnFailure('User is not authenticated with Google'));
       }
 
-      console.log('[Google OAuth] Fetching calendar list for user:', user.username);
       const auth = new google.auth.OAuth2();
       auth.setCredentials({ access_token: user.googleAccessToken });
       const calendar = google.calendar({ version: 'v3', auth });
@@ -243,7 +226,6 @@ function createEventRoutes(config, authenticateToken) {
         console.error('[Google OAuth] Calendar list failed with error code:', err.code);
         console.error('[Google OAuth] Error message:', err.message);
         if (err.code == 401) {
-          console.log('[Google OAuth] Attempting token refresh...');
           await refreshGoogleCalendarAccessToken(user, config);
           auth.setCredentials({ access_token: user.googleAccessToken });
           calendarListResponse = await calendar.calendarList.list();
@@ -252,7 +234,6 @@ function createEventRoutes(config, authenticateToken) {
         }
       }
       const calendars = calendarListResponse.data.items;
-      console.log('[Google OAuth] Successfully fetched', calendars.length, 'calendars');
 
       return res.json({ success: true, calendars });
     } catch (err) {
