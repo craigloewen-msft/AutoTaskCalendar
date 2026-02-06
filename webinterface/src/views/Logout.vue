@@ -6,11 +6,13 @@
 export default {
   name: "Logout",
   mounted: function () {
-    this.$gtag.event("logout", {
-      event_category: "userFunctions",
-      event_label: "user",
-      value: 1,
-    });
+    if (this.$gtag) {
+      this.$gtag.event("logout", {
+        event_category: "userFunctions",
+        event_label: "user",
+        value: 1,
+      });
+    }
     this.$store.dispatch("logout").then(() => {
       this.$router.push("/");
     });

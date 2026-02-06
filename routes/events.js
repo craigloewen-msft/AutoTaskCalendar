@@ -107,17 +107,40 @@ function createEventRoutes(config, authenticateToken) {
     });
 
     router.get('/connectGoogle', authenticateToken, async (req, res) => {
+        // Debug logging for Google OAuth configuration
+        console.log('[Google OAuth] /connectGoogle called');
+        console.log('[Google OAuth] Config check:', {
+            appUrl: config.appUrl || 'NOT SET',
+            googleOAuthClientID: config.googleOAuthClientID ? 'SET (length: ' + config.googleOAuthClientID.length + ')' : 'NOT SET',
+            googleOAuthClientSecret: config.googleOAuthClientSecret ? 'SET' : 'NOT SET',
+            nodeEnv: process.env.NODE_ENV || 'NOT SET'
+        });
+
         let user = await UserDetails.findOne({ username: req.user.id });
 
         if (!req.user || !user) {
+            console.error('[Google OAuth] User not logged in or not found');
             return res.send(returnFailure('Not logged in'));
         }
+
+        // Check for missing configuration
+        if (!config.appUrl) {
+            console.error('[Google OAuth] ERROR: config.appUrl is not set! This will cause OAuth to fail.');
+            return res.send(returnFailure('Server configuration error: appUrl not set'));
+        }
+        if (!config.googleOAuthClientID || !config.googleOAuthClientSecret) {
+            console.error('[Google OAuth] ERROR: Google OAuth credentials not configured');
+            return res.send(returnFailure('Server configuration error: Google OAuth not configured'));
+        }
+
+        const redirectUri = `${config.appUrl}/api/connectGoogleCallback`;
+        console.log('[Google OAuth] Redirect URI:', redirectUri);
 
         // Generate a URL for the user to connect their Google account
         const oauth2Client = new google.auth.OAuth2(
             config.googleOAuthClientID,
             config.googleOAuthClientSecret,
-            `${config.appUrl}/api/connectGoogleCallback`
+            redirectUri
         );
 
         const scopes = [
@@ -131,20 +154,28 @@ function createEventRoutes(config, authenticateToken) {
             prompt: 'consent',
         });
 
+        console.log('[Google OAuth] Generated auth URL (first 100 chars):', authUrl.substring(0, 100) + '...');
         return res.send({ authUrl });
     });
 
     router.get('/connectGoogleCallback', async (req, res) => {
+        console.log('[Google OAuth] /connectGoogleCallback called');
+        console.log('[Google OAuth] Query params:', {
+            code: req.query.code ? 'PRESENT (length: ' + req.query.code.length + ')' : 'NOT PRESENT',
+            state: req.query.state || 'NOT PRESENT',
+            error: req.query.error || 'none'
+        });
+
         // Check if Google returned an error
         if (req.query.error) {
-            // Log the OAuth error type for debugging (Google's error codes are a controlled set)
-            console.error('Google OAuth error:', req.query.error);
+            console.error('[Google OAuth] ERROR: Google returned error:', req.query.error);
+            console.error('[Google OAuth] Error description:', req.query.error_description || 'none provided');
             return res.redirect(`${config.appUrl}?error=oauth_error`);
         }
 
         // Check if authorization code is present
         if (!req.query.code) {
-            console.error('Missing authorization code in callback');
+            console.error('[Google OAuth] ERROR: Missing authorization code in callback');
             return res.redirect(`${config.appUrl}?error=missing_code`);
         }
 
@@ -152,7 +183,7 @@ function createEventRoutes(config, authenticateToken) {
         const userId = req.query.state;
 
         if (!userId) {
-            console.error('Missing state parameter in callback');
+            console.error('[Google OAuth] ERROR: Missing state parameter in callback');
             return res.redirect(`${config.appUrl}?error=invalid_state`);
         }
 
@@ -160,39 +191,56 @@ function createEventRoutes(config, authenticateToken) {
         let user = await UserDetails.findById(userId);
 
         if (!user) {
-            console.error('User not found during Google OAuth callback');
+            console.error('[Google OAuth] ERROR: User not found for ID:', userId);
             return res.redirect(`${config.appUrl}?error=user_not_found`);
         }
+
+        console.log('[Google OAuth] User found, exchanging code for tokens...');
+
+        const redirectUri = `${config.appUrl}/api/connectGoogleCallback`;
+        console.log('[Google OAuth] Using redirect URI for token exchange:', redirectUri);
 
         // Exchange the authorization code for an access token
         const oauth2Client = new google.auth.OAuth2(
             config.googleOAuthClientID,
             config.googleOAuthClientSecret,
-            `${config.appUrl}/api/connectGoogleCallback`
+            redirectUri
         );
 
         try {
             const { tokens } = await oauth2Client.getToken(req.query.code);
+            console.log('[Google OAuth] Token exchange successful');
+            console.log('[Google OAuth] Tokens received:', {
+                access_token: tokens.access_token ? 'PRESENT' : 'NOT PRESENT',
+                refresh_token: tokens.refresh_token ? 'PRESENT' : 'NOT PRESENT',
+                expiry_date: tokens.expiry_date || 'not set'
+            });
 
             // Save the access and refresh tokens in the user's document
             user.googleAccessToken = tokens.access_token;
             user.googleRefreshToken = tokens.refresh_token;
             await user.save();
 
+            console.log('[Google OAuth] Tokens saved to user document, redirecting to:', config.appUrl);
             return res.redirect(`${config.appUrl}`);
         } catch (err) {
-            console.error('Failed to exchange authorization code for tokens:', err);
+            console.error('[Google OAuth] ERROR: Failed to exchange authorization code for tokens');
+            console.error('[Google OAuth] Error message:', err.message);
+            console.error('[Google OAuth] Error details:', JSON.stringify(err.response?.data || err, null, 2));
             return res.redirect(`${config.appUrl}?error=token_exchange_failed`);
         }
     });
 
     router.get('/getCalendars', authenticateToken, async (req, res) => {
+        console.log('[Google OAuth] /getCalendars called');
         try {
             const user = await UserDetails.findOne({ username: req.user.id });
             if (!user || !user.googleAccessToken) {
+                console.error('[Google OAuth] ERROR: User not authenticated with Google or no access token');
                 return res.send(returnFailure('User is not authenticated with Google'));
             }
 
+            console.log('[Google OAuth] Fetching calendar list for user:', user.username);
             const auth = new google.auth.OAuth2();
             auth.setCredentials({ access_token: user.googleAccessToken });
             const calendar = google.calendar({ version: 'v3', auth });
@@ -201,15 +249,23 @@ function createEventRoutes(config, authenticateToken) {
             try {
                 calendarListResponse = await calendar.calendarList.list();
             } catch (err) {
+                console.error('[Google OAuth] Calendar list failed with error code:', err.code);
+                console.error('[Google OAuth] Error message:', err.message);
                 if (err.code == 401) {
+                    console.log('[Google OAuth] Attempting token refresh...');
                     await refreshGoogleCalendarAccessToken(user, config);
+                    auth.setCredentials({ access_token: user.googleAccessToken });
                     calendarListResponse = await calendar.calendarList.list();
+                } else {
+                    throw err;
                 }
             }
             const calendars = calendarListResponse.data.items;
+            console.log('[Google OAuth] Successfully fetched', calendars.length, 'calendars');
 
             return res.json({ success: true, calendars });
         } catch (err) {
+            console.error('[Google OAuth] ERROR in /getCalendars:', err.message);
             return res.send(returnFailure(err.message));
         }
     });

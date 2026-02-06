@@ -64,6 +64,19 @@ async function deleteEvent(eventId, userId) {
 }
 
 async function refreshGoogleCalendarAccessToken(inUser, config) {
+    console.log('[Google OAuth] Refreshing access token for user:', inUser.username);
+
+    // Check for missing configuration
+    if (!config.googleOAuthClientID || !config.googleOAuthClientSecret) {
+        console.error('[Google OAuth] ERROR: Cannot refresh token - OAuth credentials not configured');
+        throw new Error('Google OAuth credentials not configured');
+    }
+
+    if (!inUser.googleRefreshToken) {
+        console.error('[Google OAuth] ERROR: Cannot refresh token - no refresh token stored for user');
+        throw new Error('No refresh token available');
+    }
+
     // Refresh Google Calendar access token
     const oauth2Client = new google.auth.OAuth2(
         config.googleOAuthClientID,
@@ -73,11 +86,18 @@ async function refreshGoogleCalendarAccessToken(inUser, config) {
         refresh_token: inUser.googleRefreshToken
     });
 
-    const tokens = await oauth2Client.refreshAccessToken();
-    inUser.googleAccessToken = tokens.credentials.access_token;
-    await inUser.save();
-
-    return true;
+    try {
+        const tokens = await oauth2Client.refreshAccessToken();
+        console.log('[Google OAuth] Token refresh successful');
+        inUser.googleAccessToken = tokens.credentials.access_token;
+        await inUser.save();
+        return true;
+    } catch (err) {
+        console.error('[Google OAuth] ERROR: Failed to refresh access token');
+        console.error('[Google OAuth] Error message:', err.message);
+        console.error('[Google OAuth] Error details:', JSON.stringify(err.response?.data || {}, null, 2));
+        throw err;
+    }
 }
 
 async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod, config) {

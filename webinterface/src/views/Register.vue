@@ -85,11 +85,13 @@ export default {
                 user: response.data.user,
               })
               .then(() => {
-                this.$gtag.event("register", {
-                  event_category: "userFunctions",
-                  event_label: response.data.user.username,
-                  value: 50
-                });
+                if (this.$gtag) {
+                  this.$gtag.event("register", {
+                    event_category: "userFunctions",
+                    event_label: response.data.user.username,
+                    value: 50
+                  });
+                }
                 this.$router.push("/user/" + response.data.user.username);
               });
           } else {
