@@ -140,14 +140,14 @@ async function generateTaskEvents(inUser) {
     // Helper function to sort tasks by dependencies using topological sort
     // Tasks with no dependencies (or completed dependencies) come first
     const sortTasksByDependencies = (tasks) => {
-        const sortTaskMap = new Map();
+        const taskIdToTaskMap = new Map(); // Maps task IDs to task objects
         const inDegree = new Map(); // Number of incomplete dependencies for each task
         const adjList = new Map(); // Tasks that depend on each task
         
         // Initialize maps
         tasks.forEach(task => {
             const taskId = task._id.toString();
-            sortTaskMap.set(taskId, task);
+            taskIdToTaskMap.set(taskId, task);
             inDegree.set(taskId, 0);
             adjList.set(taskId, []);
         });
@@ -159,7 +159,7 @@ async function generateTaskEvents(inUser) {
                 task.dependsOn.forEach(depId => {
                     const depIdStr = depId.toString();
                     // Only count dependencies that are in our incomplete tasks list
-                    if (sortTaskMap.has(depIdStr)) {
+                    if (taskIdToTaskMap.has(depIdStr)) {
                         inDegree.set(taskId, inDegree.get(taskId) + 1);
                         adjList.get(depIdStr).push(taskId);
                     }
@@ -170,7 +170,8 @@ async function generateTaskEvents(inUser) {
         // Topological sort using Kahn's algorithm
         const queue = [];
         const result = [];
-        const resultTaskIds = new Set(); // Track task IDs that have been added to result
+        // Track task IDs in result for O(1) lookup instead of O(n) array search
+        const resultTaskIds = new Set();
         
         // Start with tasks that have no incomplete dependencies
         inDegree.forEach((degree, taskId) => {
@@ -181,7 +182,7 @@ async function generateTaskEvents(inUser) {
         
         while (queue.length > 0) {
             const taskId = queue.shift();
-            const task = sortTaskMap.get(taskId);
+            const task = taskIdToTaskMap.get(taskId);
             result.push(task);
             resultTaskIds.add(taskId);
             
@@ -199,8 +200,10 @@ async function generateTaskEvents(inUser) {
         // (circular dependencies should be prevented by validation in routes/tasks.js)
         // Add remaining tasks to the end as a fallback
         if (result.length < tasks.length) {
+            console.error(`Warning: Topological sort incomplete. Expected ${tasks.length} tasks, got ${result.length}. Possible circular dependency detected.`);
             tasks.forEach(task => {
                 if (!resultTaskIds.has(task._id.toString())) {
+                    console.error(`  Unschedulable task due to potential cycle: "${task.title}" (ID: ${task._id})`);
                     result.push(task);
                 }
             });
