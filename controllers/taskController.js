@@ -127,6 +127,74 @@ async function generateTaskEvents(inUser) {
         return true;
     };
 
+    // Helper function to sort tasks by dependencies using topological sort
+    // Tasks with no dependencies (or completed dependencies) come first
+    const sortTasksByDependencies = (tasks) => {
+        const taskMap = new Map();
+        const inDegree = new Map(); // Number of incomplete dependencies for each task
+        const adjList = new Map(); // Tasks that depend on each task
+        
+        // Initialize maps
+        tasks.forEach(task => {
+            const taskId = task._id.toString();
+            taskMap.set(taskId, task);
+            inDegree.set(taskId, 0);
+            adjList.set(taskId, []);
+        });
+        
+        // Build dependency graph
+        tasks.forEach(task => {
+            const taskId = task._id.toString();
+            if (task.dependsOn && task.dependsOn.length > 0) {
+                task.dependsOn.forEach(depId => {
+                    const depIdStr = depId.toString();
+                    // Only count dependencies that are in our incomplete tasks list
+                    if (taskMap.has(depIdStr)) {
+                        inDegree.set(taskId, inDegree.get(taskId) + 1);
+                        adjList.get(depIdStr).push(taskId);
+                    }
+                });
+            }
+        });
+        
+        // Topological sort using Kahn's algorithm
+        const queue = [];
+        const result = [];
+        
+        // Start with tasks that have no incomplete dependencies
+        inDegree.forEach((degree, taskId) => {
+            if (degree === 0) {
+                queue.push(taskId);
+            }
+        });
+        
+        while (queue.length > 0) {
+            const taskId = queue.shift();
+            result.push(taskMap.get(taskId));
+            
+            // Reduce in-degree for dependent tasks
+            const dependentTasks = adjList.get(taskId);
+            dependentTasks.forEach(depTaskId => {
+                inDegree.set(depTaskId, inDegree.get(depTaskId) - 1);
+                if (inDegree.get(depTaskId) === 0) {
+                    queue.push(depTaskId);
+                }
+            });
+        }
+        
+        // If result length != tasks length, there's a cycle (should not happen due to validation)
+        // Add remaining tasks to the end (fallback)
+        if (result.length < tasks.length) {
+            tasks.forEach(task => {
+                if (!result.includes(task)) {
+                    result.push(task);
+                }
+            });
+        }
+        
+        return result;
+    };
+
     // Get the TaskDetails sorted in order of their deadlines, earliest first. Only get tasks that have deadlines less than 2 weeks from now
     const twoWeeksFromNow = new Date(currentTime.getTime() + 14 * 24 * 60 * 60 * 1000);
     
@@ -145,8 +213,12 @@ async function generateTaskEvents(inUser) {
         isBacklog: true,
     }).sort({ startDate: 1 });
     
+    // Sort each group by dependencies first, preserving relative due date order within dependency levels
+    const sortedRegularTasks = sortTasksByDependencies(regularTasks);
+    const sortedBacklogTasks = sortTasksByDependencies(backlogTasks);
+    
     // Combine regular tasks first, then backlog tasks
-    const sortedTasks = [...regularTasks, ...backlogTasks];
+    const sortedTasks = [...sortedRegularTasks, ...sortedBacklogTasks];
 
     // Query the EventDetails sorted in order of when they appear, up to 2 weeks from now
     const sortedEvents = await EventDetails.find({
