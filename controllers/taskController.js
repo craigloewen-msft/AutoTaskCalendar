@@ -342,14 +342,15 @@ async function generateTaskEvents(inUser) {
                         if (currentExaminedTime.getTime() > task.startDate.getTime()) {
                             if (timeBetween >= taskDuration) {
                                 // This task can be fully scheduled
-                                // Tasks are sorted by deadline, and we skip tasks with unmet dependencies above,
-                                // so the first schedulable task we find has the earliest deadline
+                                // Tasks are sorted by deadline, and tasks with unmet dependencies are skipped
+                                // (via the continue statement above), so the first schedulable task has the earliest deadline
                                 bestTaskIndex = k;
                                 bestTask = task;
                                 break;
                             } else if (task.breakUpTask && timeBetween >= breakUpTaskChunkDuration) {
                                 // This task can be chunked
-                                // Only select it if we haven't found a full task yet
+                                // Prefer full tasks over chunks, but among chunks prefer the earliest deadline
+                                // Since tasks are sorted by deadline, first chunk we find has earliest deadline
                                 if (bestTaskIndex === -1) {
                                     bestTaskIndex = k;
                                     bestTask = task;
