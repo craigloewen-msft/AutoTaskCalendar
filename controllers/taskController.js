@@ -342,7 +342,8 @@ async function generateTaskEvents(inUser) {
                         if (currentExaminedTime.getTime() > task.startDate.getTime()) {
                             if (timeBetween >= taskDuration) {
                                 // This task can be fully scheduled
-                                // Since tasks are already sorted by deadline, the first one we find is the best
+                                // Tasks are sorted by deadline, and we skip tasks with unmet dependencies above,
+                                // so the first schedulable task we find has the earliest deadline
                                 bestTaskIndex = k;
                                 bestTask = task;
                                 break;
@@ -397,9 +398,7 @@ async function generateTaskEvents(inUser) {
 
                             // Get how many chunks could fit into the timeBetween
                             const numChunks = Math.floor(timeBetween / breakUpTaskChunkDuration);
-
                             const chunkDuration = numChunks * breakUpTaskChunkDuration;
-                            const chunkDurationMins = chunkDuration / 1000 / 60;
 
                             // Modify task to show it's a chunk
                             let taskChunkInfo = taskChunkInfoList[bestTask._id];
