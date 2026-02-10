@@ -137,79 +137,55 @@ async function generateTaskEvents(inUser) {
         return true;
     };
 
-    // Helper function to sort tasks by dependencies using topological sort
-    // Tasks with no dependencies (or completed dependencies) come first
-    const sortTasksByDependencies = (tasks) => {
-        const taskIdToTaskMap = new Map(); // Maps task IDs to task objects
-        const inDegree = new Map(); // Number of incomplete dependencies for each task
-        const adjList = new Map(); // Tasks that depend on each task
-        
-        // Initialize maps
+    // Helper function to validate no circular dependencies exist
+    // This is a safety check - circular dependencies should be prevented at task creation
+    const validateNoCycles = (tasks) => {
+        const taskIdToTaskMap = new Map();
         tasks.forEach(task => {
-            const taskId = task._id.toString();
-            taskIdToTaskMap.set(taskId, task);
-            inDegree.set(taskId, 0);
-            adjList.set(taskId, []);
+            taskIdToTaskMap.set(task._id.toString(), task);
         });
         
-        // Build dependency graph
-        tasks.forEach(task => {
-            const taskId = task._id.toString();
-            if (task.dependsOn && task.dependsOn.length > 0) {
-                task.dependsOn.forEach(depId => {
-                    const depIdStr = depId.toString();
-                    // Only count dependencies that are in our incomplete tasks list
-                    if (taskIdToTaskMap.has(depIdStr)) {
-                        inDegree.set(taskId, inDegree.get(taskId) + 1);
-                        adjList.get(depIdStr).push(taskId);
-                    }
-                });
-            }
-        });
+        const visited = new Set();
+        const recursionStack = new Set();
         
-        // Topological sort using Kahn's algorithm
-        const queue = [];
-        const result = [];
-        // Track task IDs in result for O(1) lookup instead of O(n) array search
-        const resultTaskIds = new Set();
-        
-        // Start with tasks that have no incomplete dependencies
-        inDegree.forEach((degree, taskId) => {
-            if (degree === 0) {
-                queue.push(taskId);
-            }
-        });
-        
-        while (queue.length > 0) {
-            const taskId = queue.shift();
-            const task = taskIdToTaskMap.get(taskId);
-            result.push(task);
-            resultTaskIds.add(taskId);
+        const hasCycleDFS = (taskId) => {
+            visited.add(taskId);
+            recursionStack.add(taskId);
             
-            // Reduce in-degree for dependent tasks
-            const dependentTasks = adjList.get(taskId);
-            dependentTasks.forEach(depTaskId => {
-                inDegree.set(depTaskId, inDegree.get(depTaskId) - 1);
-                if (inDegree.get(depTaskId) === 0) {
-                    queue.push(depTaskId);
+            const task = taskIdToTaskMap.get(taskId);
+            if (task && task.dependsOn && task.dependsOn.length > 0) {
+                for (let depId of task.dependsOn) {
+                    const depIdStr = depId.toString();
+                    if (!taskIdToTaskMap.has(depIdStr)) {
+                        // Dependency is completed or doesn't exist, skip
+                        continue;
+                    }
+                    
+                    if (!visited.has(depIdStr)) {
+                        if (hasCycleDFS(depIdStr)) {
+                            return true;
+                        }
+                    } else if (recursionStack.has(depIdStr)) {
+                        return true; // Cycle detected
+                    }
                 }
-            });
+            }
+            
+            recursionStack.delete(taskId);
+            return false;
+        };
+        
+        for (let task of tasks) {
+            const taskId = task._id.toString();
+            if (!visited.has(taskId)) {
+                if (hasCycleDFS(taskId)) {
+                    console.error(`Circular dependency detected involving task: "${task.title}" (ID: ${taskId})`);
+                    return false;
+                }
+            }
         }
         
-        // If result length != tasks length, there may be a cycle in the dependency graph
-        // (circular dependencies should be prevented by validation in routes/tasks.js)
-        // Add remaining tasks to the end as a fallback
-        if (result.length < tasks.length) {
-            console.error(`Warning: Topological sort incomplete. Expected ${tasks.length} tasks, got ${result.length}. Possible circular dependency detected.`);
-            tasks.forEach(task => {
-                if (!resultTaskIds.has(task._id.toString())) {
-                    console.error(`  Unschedulable task due to potential cycle: "${task.title}" (ID: ${task._id})`);
-                    result.push(task);
-                }
-            });
-        }
-        
-        return result;
+        return true;
     };
 
     // Get the TaskDetails sorted in order of their deadlines, earliest first. Only get tasks that have deadlines less than 2 weeks from now
@@ -230,12 +206,15 @@ async function generateTaskEvents(inUser) {
         isBacklog: true,
     }).sort({ startDate: 1 });
     
-    // Sort each group by dependencies first, preserving relative due date order within dependency levels
-    const sortedRegularTasks = sortTasksByDependencies(regularTasks);
-    const sortedBacklogTasks = sortTasksByDependencies(backlogTasks);
+    // Validate no circular dependencies exist
+    const allTasks = [...regularTasks, ...backlogTasks];
+    if (!validateNoCycles(allTasks)) {
+        console.error('Circular dependency detected in tasks. Scheduling may not work correctly.');
+    }
     
-    // Combine regular tasks first, then backlog tasks
-    const sortedTasks = [...sortedRegularTasks, ...sortedBacklogTasks];
+    // Keep tasks sorted by deadline (regular tasks) and start date (backlog tasks)
+    // We'll find the best task to schedule at each time slot based on deadline + dependency constraints
+    const sortedTasks = [...regularTasks, ...backlogTasks];
 
     // Query the EventDetails sorted in order of when they appear, up to 2 weeks from now
     const sortedEvents = await EventDetails.find({
@@ -337,8 +316,16 @@ async function generateTaskEvents(inUser) {
                         timeBetween = timeToEndOfWorkingHours;
                     }
 
-                    // Determine if a task can fit into that timeslot (Starting with the earliest tasks first)
+                    // Determine if a task can fit into that timeslot
+                    // Find the task with the earliest deadline whose dependencies are met
                     let insertedTask = false;
+                    let bestTaskIndex = -1;
+                    let bestTask = null;
+                    
+                    // Find the task with earliest deadline that:
+                    // 1. Has all dependencies met
+                    // 2. Can fit in the available time slot
+                    // 3. Has started (currentExaminedTime > startDate)
                     for (let k = 0; k < sortedTasks.length; k++) {
                         let task = sortedTasks[k];
                         
@@ -350,72 +337,94 @@ async function generateTaskEvents(inUser) {
                         
                         const taskDuration = taskChunkInfoList[task._id] ? taskChunkInfoList[task._id].remainingDuration : task.duration * 60 * 1000;
                         const breakUpTaskChunkDuration = task.breakUpTask ? task.breakUpTaskChunkDuration * 60 * 1000 : 0;
+                        
+                        // Check if task has started and can fit
                         if (currentExaminedTime.getTime() > task.startDate.getTime()) {
                             if (timeBetween >= taskDuration) {
-                                // Create a new task event from the task
-
-                                if (taskChunkInfoList[task._id]) {
-                                    taskChunkInfoList[task._id].chunkNumber++;
-                                }
-
-                                const taskEvent = new EventDetails({
-                                    title: taskChunkInfoList[task._id] ? task.title + " (" + taskChunkInfoList[task._id].chunkNumber + ")" : task.title,
-                                    startDate: currentExaminedTime,
-                                    endDate: new Date(currentExaminedTime.getTime() + taskDuration),
-                                    notes: task.notes,
-                                    type: taskChunkInfoList[task._id] ? 'task-chunk' : 'task',
-                                    userRef: inUser._id,
-                                    taskRef: task._id,
-                                });
-                                await taskEvent.save();
-
-                                // Remove the task from the list and mark as scheduled
-                                sortedTasks.splice(k, 1);
-                                scheduledTaskIds.add(task._id.toString());
-
-                                // Update the task's scheduledDate to be the current time.
-                                task.scheduledDate = currentExaminedTime;
-                                await task.save();
-
-                                // Set the examined time to the endDate of this last task
-                                currentExaminedTime = taskEvent.endDate;
-                                insertedTask = true;
+                                // This task can be fully scheduled
+                                // Since tasks are already sorted by deadline, the first one we find is the best
+                                bestTaskIndex = k;
+                                bestTask = task;
                                 break;
-                            } else if (task.breakUpTask ? timeBetween >= breakUpTaskChunkDuration : false) {
-                                // Chunk out the task 
-
-                                // Get how many chunks could fit into the timeBetween
-                                const numChunks = Math.floor(timeBetween / breakUpTaskChunkDuration);
-
-                                const chunkDuration = numChunks * breakUpTaskChunkDuration;
-                                const chunkDurationMins = chunkDuration / 1000 / 60;
-
-                                // Modify task to show it's a chunk
-                                let taskChunkInfo = taskChunkInfoList[task._id];
-
-                                if (!taskChunkInfo) {
-                                    taskChunkInfo = { chunkNumber: 0, remainingDuration: taskDuration };
-                                    taskChunkInfoList[task._id] = taskChunkInfo;
+                            } else if (task.breakUpTask && timeBetween >= breakUpTaskChunkDuration) {
+                                // This task can be chunked
+                                // Only select it if we haven't found a full task yet
+                                if (bestTaskIndex === -1) {
+                                    bestTaskIndex = k;
+                                    bestTask = task;
                                 }
-                                taskChunkInfo.chunkNumber++;
-                                taskChunkInfo.remainingDuration -= chunkDuration;
-
-                                const taskEvent = new EventDetails({
-                                    title: task.title + " (" + taskChunkInfo.chunkNumber + ")",
-                                    startDate: currentExaminedTime,
-                                    endDate: new Date(currentExaminedTime.getTime() + chunkDuration),
-                                    notes: task.notes,
-                                    type: 'task-chunk',
-                                    userRef: inUser._id,
-                                    taskRef: task._id,
-                                });
-                                await taskEvent.save();
-
-                                // Set the examined time to the endDate of this last task
-                                currentExaminedTime = taskEvent.endDate;
-                                insertedTask = true;
-                                break;
+                                // Don't break - keep looking for a full task that can fit
                             }
+                        }
+                    }
+                    
+                    // If we found a suitable task, schedule it
+                    if (bestTaskIndex !== -1 && bestTask) {
+                        const taskDuration = taskChunkInfoList[bestTask._id] ? taskChunkInfoList[bestTask._id].remainingDuration : bestTask.duration * 60 * 1000;
+                        const breakUpTaskChunkDuration = bestTask.breakUpTask ? bestTask.breakUpTaskChunkDuration * 60 * 1000 : 0;
+                        
+                        if (timeBetween >= taskDuration) {
+                            // Create a new task event from the task
+
+                            if (taskChunkInfoList[bestTask._id]) {
+                                taskChunkInfoList[bestTask._id].chunkNumber++;
+                            }
+
+                            const taskEvent = new EventDetails({
+                                title: taskChunkInfoList[bestTask._id] ? bestTask.title + " (" + taskChunkInfoList[bestTask._id].chunkNumber + ")" : bestTask.title,
+                                startDate: currentExaminedTime,
+                                endDate: new Date(currentExaminedTime.getTime() + taskDuration),
+                                notes: bestTask.notes,
+                                type: taskChunkInfoList[bestTask._id] ? 'task-chunk' : 'task',
+                                userRef: inUser._id,
+                                taskRef: bestTask._id,
+                            });
+                            await taskEvent.save();
+
+                            // Remove the task from the list and mark as scheduled
+                            sortedTasks.splice(bestTaskIndex, 1);
+                            scheduledTaskIds.add(bestTask._id.toString());
+
+                            // Update the task's scheduledDate to be the current time.
+                            bestTask.scheduledDate = currentExaminedTime;
+                            await bestTask.save();
+
+                            // Set the examined time to the endDate of this last task
+                            currentExaminedTime = taskEvent.endDate;
+                            insertedTask = true;
+                        } else if (bestTask.breakUpTask && timeBetween >= breakUpTaskChunkDuration) {
+                            // Chunk out the task 
+
+                            // Get how many chunks could fit into the timeBetween
+                            const numChunks = Math.floor(timeBetween / breakUpTaskChunkDuration);
+
+                            const chunkDuration = numChunks * breakUpTaskChunkDuration;
+                            const chunkDurationMins = chunkDuration / 1000 / 60;
+
+                            // Modify task to show it's a chunk
+                            let taskChunkInfo = taskChunkInfoList[bestTask._id];
+
+                            if (!taskChunkInfo) {
+                                taskChunkInfo = { chunkNumber: 0, remainingDuration: taskDuration };
+                                taskChunkInfoList[bestTask._id] = taskChunkInfo;
+                            }
+                            taskChunkInfo.chunkNumber++;
+                            taskChunkInfo.remainingDuration -= chunkDuration;
+
+                            const taskEvent = new EventDetails({
+                                title: bestTask.title + " (" + taskChunkInfo.chunkNumber + ")",
+                                startDate: currentExaminedTime,
+                                endDate: new Date(currentExaminedTime.getTime() + chunkDuration),
+                                notes: bestTask.notes,
+                                type: 'task-chunk',
+                                userRef: inUser._id,
+                                taskRef: bestTask._id,
+                            });
+                            await taskEvent.save();
+
+                            // Set the examined time to the endDate of this last task
+                            currentExaminedTime = taskEvent.endDate;
+                            insertedTask = true;
                         }
                     }
 
