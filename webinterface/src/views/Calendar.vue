@@ -39,7 +39,10 @@
                 }"
                 v-on:click="openEditTaskModal(task)"
               >
-                <span class="task-title">{{ task.title }}</span>
+                <span class="task-title">
+                  <span v-if="task.dependsOn && task.dependsOn.length > 0" class="dependency-icon" title="Has dependencies" role="img" aria-label="Has dependencies">🔗</span>
+                  {{ task.title }}
+                </span>
                 <span class="task-badge" v-if="task.isBacklog">BACKLOG</span>
                 <span class="task-days" v-else>{{ getTaskDaysBetweenDeadlineAndSchedule(task) }}</span>
               </li>
@@ -162,6 +165,27 @@
                   id="task-notes"
                   placeholder="Enter task notes"
                 />
+              </div>
+              <div class="form-group">
+                <label for="task-dependencies">Dependencies (must complete these first)</label>
+                <select
+                  v-model="input.dependsOn"
+                  class="form-control"
+                  id="task-dependencies"
+                  multiple
+                  size="4"
+                >
+                  <option
+                    v-for="task in availableTasksForDependencies"
+                    :key="task._id"
+                    :value="task._id"
+                  >
+                    {{ task.title }}
+                  </option>
+                </select>
+                <small class="form-text text-muted">
+                  Hold Ctrl (Cmd on Mac) to select multiple tasks
+                </small>
               </div>
               <div v-if="this.selectedTask" class="task-controls-buttons">
                 <button
@@ -351,6 +375,7 @@ export default {
         repeat: null,
         followUpDays: null,
         taskIsBacklog: false,
+        dependsOn: [],
       },
       showModal: false,
       currentDate: new Date(),
@@ -492,6 +517,7 @@ export default {
           breakUpTaskChunkDuration: this.input.taskBreakUpTaskChunkDuration,
           repeat: this.input.repeat,
           isBacklog: this.input.taskIsBacklog,
+          dependsOn: this.input.dependsOn || [],
         });
         this.taskList = response.data.taskList;
 
@@ -561,6 +587,7 @@ export default {
 
       this.selectedTask.repeat = this.input.repeat;
       this.selectedTask.isBacklog = this.input.taskIsBacklog;
+      this.selectedTask.dependsOn = this.input.dependsOn || [];
 
       try {
         const response = await this.$http.post("/api/editTask/", {
@@ -714,6 +741,7 @@ export default {
 
       this.input.repeat = inputTask.repeat;
       this.input.taskIsBacklog = inputTask.isBacklog || false;
+      this.input.dependsOn = inputTask.dependsOn || [];
 
       this.$refs.addtaskmodal.show();
     },
@@ -819,6 +847,17 @@ export default {
   computed: {
     calendar() {
       return this.$refs.calendar.control;
+    },
+    availableTasksForDependencies() {
+      if (!this.taskList) return [];
+      
+      // Filter out completed tasks and the task being edited (if editing)
+      return this.taskList.filter(task => {
+        if (this.selectedTask && task._id === this.selectedTask._id) {
+          return false; // Can't depend on itself
+        }
+        return !task.completed;
+      });
     },
     taskGroupedByDate() {
       const groupedTasks = {};
@@ -1134,6 +1173,12 @@ export default {
   flex: 1;
   font-weight: 500;
   color: #e0e0e0;
+}
+
+.dependency-icon {
+  margin-right: 6px;
+  font-size: 14px;
+  opacity: 0.8;
 }
 
 .task-badge,

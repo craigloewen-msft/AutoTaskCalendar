@@ -97,6 +97,36 @@ async function generateTaskEvents(inUser) {
     // Clear out old events if type is task or task-chunk
     await EventDetails.deleteMany({ userRef: inUser._id, type: { $in: ['task', 'task-chunk'] } });
 
+    // Get all incomplete tasks for the user once to check dependencies efficiently
+    const allUserTasks = await TaskDetails.find({ 
+        userRef: inUser._id,
+        $or: [{ completed: false }, { completed: null }]
+    });
+    const taskMap = new Map();
+    allUserTasks.forEach(task => {
+        taskMap.set(task._id.toString(), task);
+    });
+    
+    // Helper function to check if all dependencies are completed using the cached task map
+    const areDependenciesMet = (task) => {
+        if (!task.dependsOn || task.dependsOn.length === 0) {
+            return true;
+        }
+        
+        // Check if all dependent tasks are completed
+        // If a task is in the map, it's incomplete, so dependency is NOT met
+        // If a task is not in the map, it's either completed or doesn't exist (assume completed)
+        for (let depId of task.dependsOn) {
+            const dependentTask = taskMap.get(depId.toString());
+            if (dependentTask) {
+                // Task exists in map means it's incomplete, so dependency not met
+                return false;
+            }
+        }
+        
+        return true;
+    };
+
     // Get the TaskDetails sorted in order of their deadlines, earliest first. Only get tasks that have deadlines less than 2 weeks from now
     const twoWeeksFromNow = new Date(currentTime.getTime() + 14 * 24 * 60 * 60 * 1000);
     
@@ -222,6 +252,13 @@ async function generateTaskEvents(inUser) {
                     let insertedTask = false;
                     for (let k = 0; k < sortedTasks.length; k++) {
                         let task = sortedTasks[k];
+                        
+                        // Check if dependencies are met before scheduling
+                        const dependenciesMet = areDependenciesMet(task);
+                        if (!dependenciesMet) {
+                            continue; // Skip this task if dependencies aren't met
+                        }
+                        
                         const taskDuration = taskChunkInfoList[task._id] ? taskChunkInfoList[task._id].remainingDuration : task.duration * 60 * 1000;
                         const breakUpTaskChunkDuration = task.breakUpTask ? task.breakUpTaskChunkDuration * 60 * 1000 : 0;
                         if (currentExaminedTime.getTime() > task.startDate.getTime()) {
