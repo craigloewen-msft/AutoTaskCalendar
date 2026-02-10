@@ -107,21 +107,31 @@ async function generateTaskEvents(inUser) {
         taskMap.set(task._id.toString(), task);
     });
     
-    // Helper function to check if all dependencies are completed using the cached task map
+    // Track tasks that have been scheduled (so dependencies can be checked)
+    const scheduledTaskIds = new Set();
+    
+    // Helper function to check if all dependencies are met
     const areDependenciesMet = (task) => {
         if (!task.dependsOn || task.dependsOn.length === 0) {
             return true;
         }
         
-        // Check if all dependent tasks are completed
-        // If a task is in the map, it's incomplete, so dependency is NOT met
-        // If a task is not in the map, it's either completed or doesn't exist (assume completed)
+        // Check if all dependent tasks are either:
+        // 1. Completed (not in taskMap), OR
+        // 2. Scheduled (in scheduledTaskIds)
         for (let depId of task.dependsOn) {
-            const dependentTask = taskMap.get(depId.toString());
+            const depIdStr = depId.toString();
+            const dependentTask = taskMap.get(depIdStr);
+            
+            // If task is in the map, it means it's incomplete
             if (dependentTask) {
-                // Task exists in map means it's incomplete, so dependency not met
-                return false;
+                // Check if it's been scheduled
+                if (!scheduledTaskIds.has(depIdStr)) {
+                    // Task is incomplete and not scheduled, dependency not met
+                    return false;
+                }
             }
+            // If task is not in the map, it's completed, so dependency is met
         }
         
         return true;
@@ -352,8 +362,9 @@ async function generateTaskEvents(inUser) {
                                 });
                                 await taskEvent.save();
 
-                                // Remove the task from the list
+                                // Remove the task from the list and mark as scheduled
                                 sortedTasks.splice(k, 1);
+                                scheduledTaskIds.add(task._id.toString());
 
                                 // Update the task's scheduledDate to be the current time.
                                 task.scheduledDate = currentExaminedTime;
