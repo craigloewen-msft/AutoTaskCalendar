@@ -140,14 +140,14 @@ async function generateTaskEvents(inUser) {
     // Helper function to sort tasks by dependencies using topological sort
     // Tasks with no dependencies (or completed dependencies) come first
     const sortTasksByDependencies = (tasks) => {
-        const taskMap = new Map();
+        const sortTaskMap = new Map();
         const inDegree = new Map(); // Number of incomplete dependencies for each task
         const adjList = new Map(); // Tasks that depend on each task
         
         // Initialize maps
         tasks.forEach(task => {
             const taskId = task._id.toString();
-            taskMap.set(taskId, task);
+            sortTaskMap.set(taskId, task);
             inDegree.set(taskId, 0);
             adjList.set(taskId, []);
         });
@@ -159,7 +159,7 @@ async function generateTaskEvents(inUser) {
                 task.dependsOn.forEach(depId => {
                     const depIdStr = depId.toString();
                     // Only count dependencies that are in our incomplete tasks list
-                    if (taskMap.has(depIdStr)) {
+                    if (sortTaskMap.has(depIdStr)) {
                         inDegree.set(taskId, inDegree.get(taskId) + 1);
                         adjList.get(depIdStr).push(taskId);
                     }
@@ -170,6 +170,7 @@ async function generateTaskEvents(inUser) {
         // Topological sort using Kahn's algorithm
         const queue = [];
         const result = [];
+        const resultSet = new Set();
         
         // Start with tasks that have no incomplete dependencies
         inDegree.forEach((degree, taskId) => {
@@ -180,7 +181,9 @@ async function generateTaskEvents(inUser) {
         
         while (queue.length > 0) {
             const taskId = queue.shift();
-            result.push(taskMap.get(taskId));
+            const task = sortTaskMap.get(taskId);
+            result.push(task);
+            resultSet.add(task);
             
             // Reduce in-degree for dependent tasks
             const dependentTasks = adjList.get(taskId);
@@ -196,7 +199,7 @@ async function generateTaskEvents(inUser) {
         // Add remaining tasks to the end (fallback)
         if (result.length < tasks.length) {
             tasks.forEach(task => {
-                if (!result.includes(task)) {
+                if (!resultSet.has(task)) {
                     result.push(task);
                 }
             });
