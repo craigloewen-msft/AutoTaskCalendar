@@ -97,8 +97,11 @@ async function generateTaskEvents(inUser) {
     // Clear out old events if type is task or task-chunk
     await EventDetails.deleteMany({ userRef: inUser._id, type: { $in: ['task', 'task-chunk'] } });
 
-    // Get all tasks for the user once to check dependencies efficiently
-    const allUserTasks = await TaskDetails.find({ userRef: inUser._id });
+    // Get all incomplete tasks for the user once to check dependencies efficiently
+    const allUserTasks = await TaskDetails.find({ 
+        userRef: inUser._id,
+        $or: [{ completed: false }, { completed: null }]
+    });
     const taskMap = new Map();
     allUserTasks.forEach(task => {
         taskMap.set(task._id.toString(), task);
@@ -111,9 +114,12 @@ async function generateTaskEvents(inUser) {
         }
         
         // Check if all dependent tasks are completed
+        // If a task is in the map, it's incomplete, so dependency is NOT met
+        // If a task is not in the map, it's either completed or doesn't exist (assume completed)
         for (let depId of task.dependsOn) {
             const dependentTask = taskMap.get(depId.toString());
-            if (!dependentTask || !dependentTask.completed) {
+            if (dependentTask) {
+                // Task exists in map means it's incomplete, so dependency not met
                 return false;
             }
         }
