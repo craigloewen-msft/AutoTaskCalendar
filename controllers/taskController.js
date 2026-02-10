@@ -170,7 +170,7 @@ async function generateTaskEvents(inUser) {
         // Topological sort using Kahn's algorithm
         const queue = [];
         const result = [];
-        const resultSet = new Set();
+        const resultTaskIds = new Set(); // Track task IDs that have been added to result
         
         // Start with tasks that have no incomplete dependencies
         inDegree.forEach((degree, taskId) => {
@@ -183,7 +183,7 @@ async function generateTaskEvents(inUser) {
             const taskId = queue.shift();
             const task = sortTaskMap.get(taskId);
             result.push(task);
-            resultSet.add(task);
+            resultTaskIds.add(taskId);
             
             // Reduce in-degree for dependent tasks
             const dependentTasks = adjList.get(taskId);
@@ -195,11 +195,12 @@ async function generateTaskEvents(inUser) {
             });
         }
         
-        // If result length != tasks length, there's a cycle (should not happen due to validation)
-        // Add remaining tasks to the end (fallback)
+        // If result length != tasks length, there may be a cycle in the dependency graph
+        // (circular dependencies should be prevented by validation in routes/tasks.js)
+        // Add remaining tasks to the end as a fallback
         if (result.length < tasks.length) {
             tasks.forEach(task => {
-                if (!resultSet.has(task)) {
+                if (!resultTaskIds.has(task._id.toString())) {
                     result.push(task);
                 }
             });
