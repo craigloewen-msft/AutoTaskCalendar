@@ -4,6 +4,40 @@ const { UserDetails, TaskDetails } = require('../models');
 const { returnFailure } = require('../utils/helpers');
 const { getTaskListFromUsername, getCompletedTasksFromUsername, completeTask, generateTaskEvents } = require('../controllers/taskController');
 
+// Helper function to check for circular dependencies
+async function hasCircularDependency(taskId, dependsOn, userId) {
+    if (!dependsOn || dependsOn.length === 0) {
+        return false;
+    }
+    
+    // Check if any of the dependencies depend on this task (directly or indirectly)
+    const visited = new Set();
+    const queue = [...dependsOn];
+    
+    while (queue.length > 0) {
+        const currentDepId = queue.shift();
+        
+        // If we've already checked this task, skip it
+        if (visited.has(currentDepId.toString())) {
+            continue;
+        }
+        visited.add(currentDepId.toString());
+        
+        // If this dependency is the task itself, we have a circular dependency
+        if (taskId && currentDepId.toString() === taskId.toString()) {
+            return true;
+        }
+        
+        // Get the dependencies of this dependency
+        const depTask = await TaskDetails.findOne({ _id: currentDepId, userRef: userId });
+        if (depTask && depTask.dependsOn && depTask.dependsOn.length > 0) {
+            queue.push(...depTask.dependsOn);
+        }
+    }
+    
+    return false;
+}
+
 function createTaskRoutes(config, authenticateToken) {
 
     router.post('/createTask', authenticateToken, async (req, res) => {
@@ -29,15 +63,18 @@ function createTaskRoutes(config, authenticateToken) {
 
         // Validate dependencies
         if (dependsOn && dependsOn.length > 0) {
-            // Check for circular dependencies
-            const taskIds = new Set(dependsOn);
-            
             // Make sure all dependent tasks exist and belong to the user
             for (let depId of dependsOn) {
                 const depTask = await TaskDetails.findOne({ _id: depId, userRef: user._id });
                 if (!depTask) {
                     return res.send(returnFailure('Invalid dependency task'));
                 }
+            }
+            
+            // Check for circular dependencies
+            const hasCircular = await hasCircularDependency(null, dependsOn, user._id);
+            if (hasCircular) {
+                return res.send(returnFailure('Circular dependency detected'));
             }
         }
 
@@ -93,6 +130,12 @@ function createTaskRoutes(config, authenticateToken) {
                     if (!depTask) {
                         return res.send(returnFailure('Invalid dependency task'));
                     }
+                }
+                
+                // Check for circular dependencies
+                const hasCircular = await hasCircularDependency(task._id, task.dependsOn, user._id);
+                if (hasCircular) {
+                    return res.send(returnFailure('Circular dependency detected'));
                 }
             }
             

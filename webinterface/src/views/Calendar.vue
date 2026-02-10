@@ -40,7 +40,7 @@
                 v-on:click="openEditTaskModal(task)"
               >
                 <span class="task-title">
-                  <span v-if="task.dependsOn && task.dependsOn.length > 0" class="dependency-icon" title="Has dependencies">🔗</span>
+                  <span v-if="task.dependsOn && task.dependsOn.length > 0" class="dependency-icon" title="Has dependencies" role="img" aria-label="Has dependencies">🔗</span>
                   {{ task.title }}
                 </span>
                 <span class="task-badge" v-if="task.isBacklog">BACKLOG</span>
