@@ -87,23 +87,6 @@ const completeTask = async (task, user) => {
     return { success: true };
 }
 
-// Helper function to check if all dependencies are completed
-async function areDependenciesMet(task) {
-    if (!task.dependsOn || task.dependsOn.length === 0) {
-        return true;
-    }
-    
-    // Check if all dependent tasks are completed
-    for (let depId of task.dependsOn) {
-        const dependentTask = await TaskDetails.findById(depId);
-        if (!dependentTask || !dependentTask.completed) {
-            return false;
-        }
-    }
-    
-    return true;
-}
-
 async function generateTaskEvents(inUser) {
     // If the user has no working days, don't generate any events
     if (inUser.workingDays.length == 0) {
@@ -113,6 +96,30 @@ async function generateTaskEvents(inUser) {
     const currentTime = new Date();
     // Clear out old events if type is task or task-chunk
     await EventDetails.deleteMany({ userRef: inUser._id, type: { $in: ['task', 'task-chunk'] } });
+
+    // Get all tasks for the user once to check dependencies efficiently
+    const allUserTasks = await TaskDetails.find({ userRef: inUser._id });
+    const taskMap = new Map();
+    allUserTasks.forEach(task => {
+        taskMap.set(task._id.toString(), task);
+    });
+    
+    // Helper function to check if all dependencies are completed using the cached task map
+    const areDependenciesMet = (task) => {
+        if (!task.dependsOn || task.dependsOn.length === 0) {
+            return true;
+        }
+        
+        // Check if all dependent tasks are completed
+        for (let depId of task.dependsOn) {
+            const dependentTask = taskMap.get(depId.toString());
+            if (!dependentTask || !dependentTask.completed) {
+                return false;
+            }
+        }
+        
+        return true;
+    };
 
     // Get the TaskDetails sorted in order of their deadlines, earliest first. Only get tasks that have deadlines less than 2 weeks from now
     const twoWeeksFromNow = new Date(currentTime.getTime() + 14 * 24 * 60 * 60 * 1000);
@@ -241,7 +248,7 @@ async function generateTaskEvents(inUser) {
                         let task = sortedTasks[k];
                         
                         // Check if dependencies are met before scheduling
-                        const dependenciesMet = await areDependenciesMet(task);
+                        const dependenciesMet = areDependenciesMet(task);
                         if (!dependenciesMet) {
                             continue; // Skip this task if dependencies aren't met
                         }
