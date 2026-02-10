@@ -107,24 +107,109 @@ async function generateTaskEvents(inUser) {
         taskMap.set(task._id.toString(), task);
     });
     
-    // Helper function to check if all dependencies are completed using the cached task map
+    // Track tasks that have been scheduled (so dependencies can be checked)
+    const scheduledTaskIds = new Set();
+    
+    // Helper function to check if all dependencies are met
     const areDependenciesMet = (task) => {
         if (!task.dependsOn || task.dependsOn.length === 0) {
             return true;
         }
         
-        // Check if all dependent tasks are completed
-        // If a task is in the map, it's incomplete, so dependency is NOT met
-        // If a task is not in the map, it's either completed or doesn't exist (assume completed)
+        // Check if all dependent tasks are either:
+        // 1. Completed (not in taskMap), OR
+        // 2. Scheduled (in scheduledTaskIds)
         for (let depId of task.dependsOn) {
-            const dependentTask = taskMap.get(depId.toString());
+            const depIdStr = depId.toString();
+            const dependentTask = taskMap.get(depIdStr);
+            
+            // If task is in the map, it means it's incomplete
             if (dependentTask) {
-                // Task exists in map means it's incomplete, so dependency not met
-                return false;
+                // Check if it's been scheduled
+                if (!scheduledTaskIds.has(depIdStr)) {
+                    // Task is incomplete and not scheduled, dependency not met
+                    return false;
+                }
             }
+            // If task is not in the map, it's completed, so dependency is met
         }
         
         return true;
+    };
+
+    // Helper function to sort tasks by dependencies using topological sort
+    // Tasks with no dependencies (or completed dependencies) come first
+    const sortTasksByDependencies = (tasks) => {
+        const taskIdToTaskMap = new Map(); // Maps task IDs to task objects
+        const inDegree = new Map(); // Number of incomplete dependencies for each task
+        const adjList = new Map(); // Tasks that depend on each task
+        
+        // Initialize maps
+        tasks.forEach(task => {
+            const taskId = task._id.toString();
+            taskIdToTaskMap.set(taskId, task);
+            inDegree.set(taskId, 0);
+            adjList.set(taskId, []);
+        });
+        
+        // Build dependency graph
+        tasks.forEach(task => {
+            const taskId = task._id.toString();
+            if (task.dependsOn && task.dependsOn.length > 0) {
+                task.dependsOn.forEach(depId => {
+                    const depIdStr = depId.toString();
+                    // Only count dependencies that are in our incomplete tasks list
+                    if (taskIdToTaskMap.has(depIdStr)) {
+                        inDegree.set(taskId, inDegree.get(taskId) + 1);
+                        adjList.get(depIdStr).push(taskId);
+                    }
+                });
+            }
+        });
+        
+        // Topological sort using Kahn's algorithm
+        const queue = [];
+        const result = [];
+        // Track task IDs in result for O(1) lookup instead of O(n) array search
+        const resultTaskIds = new Set();
+        
+        // Start with tasks that have no incomplete dependencies
+        inDegree.forEach((degree, taskId) => {
+            if (degree === 0) {
+                queue.push(taskId);
+            }
+        });
+        
+        while (queue.length > 0) {
+            const taskId = queue.shift();
+            const task = taskIdToTaskMap.get(taskId);
+            result.push(task);
+            resultTaskIds.add(taskId);
+            
+            // Reduce in-degree for dependent tasks
+            const dependentTasks = adjList.get(taskId);
+            dependentTasks.forEach(depTaskId => {
+                inDegree.set(depTaskId, inDegree.get(depTaskId) - 1);
+                if (inDegree.get(depTaskId) === 0) {
+                    queue.push(depTaskId);
+                }
+            });
+        }
+        
+        // If result length != tasks length, there may be a cycle in the dependency graph
+        // (circular dependencies should be prevented by validation in routes/tasks.js)
+        // Add remaining tasks to the end as a fallback
+        if (result.length < tasks.length) {
+            console.error(`Warning: Topological sort incomplete. Expected ${tasks.length} tasks, got ${result.length}. Possible circular dependency detected.`);
+            tasks.forEach(task => {
+                if (!resultTaskIds.has(task._id.toString())) {
+                    console.error(`  Unschedulable task due to potential cycle: "${task.title}" (ID: ${task._id})`);
+                    result.push(task);
+                }
+            });
+        }
+        
+        return result;
     };
 
     // Get the TaskDetails sorted in order of their deadlines, earliest first. Only get tasks that have deadlines less than 2 weeks from now
@@ -145,8 +230,12 @@ async function generateTaskEvents(inUser) {
         isBacklog: true,
     }).sort({ startDate: 1 });
     
+    // Sort each group by dependencies first, preserving relative due date order within dependency levels
+    const sortedRegularTasks = sortTasksByDependencies(regularTasks);
+    const sortedBacklogTasks = sortTasksByDependencies(backlogTasks);
+    
     // Combine regular tasks first, then backlog tasks
-    const sortedTasks = [...regularTasks, ...backlogTasks];
+    const sortedTasks = [...sortedRegularTasks, ...sortedBacklogTasks];
 
     // Query the EventDetails sorted in order of when they appear, up to 2 weeks from now
     const sortedEvents = await EventDetails.find({
@@ -280,8 +369,9 @@ async function generateTaskEvents(inUser) {
                                 });
                                 await taskEvent.save();
 
-                                // Remove the task from the list
+                                // Remove the task from the list and mark as scheduled
                                 sortedTasks.splice(k, 1);
+                                scheduledTaskIds.add(task._id.toString());
 
                                 // Update the task's scheduledDate to be the current time.
                                 task.scheduledDate = currentExaminedTime;
