@@ -13,7 +13,7 @@ function createTaskRoutes(config, authenticateToken) {
             return res.send(returnFailure('Not logged in'));
         }
 
-        let { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration, taskRepeat, isBacklog } = req.body;
+        let { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration, taskRepeat, isBacklog, dependsOn } = req.body;
 
         if (!title || !duration || !startDate) {
             return res.send(returnFailure('Title, duration, and start date are required'));
@@ -25,6 +25,20 @@ function createTaskRoutes(config, authenticateToken) {
 
         if (!isBacklog && !dueDate) {
             return res.send(returnFailure('Due date is required for non-backlog tasks'));
+        }
+
+        // Validate dependencies
+        if (dependsOn && dependsOn.length > 0) {
+            // Check for circular dependencies
+            const taskIds = new Set(dependsOn);
+            
+            // Make sure all dependent tasks exist and belong to the user
+            for (let depId of dependsOn) {
+                const depTask = await TaskDetails.findOne({ _id: depId, userRef: user._id });
+                if (!depTask) {
+                    return res.send(returnFailure('Invalid dependency task'));
+                }
+            }
         }
 
         try {
@@ -43,6 +57,7 @@ function createTaskRoutes(config, authenticateToken) {
                 breakUpTaskChunkDuration: breakUpTaskChunkDuration,
                 repeat: taskRepeat,
                 isBacklog: isBacklog || false,
+                dependsOn: dependsOn || [],
             });
             await task.save();
             // Return the updated task list
@@ -64,6 +79,23 @@ function createTaskRoutes(config, authenticateToken) {
 
         try {
             let { task } = req.body;
+            
+            // Validate dependencies if they're being updated
+            if (task.dependsOn && task.dependsOn.length > 0) {
+                // Make sure task doesn't depend on itself
+                if (task.dependsOn.includes(task._id)) {
+                    return res.send(returnFailure('Task cannot depend on itself'));
+                }
+                
+                // Make sure all dependent tasks exist and belong to the user
+                for (let depId of task.dependsOn) {
+                    const depTask = await TaskDetails.findOne({ _id: depId, userRef: user._id });
+                    if (!depTask) {
+                        return res.send(returnFailure('Invalid dependency task'));
+                    }
+                }
+            }
+            
             let actualTask = await TaskDetails.findByIdAndUpdate(task._id, task);
             return res.json({ success: true });
         } catch (error) {

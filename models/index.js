@@ -41,6 +41,7 @@ const TaskDetail = new Schema({
     scheduledDate: Date,
     repeat: String,
     isBacklog: Boolean,
+    dependsOn: [{ type: Schema.Types.ObjectId, ref: 'taskInfo' }],
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
 });
 

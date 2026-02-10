@@ -87,6 +87,23 @@ const completeTask = async (task, user) => {
     return { success: true };
 }
 
+// Helper function to check if all dependencies are completed
+async function areDependenciesMet(task) {
+    if (!task.dependsOn || task.dependsOn.length === 0) {
+        return true;
+    }
+    
+    // Check if all dependent tasks are completed
+    for (let depId of task.dependsOn) {
+        const dependentTask = await TaskDetails.findById(depId);
+        if (!dependentTask || !dependentTask.completed) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
 async function generateTaskEvents(inUser) {
     // If the user has no working days, don't generate any events
     if (inUser.workingDays.length == 0) {
@@ -222,6 +239,13 @@ async function generateTaskEvents(inUser) {
                     let insertedTask = false;
                     for (let k = 0; k < sortedTasks.length; k++) {
                         let task = sortedTasks[k];
+                        
+                        // Check if dependencies are met before scheduling
+                        const dependenciesMet = await areDependenciesMet(task);
+                        if (!dependenciesMet) {
+                            continue; // Skip this task if dependencies aren't met
+                        }
+                        
                         const taskDuration = taskChunkInfoList[task._id] ? taskChunkInfoList[task._id].remainingDuration : task.duration * 60 * 1000;
                         const breakUpTaskChunkDuration = task.breakUpTask ? task.breakUpTaskChunkDuration * 60 * 1000 : 0;
                         if (currentExaminedTime.getTime() > task.startDate.getTime()) {
