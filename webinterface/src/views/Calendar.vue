@@ -1055,22 +1055,14 @@ export default {
 }
 
 /* Force grid lines with deep selectors */
-:deep(.calendar_default_cell) {
-  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
-}
-
-:deep(.calendar_transparent_cell) {
-  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
-}
-
 :deep(.calendar_default_cell_inner) {
-  border: none !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
 }
 
 :deep(.calendar_transparent_cell_inner) {
-  border: none !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
 }
 
 :deep(.calendar_default_rowheader),
