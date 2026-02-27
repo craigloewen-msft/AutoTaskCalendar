@@ -118,6 +118,7 @@
                   v-model="input.taskBreakUpTask"
                   class="form-control"
                   id="task-break-up-task"
+                  @change="onBreakUpTaskChange"
                   >Break Up Task Into Chunks</BFormCheckbox
                 >
               </div>
@@ -385,6 +386,11 @@ export default {
     };
   },
   methods: {
+    onBreakUpTaskChange(value) {
+      if (value) {
+        this.input.taskBreakUpTaskChunkDuration = 60;
+      }
+    },
     async loadTasks() {
       const taskDataResponse = await this.$http.get("/api/getUserTasks/");
       this.taskList = taskDataResponse.data.taskList;
