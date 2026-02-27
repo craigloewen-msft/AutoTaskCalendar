@@ -154,15 +154,23 @@ function getChunkDuration(task) {
 
 /**
  * Find the best task to schedule in the given time slot.
- * Prioritizes:
- * 1. Tasks that can fit fully (earliest deadline first)
- * 2. Tasks that can be chunked (earliest deadline first)
+ * Prioritizes by earliest deadline, considering both tasks that fit fully
+ * and tasks that can be chunked. Picks whichever eligible candidate has the
+ * soonest due date so that urgent tasks are never delayed in favour of a
+ * lower-priority task that happens to fit in the remaining time.
  *
  * Returns { task, index, canFitFully } or null if no task fits.
  */
 function findBestTaskForSlot(context, availableTime) {
     const { pendingTasks, chunkInfo, incompleteTaskMap, scheduledTaskIds, currentTime } = context;
 
+    // NOTE: pendingTasks is sorted by deadline (earliest first) coming from
+    // buildSchedulingContext. The logic below relies on this ordering: the
+    // first eligible "fits fully" task and the first eligible "chunkable"
+    // task encountered are already the earliest-deadline candidates of each
+    // type, so we stop searching as soon as we have one of each.
+    let bestFullTask = null;
+    let bestFullIndex = -1;
     let bestChunkableTask = null;
     let bestChunkableIndex = -1;
 
@@ -182,19 +190,36 @@ function findBestTaskForSlot(context, availableTime) {
         const remainingDuration = getRemainingDuration(task, chunkInfo);
         const chunkDuration = getChunkDuration(task);
 
-        // Check if task can fit fully
-        if (availableTime >= remainingDuration) {
-            return { task, index: i, canFitFully: true };
+        // First eligible task that fits fully has the earliest deadline of its kind
+        if (availableTime >= remainingDuration && !bestFullTask) {
+            bestFullTask = task;
+            bestFullIndex = i;
         }
 
-        // Check if task can be chunked (remember first chunkable task)
+        // First eligible chunkable task has the earliest deadline of its kind
         if (task.breakUpTask && availableTime >= chunkDuration && !bestChunkableTask) {
             bestChunkableTask = task;
             bestChunkableIndex = i;
         }
+
+        // Both candidates found - no need to scan further
+        if (bestFullTask && bestChunkableTask) {
+            break;
+        }
     }
 
-    // Return chunkable task if no full task fits
+    // Prefer the candidate with the earlier deadline
+    if (bestFullTask && bestChunkableTask) {
+        if (bestChunkableTask.dueDate <= bestFullTask.dueDate) {
+            return { task: bestChunkableTask, index: bestChunkableIndex, canFitFully: false };
+        }
+        return { task: bestFullTask, index: bestFullIndex, canFitFully: true };
+    }
+
+    if (bestFullTask) {
+        return { task: bestFullTask, index: bestFullIndex, canFitFully: true };
+    }
+
     if (bestChunkableTask) {
         return { task: bestChunkableTask, index: bestChunkableIndex, canFitFully: false };
     }
