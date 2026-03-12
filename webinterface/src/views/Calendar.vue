@@ -87,14 +87,6 @@
                   placeholder="Enter task title"
                 />
               </div>
-              <div class="form-group">
-                <BFormCheckbox
-                  v-model="input.taskIsBacklog"
-                  class="form-control"
-                  id="task-is-backlog"
-                  >Mark as Backlog Task</BFormCheckbox
-                >
-              </div>
               <div v-if="!input.taskIsBacklog" class="form-group">
                 <label for="task-due-date">Due Date*</label>
                 <input
@@ -133,6 +125,14 @@
                       min="0"
                       placeholder="100"
                     />
+                  </div>
+                  <div class="form-group">
+                    <BFormCheckbox
+                      v-model="input.taskIsBacklog"
+                      class="form-control"
+                      id="task-is-backlog"
+                      >Mark as Backlog Task</BFormCheckbox
+                    >
                   </div>
                   <div class="form-group">
                     <BFormCheckbox
