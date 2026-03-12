@@ -47,7 +47,7 @@ function createTaskRoutes(config, authenticateToken) {
             return res.send(returnFailure('Not logged in'));
         }
 
-        let { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration, taskRepeat, isBacklog, dependsOn } = req.body;
+        let { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration, taskRepeat, isBacklog, dependsOn, priority } = req.body;
 
         if (!title || !duration || !startDate) {
             return res.send(returnFailure('Title, duration, and start date are required'));
@@ -95,6 +95,7 @@ function createTaskRoutes(config, authenticateToken) {
                 repeat: taskRepeat,
                 isBacklog: isBacklog || false,
                 dependsOn: dependsOn || [],
+                priority: priority != null ? priority : 100,
             });
             await task.save();
             // Return the updated task list
