@@ -782,14 +782,8 @@ export default {
       this.input.dependsOn = inputTask.dependsOn || [];
       this.input.taskPriority = inputTask.priority != null ? inputTask.priority : 100;
 
-      // Show advanced options if any advanced fields have non-default values
-      this.showAdvancedOptions = !!(
-        inputTask.breakUpTask ||
-        inputTask.repeat ||
-        inputTask.notes ||
-        (inputTask.dependsOn && inputTask.dependsOn.length > 0) ||
-        (inputTask.priority != null && inputTask.priority !== 100)
-      );
+      // Always show advanced options when editing an existing task
+      this.showAdvancedOptions = true;
 
       this.$refs.addtaskmodal.show();
     },
