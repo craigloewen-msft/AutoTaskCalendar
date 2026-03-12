@@ -113,80 +113,103 @@
                   id="task-duration"
                 />
               </div>
-              <div class="form-group">
-                <BFormCheckbox
-                  v-model="input.taskBreakUpTask"
-                  class="form-control"
-                  id="task-break-up-task"
-                  @change="onBreakUpTaskChange"
-                  >Break Up Task Into Chunks</BFormCheckbox
+              <div class="advanced-options-section">
+                <button
+                  type="button"
+                  class="btn btn-link advanced-options-toggle"
+                  @click="showAdvancedOptions = !showAdvancedOptions"
                 >
-              </div>
-              <div v-if="input.taskBreakUpTask" class="form-group">
-                <label for="task-break-up-task-chunk-duration"
-                  >Chunk Duration</label
-                >
-                <input
-                  type="number"
-                  v-model="input.taskBreakUpTaskChunkDuration"
-                  class="form-control"
-                  id="task-break-up-task-chunk-duration"
-                />
-              </div>
-              <div class="form-group">
-                <label for="task-start-date">Start Date</label>
-                <input
-                  type="date"
-                  v-model="input.taskStartDate"
-                  class="form-control date-input"
-                  id="task-start-date"
-                />
-              </div>
-              <div class="form-group">
-                <label for="task-repeat">Repeat</label>
-                <select
-                  v-model="input.repeat"
-                  class="form-control"
-                  id="task-repeat"
-                >
-                  <option disabled value="">Please select one</option>
-                  <option value="">None</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="task-notes">Notes</label>
-                <input
-                  type="text"
-                  v-model="input.taskNotes"
-                  class="form-control"
-                  id="task-notes"
-                  placeholder="Enter task notes"
-                />
-              </div>
-              <div class="form-group">
-                <label for="task-dependencies">Dependencies (must complete these first)</label>
-                <select
-                  v-model="input.dependsOn"
-                  class="form-control"
-                  id="task-dependencies"
-                  multiple
-                  size="4"
-                >
-                  <option
-                    v-for="task in availableTasksForDependencies"
-                    :key="task._id"
-                    :value="task._id"
-                  >
-                    {{ task.title }}
-                  </option>
-                </select>
-                <small class="form-text text-muted">
-                  Hold Ctrl (Cmd on Mac) to select multiple tasks
-                </small>
+                  <span class="toggle-icon">{{ showAdvancedOptions ? '▼' : '▶' }}</span>
+                  Advanced Options
+                </button>
+                <div v-show="showAdvancedOptions" class="advanced-options-content">
+                  <div class="form-group">
+                    <label for="task-priority">Priority (lower = higher priority)</label>
+                    <input
+                      type="number"
+                      v-model.number="input.taskPriority"
+                      class="form-control"
+                      id="task-priority"
+                      min="0"
+                      placeholder="100"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <BFormCheckbox
+                      v-model="input.taskBreakUpTask"
+                      class="form-control"
+                      id="task-break-up-task"
+                      @change="onBreakUpTaskChange"
+                      >Break Up Task Into Chunks</BFormCheckbox
+                    >
+                  </div>
+                  <div v-if="input.taskBreakUpTask" class="form-group">
+                    <label for="task-break-up-task-chunk-duration"
+                      >Chunk Duration</label
+                    >
+                    <input
+                      type="number"
+                      v-model="input.taskBreakUpTaskChunkDuration"
+                      class="form-control"
+                      id="task-break-up-task-chunk-duration"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="task-start-date">Start Date</label>
+                    <input
+                      type="date"
+                      v-model="input.taskStartDate"
+                      class="form-control date-input"
+                      id="task-start-date"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="task-repeat">Repeat</label>
+                    <select
+                      v-model="input.repeat"
+                      class="form-control"
+                      id="task-repeat"
+                    >
+                      <option disabled value="">Please select one</option>
+                      <option value="">None</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="task-notes">Notes</label>
+                    <input
+                      type="text"
+                      v-model="input.taskNotes"
+                      class="form-control"
+                      id="task-notes"
+                      placeholder="Enter task notes"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="task-dependencies">Dependencies (must complete these first)</label>
+                    <select
+                      v-model="input.dependsOn"
+                      class="form-control"
+                      id="task-dependencies"
+                      multiple
+                      size="4"
+                    >
+                      <option
+                        v-for="task in availableTasksForDependencies"
+                        :key="task._id"
+                        :value="task._id"
+                      >
+                        {{ task.title }}
+                      </option>
+                    </select>
+                    <small class="form-text text-muted">
+                      Hold Ctrl (Cmd on Mac) to select multiple tasks
+                    </small>
+                  </div>
+                </div>
               </div>
               <div v-if="this.selectedTask" class="task-controls-buttons">
                 <button
@@ -377,7 +400,9 @@ export default {
         followUpDays: null,
         taskIsBacklog: false,
         dependsOn: [],
+        taskPriority: 100,
       },
+      showAdvancedOptions: false,
       showModal: false,
       currentDate: new Date(),
       selectedTask: null,
@@ -524,6 +549,7 @@ export default {
           repeat: this.input.repeat,
           isBacklog: this.input.taskIsBacklog,
           dependsOn: this.input.dependsOn || [],
+          priority: this.input.taskPriority != null ? this.input.taskPriority : 100,
         });
         this.taskList = response.data.taskList;
 
@@ -594,6 +620,7 @@ export default {
       this.selectedTask.repeat = this.input.repeat;
       this.selectedTask.isBacklog = this.input.taskIsBacklog;
       this.selectedTask.dependsOn = this.input.dependsOn || [];
+      this.selectedTask.priority = this.input.taskPriority != null ? this.input.taskPriority : 100;
 
       try {
         const response = await this.$http.post("/api/editTask/", {
@@ -710,6 +737,11 @@ export default {
 
       // Make all of this.input null
       Object.keys(this.input).forEach((i) => (this.input[i] = null));
+      this.input.taskPriority = 100;
+      this.input.taskIsBacklog = false;
+      this.input.taskBreakUpTask = false;
+      this.input.dependsOn = [];
+      this.showAdvancedOptions = false;
       this.$refs.addtaskmodal.show();
     },
     openFollowUpModal(inputTask) {
@@ -748,6 +780,16 @@ export default {
       this.input.repeat = inputTask.repeat;
       this.input.taskIsBacklog = inputTask.isBacklog || false;
       this.input.dependsOn = inputTask.dependsOn || [];
+      this.input.taskPriority = inputTask.priority != null ? inputTask.priority : 100;
+
+      // Show advanced options if any advanced fields have non-default values
+      this.showAdvancedOptions = !!(
+        inputTask.breakUpTask ||
+        inputTask.repeat ||
+        inputTask.notes ||
+        (inputTask.dependsOn && inputTask.dependsOn.length > 0) ||
+        (inputTask.priority != null && inputTask.priority !== 100)
+      );
 
       this.$refs.addtaskmodal.show();
     },
@@ -1290,5 +1332,39 @@ export default {
 /* Fix date input styling for dark theme */
 .date-input {
   color-scheme: dark;
+}
+
+/* Advanced options section */
+.advanced-options-section {
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 4px;
+}
+
+.advanced-options-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  color: #a0a0b0;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  width: 100%;
+  text-align: left;
+}
+
+.advanced-options-toggle:hover {
+  color: #c0c0d0;
+  text-decoration: none;
+}
+
+.toggle-icon {
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.advanced-options-content {
+  padding-top: 4px;
 }
 </style>

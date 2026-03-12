@@ -7,7 +7,7 @@ async function getTaskListFromUsername(inUsername) {
     let user = await UserDetails.findOne({ username: inUsername }).populate({
         path: 'taskList',
         match: { $or: [{ completed: false }, { completed: null }] },
-        options: { sort: { dueDate: 1 } },
+        options: { sort: { dueDate: 1, priority: 1 } },
     });
 
     return user.taskList;

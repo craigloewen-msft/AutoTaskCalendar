@@ -208,9 +208,12 @@ function findBestTaskForSlot(context, availableTime) {
         }
     }
 
-    // Prefer the candidate with the earlier deadline
+    // Prefer the candidate with the earlier deadline (use priority as tiebreaker)
     if (bestFullTask && bestChunkableTask) {
-        if (bestChunkableTask.dueDate <= bestFullTask.dueDate) {
+        const fullPriority = bestFullTask.priority != null ? bestFullTask.priority : 100;
+        const chunkPriority = bestChunkableTask.priority != null ? bestChunkableTask.priority : 100;
+        if (bestChunkableTask.dueDate < bestFullTask.dueDate ||
+            (bestChunkableTask.dueDate.getTime() === bestFullTask.dueDate.getTime() && chunkPriority < fullPriority)) {
             return { task: bestChunkableTask, index: bestChunkableIndex, canFitFully: false };
         }
         return { task: bestFullTask, index: bestFullIndex, canFitFully: true };
@@ -467,7 +470,7 @@ async function buildSchedulingContext(user) {
             { $or: [{ completed: false }, { completed: null }] },
             { $or: [{ isBacklog: false }, { isBacklog: null }] }
         ]
-    }).sort({ dueDate: 1 });
+    }).sort({ dueDate: 1, priority: 1 });
 
     const backlogTasks = await TaskDetails.find({
         userRef: user._id,
