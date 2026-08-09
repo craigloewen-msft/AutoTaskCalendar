@@ -139,10 +139,66 @@ result depends on the current time:
 When you change the scheduler, add an invariant rather than pinning a timestamp. Pinned
 timestamps break every time the clock moves, and everyone learns to ignore them.
 
+## Where the output goes
+
+Two directories, both gitignored, both overwritten by each run:
+
+| Path | What it is |
+| --- | --- |
+| `playwright-report/index.html` | The HTML report for the whole run: every test, pass or fail, with timings. |
+| `test-results/<test-name>/` | Per-failure artifacts. **Only written when a test fails.** |
+
+A passing run leaves `test-results/` empty. That is deliberate — artifacts are captured
+`on-failure` only, so green runs stay fast and cheap.
+
+A failed test leaves four things behind:
+
+```
+test-results/calendar-calendar-page-renders-tasks-ui/
+  test-failed-1.png     screenshot at the moment of failure
+  video.webm            video of the whole test
+  trace.zip             full time-travel recording (the useful one)
+  error-context.md      the page's accessibility tree as text
+```
+
+### Looking at them
+
+```bash
+npm run test:report          # open the HTML report in your browser
+```
+
+The report is the best starting point: click any failed test and the screenshot, video,
+and trace are all attached inline. It serves at `http://localhost:9323`.
+
+For the trace specifically — a step-by-step recording where you can scrub through the
+test and inspect the DOM at each step:
+
+```bash
+npx playwright show-trace test-results/<test-name>/trace.zip
+```
+
+You can also just open the files directly: `test-failed-1.png` and `video.webm` are an
+ordinary PNG and WebM.
+
+`error-context.md` is worth knowing about if you are an agent rather than a human — it is
+plain text, so you can `cat` it without a browser. It contains the expected vs. received
+values and a text rendering of the page, which is usually enough to diagnose a failure
+without opening anything.
+
+### Watching tests run live
+
+```bash
+npm run test:ui        # interactive: pick tests, watch, step, time-travel
+npm test -- --headed   # run headless suite but show the browser window
+```
+
+UI mode is the nicest way to explore what the suite covers.
+
 ## Debugging a failure
 
-On failure Playwright saves a trace, a screenshot, and a video under `test-results/`.
-The trace is the useful one — it is a full time-travel recording of the run:
+On failure Playwright saves a trace, a screenshot, and a video under `test-results/`
+(see "Where the output goes" above). The trace is the useful one — it is a full
+time-travel recording of the run:
 
 ```bash
 npx playwright show-trace test-results/<the-failing-test>/trace.zip
