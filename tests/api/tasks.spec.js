@@ -193,42 +193,6 @@ test.describe('tasks', () => {
         expect(updated.isBacklog).toBe(true);
     });
 
-    test('paginates completed tasks', async ({ seed, api }) => {
-        const data = await seed();
-        const total = data.counts.completed;
-
-        const first = await (await api.get('/api/getCompletedTasks?limit=20&skip=0')).json();
-        expect(first.success).toBe(true);
-        expect(first.taskList).toHaveLength(20);
-        expect(first.totalCount).toBe(total);
-        expect(first.hasMore).toBe(true);
-
-        const lastPageSkip = Math.floor((total - 1) / 20) * 20;
-        const last = await (await api.get(`/api/getCompletedTasks?limit=20&skip=${lastPageSkip}`)).json();
-        expect(last.taskList).toHaveLength(total - lastPageSkip);
-        expect(last.hasMore).toBe(false);
-
-        // Pages must not overlap.
-        const firstIds = first.taskList.map((t) => t._id);
-        expect(last.taskList.every((t) => !firstIds.includes(t._id))).toBe(true);
-    });
-
-    test('searches completed tasks by title and notes', async ({ seed, api }) => {
-        await seed();
-
-        const res = await api.get('/api/searchCompletedTasks?q=quarterly');
-        const body = await res.json();
-
-        expect(body.success).toBe(true);
-        expect(body.taskList.length).toBeGreaterThan(0);
-        expect(
-            body.taskList.every(
-                (t) =>
-                    /quarterly/i.test(t.title || '') || /quarterly/i.test(t.notes || '')
-            )
-        ).toBe(true);
-    });
-
     test('creates a follow up and completes the original task', async ({ seed, api }) => {
         const data = await seed();
         const original = data.named.codeReview;

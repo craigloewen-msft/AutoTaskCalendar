@@ -63,14 +63,6 @@ const routes = [
     meta: {
       requiresAuth: true
     }
-  },
-  {
-    path: '/completed',
-    name: 'CompletedTasks',
-    component: () => import(/* webpackChunkName: "about" */ '../views/CompletedTasks.vue'),
-    meta: {
-      requiresAuth: true
-    }
   }
 ]
 

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { UserDetails, TaskDetails, ProjectDetails } = require('../models');
 const { returnFailure } = require('../utils/helpers');
-const { getTaskListFromUsername, getCompletedTasksFromUsername, completeTask, generateTaskEvents } = require('../controllers/taskController');
+const { getTaskListFromUsername, completeTask, generateTaskEvents } = require('../controllers/taskController');
 
 // Resolve an optional Compass project, making sure it belongs to the caller.
 async function resolveProjectRef(projectRef, userId) {
@@ -287,61 +287,6 @@ function createTaskRoutes(config, authenticateToken) {
             }
             const returnTaskList = await getTaskListFromUsername(req.user.id);
             return res.json({ success: true, taskList: returnTaskList });
-        } catch (error) {
-            console.error(error);
-            return res.json({ success: false });
-        }
-    });
-
-    router.get('/getCompletedTasks', authenticateToken, async (req, res) => {
-        try {
-            let user = await UserDetails.findOne({ username: req.user.id });
-
-            if (!req.user || !user) {
-                return res.send(returnFailure('Not logged in'));
-            }
-
-            // Parse pagination parameters
-            const limit = req.query.limit ? parseInt(req.query.limit) : 20;
-            const skip = req.query.skip ? parseInt(req.query.skip) : 0;
-            
-            const result = await getCompletedTasksFromUsername(req.user.id, limit, skip);
-            return res.json({ 
-                success: true, 
-                taskList: result.tasks,
-                totalCount: result.totalCount,
-                hasMore: (skip + result.tasks.length) < result.totalCount
-            });
-        } catch (error) {
-            console.error(error);
-            return res.json({ success: false });
-        }
-    });
-
-    router.get('/searchCompletedTasks', authenticateToken, async (req, res) => {
-        try {
-            let user = await UserDetails.findOne({ username: req.user.id });
-
-            if (!req.user || !user) {
-                return res.send(returnFailure('Not logged in'));
-            }
-
-            const searchQuery = req.query.q || '';
-            
-            // Search in both title and notes
-            const tasks = await TaskDetails.find({
-                userRef: user._id,
-                completed: true,
-                $or: [
-                    { title: { $regex: searchQuery, $options: 'i' } },
-                    { notes: { $regex: searchQuery, $options: 'i' } }
-                ]
-            }).sort({ completedDate: -1 }).limit(100); // Limit search results to 100
-
-            return res.json({ 
-                success: true, 
-                taskList: tasks
-            });
         } catch (error) {
             console.error(error);
             return res.json({ success: false });

@@ -13,35 +13,6 @@ async function getTaskListFromUsername(inUsername) {
     return user.taskList;
 }
 
-async function getCompletedTasksFromUsername(inUsername, limit = null, skip = 0) {
-    let user = await UserDetails.findOne({ username: inUsername });
-
-    if (!user) {
-        return { tasks: [], totalCount: 0 };
-    }
-
-    // Build query for completed tasks
-    const query = TaskDetails.find({
-        userRef: user._id,
-        completed: true
-    }).sort({ completedDate: -1 });
-
-    // Apply pagination if limit is specified
-    if (limit !== null) {
-        query.limit(limit).skip(skip);
-    }
-
-    const tasks = await query.exec();
-
-    // Get total count for pagination
-    const totalCount = await TaskDetails.countDocuments({
-        userRef: user._id,
-        completed: true
-    });
-
-    return { tasks, totalCount };
-}
-
 const completeTask = async (task, user) => {
     if (!task) {
         return { success: false, message: 'Task not found' };
@@ -90,7 +61,6 @@ const completeTask = async (task, user) => {
 
 module.exports = {
     getTaskListFromUsername,
-    getCompletedTasksFromUsername,
     completeTask,
     generateTaskEvents
 };

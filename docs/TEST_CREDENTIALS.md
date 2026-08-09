@@ -33,7 +33,7 @@ The dataset creates:
    - Review team code (due in 3 days, 1 hour)
    - Update documentation (due next week, 3 hours, chunked into 1-hour blocks)
    - Research new technologies (backlog task, 2 hours)
-   - 35 completed tasks, enough to page through the Completed Tasks screen
+   - 70 completed tasks spanning 90 days, kept as completion history
 
 3. **Sample Events:**
    - Team Meeting (tomorrow, 10 AM - 11 AM)

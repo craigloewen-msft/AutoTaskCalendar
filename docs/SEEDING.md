@@ -35,8 +35,8 @@ All of it belongs to `testuser` unless noted:
 - **5 backlog tasks** with no due date.
 - **A dependency chain** — research → draft → publish.
 - **Repeating tasks** — one each of daily, weekly, and monthly.
-- **70 completed tasks** spread over 90 days. Enough to page through (20 per page) and to
-  give search something to find ("quarterly").
+- **70 completed tasks** spread over 90 days, kept as completion history and to prove the
+  scheduler never schedules a completed task.
 - **Edge cases** — a zero-duration task, one longer than the working day, one overdue by a
   month, unicode/emoji/HTML-looking titles, a 500-character title, a task blocked by an
   unschedulable dependency, and a task that starts next week.
@@ -144,8 +144,8 @@ Expose anything tests should reach under `named`, and any size tests care about 
 
 **When you found a bug, add its shape here.** That is what stops it coming back.
 
-**Check the count-sensitive tests when you change bulk sizes** — the pagination tests
-assume at least 21 completed tasks and derive the rest from `data.counts`.
+**Check the count-sensitive tests when you change bulk sizes** — derive sizes from
+`data.counts` rather than hard-coding them.
 
 ## Adding a field to the schema
 

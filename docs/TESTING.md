@@ -110,7 +110,7 @@ test('shows the seeded tasks', async ({ seed, loggedInPage: page }) => {
 });
 ```
 
-Routes are hash-based, so URLs look like `/#/calendar` and `/#/completed`.
+Routes are hash-based, so URLs look like `/#/calendar` and `/#/about`.
 
 ### Using the data
 
@@ -120,7 +120,7 @@ assertions survive the dataset growing:
 
 ```js
 const data = await seed();
-expect(first.totalCount).toBe(data.counts.completed);   // not: toBe(70)
+expect(events).toHaveLength(data.counts.repeating);   // not: toBe(3)
 ```
 
 If your test needs an empty account, set that up explicitly:
