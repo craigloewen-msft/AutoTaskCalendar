@@ -308,67 +308,6 @@ function createTaskRoutes(config, authenticateToken) {
         }
     });
 
-    router.get('/getTaskStatistics', authenticateToken, async (req, res) => {
-        try {
-            let user = await UserDetails.findOne({ username: req.user.id });
-
-            if (!req.user || !user) {
-                return res.send(returnFailure('Not logged in'));
-            }
-
-            // Get all tasks for the user
-            const allTasks = await TaskDetails.find({ userRef: user._id });
-            
-            // Calculate statistics
-            const completedTasks = allTasks.filter(t => t.completed);
-            const incompleteTasks = allTasks.filter(t => !t.completed);
-            
-            // Tasks completed by day
-            const tasksByDay = {};
-            completedTasks.forEach(task => {
-                if (task.completedDate) {
-                    const dateKey = task.completedDate.toISOString().split('T')[0];
-                    if (!tasksByDay[dateKey]) {
-                        tasksByDay[dateKey] = 0;
-                    }
-                    tasksByDay[dateKey]++;
-                }
-            });
-
-            // Total time spent (sum of completed task durations)
-            const totalTimeSpent = completedTasks.reduce((sum, task) => sum + (task.duration || 0), 0);
-            
-            // Average task duration
-            const avgTaskDuration = completedTasks.length > 0 
-                ? totalTimeSpent / completedTasks.length 
-                : 0;
-
-            // Tasks by type
-            const regularTasks = incompleteTasks.filter(t => !t.isBacklog).length;
-            const backlogTasks = incompleteTasks.filter(t => t.isBacklog).length;
-
-            // Repeating tasks count
-            const repeatingTasks = allTasks.filter(t => t.repeat && !t.completed).length;
-
-            return res.json({ 
-                success: true, 
-                statistics: {
-                    totalTasks: allTasks.length,
-                    completedTasksCount: completedTasks.length,
-                    incompleteTasksCount: incompleteTasks.length,
-                    tasksByDay,
-                    totalTimeSpent,
-                    avgTaskDuration,
-                    regularTasks,
-                    backlogTasks,
-                    repeatingTasks
-                }
-            });
-        } catch (error) {
-            console.error(error);
-            return res.json({ success: false });
-        }
-    });
 
     router.post('/setFollowUp', authenticateToken, async (req, res) => {
         let user = await UserDetails.findOne({ username: req.user.id });
