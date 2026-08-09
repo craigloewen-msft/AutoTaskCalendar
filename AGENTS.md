@@ -18,6 +18,10 @@ colliding. `main` uses the standard 8080/3000/27017.
 Run `npm run db:status` to print the ports and database name for your branch. Override the
 name with `AUTOTASKCALENDAR_INSTANCE` if you need two stacks on one branch.
 
+## Coding style
+
+Keep all comments short and concise, usually just 1 or 2 sentences max.
+
 ## Containers: `wslc`, not docker
 
 MongoDB runs in a `wslc` container (no compose support; `scripts/dev-db.sh` replaces it):
