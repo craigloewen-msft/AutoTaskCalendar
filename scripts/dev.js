@@ -1,11 +1,7 @@
 #!/usr/bin/env node
 /**
- * Start the AutoTaskCalendar dev stack: the Express API (under nodemon) and the Vue dev
- * server, both bound to this instance's ports.
- *
- * Processes are spawned directly rather than through a shell so that no quoting is lost
- * on the way through npm, and the derived ports are handed to the Vue dev server (a
- * separate process that cannot require() instance.js) as environment variables.
+ * Start the dev stack: the Express API under nodemon, plus the Vue dev server, both on
+ * this instance's ports.
  *
  * Usage: node scripts/dev.js   (normally via `npm run dev`)
  */
@@ -54,7 +50,7 @@ const targets = [
 const children = [];
 let shuttingDown = false;
 
-// If either process dies the other is useless, so tear the whole stack down together.
+// If either process dies the other is useless, so tear the stack down together.
 function shutdown(signal) {
     if (shuttingDown) {
         return;

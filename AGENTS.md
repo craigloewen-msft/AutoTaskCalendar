@@ -6,32 +6,17 @@ Express + Mongoose (MongoDB) backend, Vue 3 (vue-cli) frontend in `webinterface/
 ## Start here
 
 ```bash
-export AUTOTASKCALENDAR_INSTANCE=<your-agent-name>   # REQUIRED, must be unique
 npm install && (cd webinterface && npm install)
 npm run seed        # optional: testuser / testpassword
 npm run dev         # starts mongo, API, and web UI
 ```
 
-**Every agent must set a unique `AUTOTASKCALENDAR_INSTANCE`.** All ports, the MongoDB
-database, the container/volume names, and the session cookie are derived from it, so
-instances with different names never collide. Two agents sharing a name will fight over
-ports and corrupt each other's data.
+Nothing needs to be exported. Each git branch automatically gets its own ports, MongoDB
+database, container, and session cookie, so several agents can run at once without
+colliding. `main` uses the standard 8080/3000/27017.
 
-## Ports and database
-
-Derived from the instance name (see `instance.js`); `default` gets offset 0. Run
-`npm run db:status` to print yours.
-
-| | `default` | derived |
-|---|---|---|
-| web UI | 8080 | `8080 + offset*10` |
-| API | 3000 | `3000 + offset*10` |
-| MongoDB | 27017 | `27017 + offset*10` |
-| debugger | 9229 | `9229 + offset*10` |
-| database | `autotaskcalendar_default` | `autotaskcalendar_<name>` |
-
-Override individually with `AUTOTASKCALENDAR_{API,WEB,MONGO,INSPECT}_PORT` or
-`AUTOTASKCALENDAR_PORT_OFFSET`.
+Run `npm run db:status` to print the ports and database name for your branch. Override the
+name with `AUTOTASKCALENDAR_INSTANCE` if you need two stacks on one branch.
 
 ## Containers: `wslc`, not docker
 
@@ -53,9 +38,17 @@ MongoDB runs in a `wslc` container (no compose support; `scripts/dev-db.sh` repl
 - `middleware/auth.js` — JWT `authenticateToken`. `utils/helpers.js` — `returnFailure()`.
 - `webinterface/src/` — Vue app (`views/`, `components/`, `store.js`).
 - `scripts/` — `dev.js` (dev stack), `dev-db.sh` (database).
+- `docs/` — one file per broad concept, each a standalone instruction manual.
+
+## Documenting your work
+
+Any broad concept (a subsystem, a workflow, an integration) gets its own file in `docs/`,
+written as an instruction manual someone can follow end to end. Keep this file as the
+short index and put the depth in `docs/`. See `docs/TEST_CREDENTIALS.md` for the format.
 
 ## Gotchas
 
 - `config.js` (gitignored) overrides `defaultconfig.js`; production reads env vars instead.
 - API errors return HTTP 200 with `{success: false}` via `returnFailure()`.
 - Dates use `moment`; watch UTC vs. local conversions and per-user timezone offsets.
+- Keep code comments to one or two sentences.

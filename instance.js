@@ -1,19 +1,18 @@
 /**
  * Per-instance environment resolution.
  *
- * AutoTaskCalendar supports running several fully isolated instances on one host at the
- * same time (for example, one per AI agent or per git worktree). Everything that could
- * collide between instances -- TCP ports, the MongoDB database, the container and volume
- * names, and the session cookie -- is derived from a single input:
+ * Several AutoTaskCalendar instances can run on one host at once (one per agent, or per
+ * git worktree). Ports, the database, container/volume names, and the session cookie are
+ * all derived from one instance name, so instances never collide.
  *
- *     AUTOTASKCALENDAR_INSTANCE   (default: "default")
- *
- * This module is the single source of truth for that derivation. Both the Node app and
- * scripts/dev-db.sh read it, so the two can never disagree about which port or database
- * belongs to an instance.
+ * The name is detected automatically from the git branch, so nothing needs to be exported
+ * by hand. Set AUTOTASKCALENDAR_INSTANCE to override it.
  */
 
 'use strict';
+
+const { execFileSync } = require('child_process');
+const path = require('path');
 
 const BASE_PORTS = {
     apiPort: 3000,
@@ -23,13 +22,14 @@ const BASE_PORTS = {
 };
 
 // Ports are allocated in blocks of 10, so offset N uses 3000+N*10, 8080+N*10, etc.
-// Offsets are capped so that the highest port (27017 + 49*10 = 27507) stays well clear
-// of the ephemeral port range.
 const PORT_STRIDE = 10;
 const MAX_OFFSET = 49;
 
+// Trunk branches map to the "default" instance, which keeps the historical ports.
+const DEFAULT_BRANCHES = new Set(['main', 'master', 'trunk']);
+
 /**
- * Reduce an arbitrary instance name to a filesystem/DNS/Mongo-safe token.
+ * Reduce an arbitrary name to a filesystem/DNS/Mongo-safe token.
  */
 function slugify(rawName) {
     const slug = String(rawName)
@@ -41,26 +41,55 @@ function slugify(rawName) {
 }
 
 /**
- * FNV-1a. Chosen because it is short, dependency-free, and stable across Node versions --
- * the same instance name must always map to the same ports, on every machine and forever.
+ * Detect the instance name from the current git branch, falling back to the directory
+ * name when git is unavailable (tarball checkout, detached HEAD, no git installed).
+ */
+function detectName() {
+    const explicit = process.env.AUTOTASKCALENDAR_INSTANCE;
+
+    if (explicit) {
+        return slugify(explicit);
+    }
+
+    let branch = '';
+
+    try {
+        branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+            cwd: __dirname,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'ignore'],
+        }).trim();
+    } catch {
+        // Not a git checkout, or git is missing: fall through to the directory name.
+    }
+
+    if (!branch || branch === 'HEAD') {
+        branch = path.basename(__dirname);
+    }
+
+    if (DEFAULT_BRANCHES.has(branch)) {
+        return 'default';
+    }
+
+    return slugify(branch);
+}
+
+/**
+ * FNV-1a. Short, dependency-free, and stable across Node versions, so a given name always
+ * maps to the same ports.
  */
 function hashToOffset(name) {
     let hash = 0x811c9dc5;
 
     for (let i = 0; i < name.length; i++) {
         hash ^= name.charCodeAt(i);
-        // 32-bit FNV prime multiply, kept in unsigned range.
         hash = Math.imul(hash, 0x01000193) >>> 0;
     }
 
-    // Offset 0 is reserved for the "default" instance so its ports match the historical
-    // 3000/8080/27017 values that docs, bookmarks, and OAuth redirect URIs assume.
+    // Offset 0 is reserved for the "default" instance.
     return (hash % MAX_OFFSET) + 1;
 }
 
-/**
- * Read a port from the environment, falling back to the offset-derived value.
- */
 function resolvePort(envVarName, basePort, offset) {
     const override = process.env[envVarName];
 
@@ -99,7 +128,7 @@ function resolveOffset(name) {
 }
 
 function resolveInstance() {
-    const name = slugify(process.env.AUTOTASKCALENDAR_INSTANCE || 'default');
+    const name = detectName();
     const offset = resolveOffset(name);
 
     const apiPort = resolvePort('AUTOTASKCALENDAR_API_PORT', BASE_PORTS.apiPort, offset);
@@ -121,8 +150,7 @@ function resolveInstance() {
         inspectPort,
         dbName,
         mongoUrl,
-        // Session cookies are scoped by host, not port, so two instances on localhost
-        // would otherwise clobber each other's login state.
+        // Cookies are scoped by host and ignore the port, so each instance needs its own.
         sessionCookieName: `autotaskcalendar.sid.${name}`,
         containerName: `autotaskcalendar-mongo-${name}`,
         volumeName: `autotaskcalendar-mongo-data-${name}`,

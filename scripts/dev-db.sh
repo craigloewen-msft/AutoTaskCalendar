@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
 #
-# Manage the per-instance MongoDB container for AutoTaskCalendar.
-#
-# Containers are run with `wslc`, which has no compose support, so this script plays the
-# role docker-compose used to. Every name and port is resolved from instance.js, so this
-# script and the Node app can never disagree about which database belongs to an instance.
+# Manage the per-instance MongoDB container. wslc has no compose support, so this script
+# plays that role. Names and ports come from instance.js.
 #
 # Usage: scripts/dev-db.sh <up|down|reset|status|logs|nuke-all>
-#
-# Set AUTOTASKCALENDAR_INSTANCE to pick an instance (default: "default").
 
 set -euo pipefail
 
@@ -21,8 +16,7 @@ if ! command -v wslc >/dev/null 2>&1; then
     exit 1
 fi
 
-# Pull the resolved instance descriptor out of instance.js. Emitting shell assignments and
-# eval-ing them keeps a single source of truth for ports and names.
+# Read the resolved instance descriptor from instance.js, the single source of truth.
 eval "$(node -e '
     const i = require("./instance");
     const emit = (k, v) => console.log(`${k}=${JSON.stringify(String(v))}`);
@@ -45,8 +39,7 @@ wslc_clean() {
     wslc "$@" 2>/dev/null | tr -d '\r'
 }
 
-# Extract the "Name" field from wslc's JSON output. Parsing JSON rather than the table
-# layout keeps this robust against column-formatting changes.
+# Extract the "Name" field from wslc's JSON output.
 json_names() {
     node -e '
         let raw = "";
@@ -78,8 +71,7 @@ volume_exists() {
     wslc_clean volume list --format json | json_names | grep -Fxq "$VOLUME_NAME"
 }
 
-# Block until mongod actually accepts connections. Without this, `npm run dev` races the
-# container's startup and the app's first connection attempt fails.
+# Block until mongod accepts connections, otherwise `npm run dev` races container startup.
 wait_for_ready() {
     local deadline=$((SECONDS + READINESS_TIMEOUT_SECONDS))
 
@@ -169,8 +161,7 @@ cmd_logs() {
     wslc logs -f "$CONTAINER_NAME"
 }
 
-# Tear down every instance, not just the current one. Handy for reclaiming a machine after
-# a swarm of agents has been through it.
+# Tear down every instance, not just the current one.
 cmd_nuke_all() {
     local containers volumes
 

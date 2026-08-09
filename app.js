@@ -29,14 +29,12 @@ if (process.env.NODE_ENV == 'production') {
     config.googleOAuthClientID = process.env.googleOAuthClientID;
     config.googleOAuthClientSecret = process.env.googleOAuthClientSecret;
     config.appUrl = process.env.appUrl;
-    // Azure App Service (and most PaaS hosts) inject the port to bind on.
+    // Azure App Service and most PaaS hosts inject the port to bind on.
     hostPort = parseInt(process.env.PORT, 10) || 8080;
     sessionCookieName = 'connect.sid';
 } else {
-    // Dev: every value is derived from AUTOTASKCALENDAR_INSTANCE so that multiple
-    // instances can run side by side. See instance.js.
+    // Derived per instance so multiple instances can run side by side. See instance.js.
     mongooseConnectionString = instance.mongoUrl;
-    // The browser talks to the Vue dev server, which proxies /api back to this process.
     config.appUrl = `http://localhost:${instance.webPort}`;
 }
 
@@ -54,8 +52,7 @@ app.use(session({
         autoRemove: 'interval',
         autoRemoveInterval: 60 * 24 * 7 // Once a week
     }),
-    // Cookies are scoped by host and ignore the port, so parallel dev instances on
-    // localhost need distinct cookie names to avoid clobbering each other's sessions.
+    // Cookies are scoped by host and ignore the port, so each instance needs its own.
     name: sessionCookieName,
     secret: config.sessionSecret,
     resave: false,
@@ -82,8 +79,7 @@ app.use('/api', authRoutes);
 app.use('/api', taskRoutes);
 app.use('/api', eventRoutes);
 
-// Start listening only once every route and auth handler is registered, so no request
-// can ever hit a half-configured app.
+// Listen only once routes and auth are registered, so no request can hit a half-built app.
 app.listen(hostPort, '0.0.0.0', () => {
     if (process.env.NODE_ENV == 'production') {
         console.log(`App listening on port ${hostPort} on all interfaces`);
