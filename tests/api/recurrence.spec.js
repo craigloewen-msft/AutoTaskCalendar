@@ -365,6 +365,84 @@ test.describe('recurrence expansion', () => {
         // History is never swept away, however old it gets.
         expect(await TaskDetails.findById(done._id)).not.toBeNull();
     });
+
+    test('an occurrence reports the rule its series is running on', async ({ seed, api }) => {
+        const data = await seed();
+        await schedule(api);
+
+        const list = await (await api.get('/api/getUserTasks')).json();
+        const occurrence = list.taskList.find(
+            (t) => t.seriesRef === data.named.weekdaysSeries._id.toString()
+        );
+
+        // Without this the edit modal shows "Does not repeat" for a task it is
+        // simultaneously labelling as part of a series.
+        expect(occurrence).toBeTruthy();
+        expect(occurrence.seriesRecurrence).toBeTruthy();
+        expect(occurrence.seriesRecurrence.freq).toBe('weekly');
+        expect(occurrence.seriesRecurrence.byWeekday).toEqual([1, 2]);
+    });
+
+    test('editing an occurrence does not corrupt its template', async ({ seed, api }) => {
+        const data = await seed();
+        await schedule(api);
+
+        const occurrences = await occurrencesOf(data.named.weekdaysSeries);
+        const occurrence = occurrences[0];
+
+        // Post the occurrence back nearly verbatim, exactly as the edit modal does.
+        const res = await api.post('/api/editTask', {
+            data: {
+                task: {
+                    _id: occurrence._id.toString(),
+                    title: 'Renamed through an occurrence',
+                    duration: 25,
+                    seriesRef: occurrence.seriesRef.toString(),
+                    occurrenceDate: occurrence.occurrenceDate,
+                    isSeriesTemplate: false,
+                    completed: false,
+                    scheduledDate: occurrence.scheduledDate,
+                },
+            },
+        });
+        expect((await res.json()).success).toBe(true);
+
+        const template = await TaskDetails.findById(data.named.weekdaysSeries._id);
+
+        // The edit lands on the template, but the occurrence's identity fields must not:
+        // copying them would make the template an occurrence of itself and break expansion.
+        expect(template.title).toBe('Renamed through an occurrence');
+        expect(template.duration).toBe(25);
+        expect(template.isSeriesTemplate).toBe(true);
+        expect(template.seriesRef).toBeNull();
+        expect(template.occurrenceDate).toBeNull();
+        expect(template.recurrence.freq).toBe('weekly');
+
+        // And the series still expands.
+        await schedule(api);
+        expect((await occurrencesOf(data.named.weekdaysSeries)).length).toBeGreaterThan(0);
+    });
+
+    test('a new series shows its occurrences without scheduling first', async ({ seed, api }) => {
+        await seed();
+
+        const res = await api.post('/api/createTask', {
+            data: {
+                title: 'Instant series',
+                duration: 30,
+                startDate: new Date().toISOString(),
+                dueDate: new Date(Date.now() + 86400000).toISOString(),
+                recurrence: { freq: 'weekly', interval: 1, byWeekday: [1, 2] },
+            },
+        });
+        const body = await res.json();
+
+        // The response itself must already contain the occurrences, otherwise a new
+        // repeating task looks like it silently vanished until "Schedule Tasks" is pressed.
+        const mine = body.taskList.filter((t) => t.title === 'Instant series');
+        expect(mine.length).toBeGreaterThan(0);
+        expect(mine.every((t) => !!t.seriesRef)).toBe(true);
+    });
 });
 
 test.describe('recurrence validation through the API', () => {

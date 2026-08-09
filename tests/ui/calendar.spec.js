@@ -64,6 +64,102 @@ test.describe('calendar page', () => {
         // DayPilot renders each scheduled block as an event div.
         await expect(page.locator('.calendar_default_event').first()).toBeVisible();
     });
+
+    test('never renders an "Invalid Date" group header', async ({ seed, loggedInPage: page }) => {
+        await seed();
+
+        await page.goto('/#/calendar');
+        await expect(page.locator('.task-item').first()).toBeVisible();
+
+        // Unschedulable tasks have no scheduledDate; formatting one used to produce the
+        // literal string "Invalid Date" as a sidebar heading.
+        await expect(page.locator('.task-date-header', { hasText: 'Invalid Date' })).toHaveCount(0);
+        await expect(page.locator('.task-date-header', { hasText: 'UNSCHEDULED' })).toBeVisible();
+    });
+
+    test('creates a weekly task on chosen weekdays through the modal', async ({ seed, loggedInPage: page }) => {
+        await seed();
+
+        await page.goto('/#/calendar');
+        await page.click('button:has-text("Add Task")');
+
+        await page.fill('#task-title', 'Mon and Tue only');
+        await page.fill('#task-due-date', isoDay(3));
+        await page.fill('#task-duration', '30');
+
+        await page.click('.advanced-options-toggle');
+        await page.selectOption('#task-repeat', 'weekly');
+
+        // Start from a known state: clear whatever day defaulted on, then pick Mon + Tue.
+        const selected = page.locator('.weekday-pill.selected');
+        await expect(selected).toHaveCount(1);
+
+        await page.click('.weekday-pill[data-day="Monday"]');
+        await page.click('.weekday-pill[data-day="Tuesday"]');
+        const initial = await selected.first().getAttribute('data-day');
+        if (initial !== 'Monday' && initial !== 'Tuesday') {
+            await page.click(`.weekday-pill[data-day="${initial}"]`);
+        }
+
+        await expect(page.locator('[data-test=repeat-summary]')).toContainText(
+            'Every week on Monday and Tuesday'
+        );
+
+        await page.click('.modal-footer button:has-text("OK")');
+
+        // Occurrences appear immediately, without pressing "Schedule Tasks" first.
+        await expect(page.locator('.task-list')).toContainText('Mon and Tue only');
+        await expect(
+            page.locator('.task-item', { hasText: 'Mon and Tue only' }).first().locator('.recurring-icon')
+        ).toBeVisible();
+    });
+
+    test('warns when a chosen day is not a working day, but still saves', async ({ seed, loggedInPage: page }) => {
+        await seed();
+
+        await page.goto('/#/calendar');
+        await page.click('button:has-text("Add Task")');
+
+        await page.fill('#task-title', 'Weekend chore');
+        await page.fill('#task-due-date', isoDay(3));
+        await page.fill('#task-duration', '30');
+
+        await page.click('.advanced-options-toggle');
+        await page.selectOption('#task-repeat', 'weekly');
+
+        // The seeded user works Monday to Friday, so Saturday is flagged before you pick it.
+        await expect(page.locator('.weekday-pill[data-day="Saturday"]')).toHaveClass(/non-working/);
+        await expect(page.locator('[data-test=repeat-warning]')).toHaveCount(0);
+
+        await page.click('.weekday-pill[data-day="Saturday"]');
+
+        await expect(page.locator('[data-test=repeat-warning]')).toContainText(
+            'Saturday is not among your working days'
+        );
+
+        // A warning, not a validation error: the rule still saves.
+        await page.click('.modal-footer button:has-text("OK")');
+        await expect(page.locator('.task-list')).toContainText('Weekend chore');
+    });
+
+    test('shows the series banner and the rule when opening an occurrence', async ({ seed, loggedInPage: page }) => {
+        await seed();
+
+        await page.goto('/#/calendar');
+        await page.click('button:has-text("Schedule Tasks")');
+
+        const occurrence = page.locator('.task-item', { hasText: 'Team standup' }).first();
+        await expect(occurrence).toBeVisible();
+        await occurrence.click();
+
+        await expect(page.locator('[data-test=series-banner]')).toContainText('repeating series');
+        // The occurrence carries no rule of its own, so this proves the series' rule is
+        // surfaced rather than the editor claiming the task does not repeat.
+        await expect(page.locator('#task-repeat')).toHaveValue('weekly');
+        await expect(page.locator('[data-test=repeat-summary]')).toContainText(
+            'Every week on Monday and Tuesday'
+        );
+    });
 });
 
 // A yyyy-mm-dd string N days from today, which is what <input type="date"> expects.

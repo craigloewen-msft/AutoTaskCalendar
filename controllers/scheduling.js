@@ -289,9 +289,11 @@ async function scheduleFullTask(context, task, taskIndex) {
     pendingTasks.splice(taskIndex, 1);
     scheduledTaskIds.add(task._id.toString());
 
-    // Update task's scheduled date
+    // Update task's scheduled date. Written with updateOne rather than doc.save() because
+    // a concurrent scheduling run can prune this occurrence mid-loop; save() would throw
+    // DocumentNotFoundError and fail the whole request, while this is simply a no-op.
     task.scheduledDate = currentTime;
-    await task.save();
+    await TaskDetails.updateOne({ _id: task._id }, { $set: { scheduledDate: currentTime } });
 
     // Advance time
     context.currentTime = event.endDate;

@@ -16,7 +16,37 @@ async function getTaskListFromUsername(inUsername) {
         options: { sort: { dueDate: 1, priority: 1 } },
     });
 
-    return user.taskList;
+    return attachSeriesRules(user.taskList);
+}
+
+/**
+ * Occurrences do not carry the rule (their template owns it), so the editor would show
+ * "Does not repeat" for a task the UI is simultaneously calling part of a series. Attach
+ * the owning rule as `seriesRecurrence` purely for display.
+ */
+async function attachSeriesRules(taskList) {
+    if (!taskList || taskList.length === 0) {
+        return taskList;
+    }
+
+    const seriesIds = [
+        ...new Set(taskList.filter((t) => t.seriesRef).map((t) => t.seriesRef.toString())),
+    ];
+
+    if (seriesIds.length === 0) {
+        return taskList;
+    }
+
+    const templates = await TaskDetails.find({ _id: { $in: seriesIds } }, 'recurrence');
+    const ruleById = new Map(templates.map((t) => [t._id.toString(), t.recurrence]));
+
+    return taskList.map((task) => {
+        if (!task.seriesRef) return task;
+
+        const plain = task.toObject ? task.toObject() : { ...task };
+        plain.seriesRecurrence = ruleById.get(task.seriesRef.toString()) || null;
+        return plain;
+    });
 }
 
 const completeTask = async (task, user) => {

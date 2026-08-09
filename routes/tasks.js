@@ -3,7 +3,8 @@ const router = express.Router();
 const { UserDetails, TaskDetails, ProjectDetails } = require('../models');
 const { returnFailure } = require('../utils/helpers');
 const { getTaskListFromUsername, completeTask, generateTaskEvents } = require('../controllers/taskController');
-const { validateRecurrence, normaliseRecurrence } = require('../controllers/recurrence');
+const { validateRecurrence, normaliseRecurrence, expandRecurrences } = require('../controllers/recurrence');
+const { SCHEDULING_HORIZON_DAYS } = require('../controllers/scheduling');
 
 // Resolve an optional Compass project, making sure it belongs to the caller.
 async function resolveProjectRef(projectRef, userId) {
@@ -138,6 +139,13 @@ function createTaskRoutes(config, authenticateToken) {
                 projectRef: resolvedProject,
             });
             await task.save();
+
+            // Materialise straight away, so a new series shows its occurrences without
+            // waiting for the user to press "Schedule Tasks".
+            if (task.isSeriesTemplate) {
+                await expandRecurrences(user, SCHEDULING_HORIZON_DAYS);
+            }
+
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.id);
 
@@ -201,12 +209,28 @@ function createTaskRoutes(config, authenticateToken) {
             // template that owns the rule.
             let targetId = task._id;
             const existing = await TaskDetails.findOne({ _id: task._id, userRef: user._id });
-            if (existing && existing.seriesRef) {
+            const isOccurrence = !!(existing && existing.seriesRef);
+            if (isOccurrence) {
                 targetId = existing.seriesRef;
             }
 
             const update = { ...task };
             delete update._id;
+            delete update.seriesRecurrence;
+
+            // Per-occurrence state must never be copied onto the template: doing so would
+            // mark the template as an occurrence of itself and corrupt the series.
+            if (isOccurrence) {
+                delete update.seriesRef;
+                delete update.occurrenceDate;
+                delete update.isSeriesTemplate;
+                delete update.completed;
+                delete update.completedDate;
+                delete update.scheduledDate;
+                // An occurrence's dates come from the rule, so they are not authored here.
+                delete update.dueDate;
+                delete update.startDate;
+            }
 
             if (task.recurrence !== undefined) {
                 update.recurrence = normaliseRecurrence(task.recurrence);
@@ -231,6 +255,11 @@ function createTaskRoutes(config, authenticateToken) {
 
             if (!actualTask) {
                 return res.send(returnFailure('Task not found'));
+            }
+
+            // Reflect a changed rule immediately, as on create.
+            if (task.recurrence !== undefined) {
+                await expandRecurrences(user, SCHEDULING_HORIZON_DAYS);
             }
 
             return res.json({ success: true });

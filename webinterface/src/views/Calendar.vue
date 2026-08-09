@@ -40,6 +40,7 @@
                 v-on:click="openEditTaskModal(task)"
               >
                 <span class="task-title">
+                  <span v-if="task.seriesRef" class="recurring-icon" title="Part of a repeating series" role="img" aria-label="Repeating task">↻</span>
                   <span v-if="task.dependsOn && task.dependsOn.length > 0" class="dependency-icon" title="Has dependencies" role="img" aria-label="Has dependencies">🔗</span>
                   {{ task.title }}
                 </span>
@@ -76,6 +77,10 @@
         <div class="modal-content">
           <div class="modal-body">
             <div v-if="input.error">{{ input.error }}</div>
+            <div v-if="isSeriesTask" class="series-banner" data-test="series-banner">
+              <span aria-hidden="true">&#8635;</span>
+              Part of a repeating series &mdash; changes apply to all occurrences.
+            </div>
             <form ref="form" @submit.stop.prevent="handleSubmit">
               <div class="form-group">
                 <label for="task-title">Task Title*</label>
@@ -163,21 +168,10 @@
                       id="task-start-date"
                     />
                   </div>
-                  <div class="form-group">
-                    <label for="task-repeat">Repeat</label>
-                    <select
-                      v-model="input.repeat"
-                      class="form-control"
-                      id="task-repeat"
-                    >
-                      <option disabled value="">Please select one</option>
-                      <option value="">None</option>
-                      <option value="daily">Daily</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="yearly">Yearly</option>
-                    </select>
-                  </div>
+                  <RepeatEditor
+                    v-model="input.recurrence"
+                    :working-days="userWorkingDays"
+                  />
                   <div class="form-group">
                     <label for="task-notes">Notes</label>
                     <input
@@ -304,6 +298,11 @@
 <script>
 import { DayPilot, DayPilotCalendar } from "@daypilot/daypilot-lite-vue";
 import { BButton, BModal, BFormCheckbox } from 'bootstrap-vue-next';
+import RepeatEditor from "../components/RepeatEditor.vue";
+
+// The sidebar shows this far ahead. The scheduler materialises 60 days of recurring
+// occurrences, which would otherwise make the list unusably long.
+const SIDEBAR_WINDOW_DAYS = 14;
 
 export default {
   name: "Calendar",
@@ -311,7 +310,8 @@ export default {
     DayPilotCalendar,
     BButton,
     BModal,
-    BFormCheckbox
+    BFormCheckbox,
+    RepeatEditor
   },
   data() {
     return {
@@ -423,6 +423,7 @@ export default {
         taskBreakUpTaskChunkDuration: 30,
         error: null,
         repeat: null,
+        recurrence: null,
         followUpDays: null,
         taskIsBacklog: false,
         dependsOn: [],
@@ -585,7 +586,7 @@ export default {
           notes: this.input.taskNotes,
           breakUpTask: this.input.taskBreakUpTask,
           breakUpTaskChunkDuration: this.input.taskBreakUpTaskChunkDuration,
-          repeat: this.input.repeat,
+          recurrence: this.input.recurrence,
           isBacklog: this.input.taskIsBacklog,
           dependsOn: this.input.dependsOn || [],
           priority: this.input.taskPriority != null ? this.input.taskPriority : 100,
@@ -657,7 +658,7 @@ export default {
       this.selectedTask.breakUpTaskChunkDuration =
         this.input.taskBreakUpTaskChunkDuration;
 
-      this.selectedTask.repeat = this.input.repeat;
+      this.selectedTask.recurrence = this.input.recurrence;
       this.selectedTask.isBacklog = this.input.taskIsBacklog;
       this.selectedTask.dependsOn = this.input.dependsOn || [];
       this.selectedTask.priority = this.input.taskPriority != null ? this.input.taskPriority : 100;
@@ -819,7 +820,9 @@ export default {
       this.input.taskBreakUpTaskChunkDuration =
         inputTask.breakUpTaskChunkDuration;
 
-      this.input.repeat = inputTask.repeat;
+      // An occurrence carries no rule of its own; the API attaches its series' rule as
+      // seriesRecurrence so the editor shows what is actually in force.
+      this.input.recurrence = inputTask.recurrence || inputTask.seriesRecurrence || null;
       this.input.taskIsBacklog = inputTask.isBacklog || false;
       this.input.dependsOn = inputTask.dependsOn || [];
       this.input.taskPriority = inputTask.priority != null ? inputTask.priority : 100;
@@ -891,7 +894,15 @@ export default {
       if (task.isBacklog && !task.scheduledDate) {
         return "Backlog";
       }
+      // Anything the scheduler could not place has no scheduledDate. Without this the
+      // date below formats as the literal string "Invalid Date" and becomes a header.
+      if (!task.scheduledDate) {
+        return "Unscheduled";
+      }
       const taskDate = new Date(task.scheduledDate);
+      if (Number.isNaN(taskDate.getTime())) {
+        return "Unscheduled";
+      }
       return taskDate.toLocaleDateString("en-US", {
         weekday: "long",
         year: "numeric",
@@ -948,6 +959,12 @@ export default {
 
       return groups;
     },
+    userWorkingDays() {
+      return this.$store.state.user?.workingDays || [];
+    },
+    isSeriesTask() {
+      return !!(this.selectedTask && this.selectedTask.seriesRef);
+    },
     availableTasksForDependencies() {
       if (!this.taskList) return [];
       
@@ -962,7 +979,21 @@ export default {
     taskGroupedByDate() {
       const groupedTasks = {};
       if (this.taskList) {
-        this.taskList.forEach((task) => {
+        // The scheduler materialises 60 days of recurring occurrences; showing them all
+        // would bury the list, so the sidebar keeps a shorter window. Backlog and
+        // unscheduled tasks are always kept, since they have no date to fall outside it.
+        const windowEnd = new Date();
+        windowEnd.setDate(windowEnd.getDate() + SIDEBAR_WINDOW_DAYS);
+        windowEnd.setHours(23, 59, 59, 999);
+
+        const visibleTasks = this.taskList.filter((task) => {
+          if (!task.scheduledDate) return true;
+          const scheduled = new Date(task.scheduledDate);
+          if (Number.isNaN(scheduled.getTime())) return true;
+          return scheduled <= windowEnd;
+        });
+
+        visibleTasks.forEach((task) => {
           const date = this.getTaskDate(task);
           if (!groupedTasks[date]) {
             groupedTasks[date] = [];
@@ -984,8 +1015,16 @@ export default {
     tasksDatesArray() {
       if (this.taskGroupedByDate) {
         let taskDateArray = Object.keys(this.taskGroupedByDate);
-        // Sort taskDateArray by date
+        // "Backlog" and "Unscheduled" are labels, not dates, so they sort to the end
+        // rather than becoming NaN comparisons.
+        const labels = ["Backlog", "Unscheduled"];
         taskDateArray.sort(function (a, b) {
+          const aIsLabel = labels.includes(a);
+          const bIsLabel = labels.includes(b);
+          if (aIsLabel || bIsLabel) {
+            if (aIsLabel && bIsLabel) return a.localeCompare(b);
+            return aIsLabel ? 1 : -1;
+          }
           return new Date(a) - new Date(b);
         });
         return taskDateArray;
@@ -1267,10 +1306,24 @@ export default {
   color: #e0e0e0;
 }
 
-.dependency-icon {
+.dependency-icon,
+.recurring-icon {
   margin-right: 6px;
   font-size: 14px;
   opacity: 0.8;
+}
+
+.series-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(102, 126, 234, 0.15);
+  border-left: 3px solid #667eea;
+  color: #c7d2fe;
+  font-size: 13px;
 }
 
 .task-badge,

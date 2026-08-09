@@ -34,7 +34,12 @@ All of it belongs to `testuser` unless noted:
 - **20 active tasks** across four priority levels and ten due dates.
 - **5 backlog tasks** with no due date.
 - **A dependency chain** — research → draft → publish.
-- **Repeating tasks** — one each of daily, weekly, and monthly.
+- **Repeating tasks** — one each of daily, weekly, and monthly, using the legacy `repeat`
+  string so the on-the-fly migration path stays covered.
+- **Recurrence series** — three rule-based templates (`data.named.weekdaysSeries` Mon+Tue,
+  `fortnightlySeries` every 2 weeks, `monthlySeries` 1st and last day). The scheduler
+  materialises their occurrences; the templates themselves never appear in the task list.
+  See `docs/RECURRING_TASKS.md`.
 - **70 completed tasks** spread over 90 days, kept as completion history and to prove the
   scheduler never schedules a completed task.
 - **Edge cases** — a zero-duration task, one longer than the working day, one overdue by a

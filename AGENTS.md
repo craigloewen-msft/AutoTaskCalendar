@@ -45,6 +45,7 @@ dataset.
 - `instance.js` — per-instance ports/DB names. Single source of truth.
 - `routes/` — HTTP endpoints; `controllers/` — business logic.
 - `controllers/scheduling.js` — the task-scheduling algorithm. Highest-risk code.
+- `controllers/recurrence.js` — recurrence rules and occurrence expansion. See `docs/RECURRING_TASKS.md`.
 - `models/index.js` — all Mongoose schemas. Import these; never redefine.
 - `middleware/auth.js` — JWT `authenticateToken`. `utils/helpers.js` — `returnFailure()`,
   `parseDate()`.
@@ -66,4 +67,5 @@ short index and put the depth in `docs/`. See `docs/TEST_CREDENTIALS.md` for the
 - `config.js` (gitignored) overrides `defaultconfig.js`; production reads env vars instead.
 - API errors return HTTP 200 with `{success: false}` via `returnFailure()`.
 - Dates use `moment`; watch UTC vs. local conversions and per-user timezone offsets.
+- Recurrence date maths is server-local: never use UTC getters or `+ MS_PER_DAY` (DST drift).
 - Keep code comments to one or two sentences.
