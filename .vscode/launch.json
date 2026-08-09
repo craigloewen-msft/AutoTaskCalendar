@@ -5,8 +5,10 @@
             "type": "chrome",
             "request": "launch",
             "name": "Launch Edge against localhost",
+            // Port 8080 is the "default" instance. If you set AUTOTASKCALENDAR_INSTANCE,
+            // run `npm run db:status` to find your web port and update this URL.
             "url": "http://localhost:8080",
-            "webRoot": "${workspaceFolder}/webinterface/src",
+            "webRoot": "${workspaceFolder}/webinterface/src"
         },
         {
             "type": "node",
@@ -14,7 +16,7 @@
             "name": "Node: Nodemon",
             "processId": "${command:PickProcess}",
             "restart": true,
-            "protocol": "inspector",
+            "protocol": "inspector"
         }
     ],
     "compounds": [

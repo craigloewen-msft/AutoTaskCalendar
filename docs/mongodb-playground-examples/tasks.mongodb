@@ -1,0 +1,14 @@
+// MongoDB Playground for AutoTaskCalendar
+//
+// Select the database for your instance. The name is derived from
+// AUTOTASKCALENDAR_INSTANCE -- run `npm run db:status` to see yours.
+use('autotaskcalendar_default');
+
+// All incomplete, non-backlog tasks, soonest deadline first.
+db.taskInfo.find({ completed: false, isBacklog: false }).sort({ dueDate: 1 });
+
+// Tasks that are scheduled but overdue.
+db.taskInfo.find({ completed: false, dueDate: { $lt: new Date() } });
+
+// Events synced in from Google Calendar.
+db.eventInfo.find({ type: 'calendar' }).sort({ startDate: 1 });

@@ -1,9 +1,10 @@
 const mongoose = require('mongoose');
-const fs = require('fs');
 const moment = require('moment');
 
-// Get config
-const config = fs.existsSync('./config.js') ? require('./config') : require('./defaultconfig');
+// Schemas live in models/ -- always import them so this script cannot drift from the
+// definitions the running app uses.
+const { UserDetails, TaskDetails, EventDetails } = require('./models');
+const instance = require('./instance');
 
 // Set up MongoDB connection
 let mongooseConnectionString = '';
@@ -11,76 +12,14 @@ let mongooseConnectionString = '';
 if (process.env.NODE_ENV == 'production') {
     mongooseConnectionString = process.env.prodMongoDBConnectionString;
 } else {
-    // Use localhost for direct docker runs, 'db' for docker-compose
-    mongooseConnectionString = config.devMongoDBConnectionString.replace('mongodb://db/', 'mongodb://localhost/');
+    // Derived per instance from AUTOTASKCALENDAR_INSTANCE. See instance.js.
+    mongooseConnectionString = instance.mongoUrl;
 }
-
-// Import schemas from app.js
-const Schema = mongoose.Schema;
-
-const UserDetail = new Schema({
-    username: { type: String, index: true },
-    password: String,
-    email: String,
-    lastLoginDate: Date,
-    workingStartTime: Date,
-    workingDuration: Number,
-    workingDays: [String],
-    googleAccessToken: String,
-    googleRefreshToken: String,
-    selectedCalendars: [String],
-}, { collection: 'usercollection' });
-
-UserDetail.virtual('taskList', {
-    ref: 'taskInfo',
-    localField: '_id',
-    foreignField: 'userRef'
-});
-
-UserDetail.virtual('eventList', {
-    ref: 'eventInfo',
-    localField: '_id',
-    foreignField: 'userRef'
-});
-
-const TaskDetail = new Schema({
-    title: String,
-    dueDate: Date,
-    notes: String,
-    duration: Number,
-    startDate: Date,
-    breakUpTask: Boolean,
-    breakUpTaskChunkDuration: Number,
-    completed: Boolean,
-    completedDate: Date,
-    scheduledDate: Date,
-    repeat: String,
-    isBacklog: Boolean,
-    userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
-});
-
-const EventDetail = new Schema({
-    title: String,
-    startDate: Date,
-    endDate: Date,
-    notes: String,
-    type: String,
-    externalEventID: String,
-    userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
-    taskRef: { type: Schema.Types.ObjectId, ref: 'taskInfo' },
-});
-
-const passportLocalMongoose = require('passport-local-mongoose');
-UserDetail.plugin(passportLocalMongoose);
-
-const UserDetails = mongoose.model('userInfo', UserDetail, 'userInfo');
-const TaskDetails = mongoose.model('taskInfo', TaskDetail, 'taskInfo');
-const EventDetails = mongoose.model('eventInfo', EventDetail, 'eventInfo');
 
 async function seedDatabase() {
     try {
         console.log('Connecting to MongoDB...');
-        await mongoose.connect(mongooseConnectionString, { useNewUrlParser: true, useUnifiedTopology: true });
+        await mongoose.connect(mongooseConnectionString);
         console.log('Connected to MongoDB');
 
         // Check if test user already exists

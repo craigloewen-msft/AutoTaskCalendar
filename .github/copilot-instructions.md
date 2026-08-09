@@ -62,31 +62,33 @@ The main application file contains:
 
 ## Development Setup
 
+See [AGENTS.md](../AGENTS.md) for the authoritative quick reference; this section must
+stay consistent with it.
+
 ### Prerequisites
 - Node.js (latest LTS version recommended)
-- MongoDB (can run via Docker)
-- Optional: Use GitHub Codespaces or VS Code Dev Containers
+- `wslc` to run the MongoDB container (there is no docker/compose setup)
 
 ### Quick Start
-
-**Using Codespaces/Dev Containers:**
 ```bash
-npm run dev
+# Required if anyone else might be running this repo on the same machine.
+export AUTOTASKCALENDAR_INSTANCE=<unique-name>
+
+npm install
+cd webinterface && npm install && cd ..
+
+npm run seed   # optional test data: testuser / testpassword
+npm run dev    # starts MongoDB, backend, and frontend together
 ```
 
-**Local Development:**
-1. Start MongoDB:
-   ```bash
-   sudo docker run -d -p 27017:27017 --name mongo mongo:latest
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   cd webinterface && npm install
-   ```
-3. Configure `defaultconfig.js` or create `config.js` for custom settings
-4. Run backend: `node app.js` (port 3000)
-5. Run frontend: `cd webinterface && npm run serve` (port 8080)
+Ports and the database name are derived per instance from `AUTOTASKCALENDAR_INSTANCE`
+(see `instance.js`); the `default` instance uses 8080/3000/27017. Run `npm run db:status`
+to print the values for the current instance. Never hardcode these ports in new code --
+read them from `instance.js` or the `AUTOTASKCALENDAR_*_PORT` environment variables.
+
+### Database Commands
+`npm run db:up | db:down | db:reset | db:status | db:logs` wrap `scripts/dev-db.sh`,
+which manages a per-instance MongoDB container through `wslc`.
 
 ### Build Commands
 - **Full build**: `npm run build` - Builds Vue frontend and moves dist to root
@@ -174,16 +176,21 @@ return res.json(returnFailure('Error message'));
 - Don't expose internal errors to clients
 
 ### Testing
-- Run `npm run build` to test and ensure the website builds correctly
+- Run `npm run build` to ensure the website still builds correctly
+- There is no automated test suite; verify behaviour by running the app
 
 ## File Organization
 
 ```
 /
 ├── app.js                    # Main backend application
+├── instance.js               # Per-instance ports / database names (single source of truth)
 ├── defaultconfig.js          # Default configuration (template)
 ├── config.js                 # Local config (create from defaultconfig.js, not committed)
 ├── package.json              # Backend dependencies
+├── scripts/
+│   ├── dev.js                # Starts backend + frontend for the current instance
+│   └── dev-db.sh             # Per-instance MongoDB container, managed with wslc
 ├── webinterface/             # Vue.js frontend
 │   ├── src/
 │   │   ├── components/      # Reusable Vue components
@@ -192,7 +199,6 @@ return res.json(returnFailure('Error message'));
 │   │   ├── store.js         # Vuex store
 │   │   └── App.vue          # Root component
 │   └── package.json         # Frontend dependencies
-├── .devcontainer/           # Dev container configuration
 └── .github/                 # GitHub configurations
 ```
 

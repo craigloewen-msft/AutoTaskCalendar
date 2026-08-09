@@ -1,4 +1,7 @@
 {
+  "name": "autotaskcalendar",
+  "private": true,
+  "description": "Web interface to manage daily tasks and automatically schedule them on your calendar.",
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
     "axios": "^1.13.2",
@@ -17,10 +20,13 @@
   },
   "scripts": {
     "build": "cd webinterface && npm install && npm run build && cd .. && rm -rf ./dist && mv ./webinterface/dist .",
-    "dev": "concurrently --kill-others \"nodemon --inspect app.js\" \"cd webinterface; npm run serve\"",
-    "seed": "node seedDatabase.js"
+    "dev": "npm run db:up && node scripts/dev.js",
+    "seed": "npm run db:up && node seedDatabase.js",
+    "db:up": "scripts/dev-db.sh up",
+    "db:down": "scripts/dev-db.sh down",
+    "db:reset": "scripts/dev-db.sh reset",
+    "db:status": "scripts/dev-db.sh status",
+    "db:logs": "scripts/dev-db.sh logs"
   },
-  "devDependencies": {
-    "concurrently": "^9.2.1"
-  }
+  "devDependencies": {}
 }

@@ -1,6 +1,11 @@
+# Local config, overrides defaultconfig.js
 config.js
+
 node_modules/
-.vscode/
 dist/
 nohup.out
 .phoenix/
+
+# Editor settings are personal, but the shared debug config is committed.
+.vscode/*
+!.vscode/launch.json
