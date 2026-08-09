@@ -4,7 +4,7 @@ config.js
 node_modules/
 dist/
 nohup.out
-.phoenix/
+/.phoenix
 
 # Editor settings are personal, but the shared debug config is committed.
 .vscode/*
