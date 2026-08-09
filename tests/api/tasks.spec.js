@@ -139,7 +139,7 @@ test.describe('tasks', () => {
         expect(titles(body.taskList)).not.toContain(task.title);
     });
 
-    test('completing a repeating task creates the next occurrence', async ({ seed, api }) => {
+    test('completing a legacy repeating task creates the next occurrence', async ({ seed, api }) => {
         await seed();
 
         const before = await (await api.get('/api/getUserTasks')).json();
@@ -149,7 +149,9 @@ test.describe('tasks', () => {
         const res = await api.post('/api/completeTask', { data: { taskId: weekly._id } });
         const body = await res.json();
 
-        // The completed one is gone, but a fresh copy with the same title took its place.
+        // A legacy `repeat` string still clones itself forward on completion, so nothing
+        // breaks before the scheduler promotes it to a series. Rule-based recurrence is
+        // covered by tests/api/recurrence.spec.js instead.
         const successors = body.taskList.filter((t) => t.title === weekly.title);
         expect(successors).toHaveLength(1);
         expect(successors[0]._id).not.toBe(weekly._id);

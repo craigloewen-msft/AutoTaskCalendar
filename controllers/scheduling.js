@@ -1,4 +1,6 @@
 const { TaskDetails, EventDetails } = require('../models');
+const moment = require('moment');
+const { expandRecurrences } = require('./recurrence');
 
 // ============================================================================
 // Constants
@@ -7,7 +9,10 @@ const { TaskDetails, EventDetails } = require('../models');
 const MS_PER_MINUTE = 60 * 1000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
-const SCHEDULING_HORIZON_DAYS = 14;
+// Bounds both the existing-events query and how far recurring series are materialised.
+// These must stay equal: the scheduling loop itself is unbounded, so a shorter event
+// window would let it book on top of real calendar events past the horizon.
+const SCHEDULING_HORIZON_DAYS = 60;
 const MAX_SCHEDULING_ITERATIONS = 10000;
 const MAX_NO_PROGRESS_ITERATIONS = 100;
 const VERY_LARGE_TIME_MS = 999 * MS_PER_DAY;
@@ -366,8 +371,9 @@ function handleNonWorkingDay(context) {
         return false;
     }
 
-    // Move to next day
-    context.currentTime = new Date(currentTime.getTime() + MS_PER_DAY);
+    // Move to the start of the next day. moment's add() is DST-safe; adding MS_PER_DAY
+    // drifts an hour across a DST boundary and eventually skips or repeats a date.
+    context.currentTime = moment(currentTime).add(1, 'day').startOf('day').toDate();
     return true;
 }
 
@@ -389,8 +395,8 @@ function handleOutsideWorkingHours(context) {
     }
 
     if (afterEnd) {
-        // Move to start of next day
-        context.currentTime = new Date(start.getTime() + MS_PER_DAY);
+        // Move to the start of the next day's working hours. DST-safe via moment.
+        context.currentTime = moment(start).add(1, 'day').toDate();
         return { handled: true, workingHours: { start, end } };
     }
 
@@ -450,11 +456,13 @@ function trackProgress(context) {
  */
 async function buildSchedulingContext(user) {
     const currentTime = new Date();
-    const schedulingHorizon = new Date(currentTime.getTime() + SCHEDULING_HORIZON_DAYS * MS_PER_DAY);
+    const schedulingHorizon = moment(currentTime).add(SCHEDULING_HORIZON_DAYS, 'days').toDate();
 
-    // Get all incomplete tasks to build dependency map
+    // Get all incomplete tasks to build dependency map. Series templates are rule holders,
+    // never work items, so they are excluded everywhere tasks are treated as schedulable.
     const allIncompleteTasks = await TaskDetails.find({
         userRef: user._id,
+        isSeriesTemplate: { $ne: true },
         $or: [{ completed: false }, { completed: null }]
     });
 
@@ -466,6 +474,7 @@ async function buildSchedulingContext(user) {
     // Get regular tasks (sorted by deadline) and backlog tasks (sorted by start date)
     const regularTasks = await TaskDetails.find({
         userRef: user._id,
+        isSeriesTemplate: { $ne: true },
         $and: [
             { $or: [{ completed: false }, { completed: null }] },
             { $or: [{ isBacklog: false }, { isBacklog: null }] }
@@ -474,6 +483,7 @@ async function buildSchedulingContext(user) {
 
     const backlogTasks = await TaskDetails.find({
         userRef: user._id,
+        isSeriesTemplate: { $ne: true },
         $or: [{ completed: false }, { completed: null }],
         isBacklog: true,
     }).sort({ startDate: 1 });
@@ -520,6 +530,10 @@ async function generateTaskEvents(user) {
     if (!user.workingDays || user.workingDays.length === 0) {
         return;
     }
+
+    // Materialise recurring series first, so occurrences are ordinary task documents by
+    // the time the scheduling loop sees them.
+    await expandRecurrences(user, SCHEDULING_HORIZON_DAYS);
 
     // Clear existing task events
     await EventDetails.deleteMany({
@@ -581,6 +595,7 @@ async function generateTaskEvents(user) {
 
 module.exports = {
     generateTaskEvents,
+    SCHEDULING_HORIZON_DAYS,
     // Export helpers for testing
     areDependenciesMet,
     validateNoCycles,

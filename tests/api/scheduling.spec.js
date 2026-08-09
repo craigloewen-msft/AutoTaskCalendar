@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const moment = require('moment');
 
 const { test, expect } = require('../fixtures');
 const { EventDetails, TaskDetails, UserDetails } = require('../../models');
@@ -257,5 +258,121 @@ test.describe('scheduling', () => {
 
         const user = await loadUser();
         expect(await taskEvents(user)).toHaveLength(0);
+    });
+
+    test('never overlaps a calendar event beyond the old 14 day horizon', async ({ seed, api }) => {
+        const data = await seed();
+
+        // Regression: the events query used a 14 day horizon while the scheduling loop was
+        // unbounded, so anything scheduled past day 14 was placed with no knowledge of the
+        // user's real calendar and could sit straight on top of it.
+        const far = moment().add(30, 'days').startOf('day').hour(10);
+        const farEvent = await EventDetails.create({
+            title: 'Far future all-hands',
+            startDate: far.toDate(),
+            endDate: far.clone().add(2, 'hours').toDate(),
+            type: 'calendar',
+            userRef: data.primary.user._id,
+        });
+
+        await schedule(api);
+
+        const user = await loadUser();
+        const scheduled = await taskEvents(user);
+
+        for (const task of scheduled) {
+            const overlaps =
+                task.startDate.getTime() < farEvent.endDate.getTime() &&
+                task.endDate.getTime() > farEvent.startDate.getTime();
+
+            expect(overlaps, `"${task.title}" overlaps "${farEvent.title}"`).toBe(false);
+        }
+    });
+
+    test('an occurrence is never scheduled before its occurrence date', async ({ seed, api }) => {
+        const data = await seed();
+        await schedule(api);
+
+        const user = await loadUser();
+        const events = await taskEvents(user);
+
+        const occurrences = await TaskDetails.find({
+            seriesRef: data.named.weekdaysSeries._id,
+        });
+        expect(occurrences.length).toBeGreaterThan(0);
+        const byId = new Map(occurrences.map((o) => [o._id.toString(), o]));
+
+        // The scheduler is best-effort on deadlines: a busy day pushes work later, exactly
+        // as it does for any overdue task. What it must never do is schedule an occurrence
+        // EARLY, before the day it is for.
+        for (const event of events) {
+            const occurrence = byId.get(event.taskRef?.toString());
+            if (!occurrence) continue;
+
+            expect(
+                event.startDate.getTime(),
+                `"${occurrence.title}" was scheduled before its occurrence date`
+            ).toBeGreaterThanOrEqual(occurrence.occurrenceDate.getTime());
+        }
+    });
+
+    test('recurring occurrences land on their chosen weekdays when the calendar has room', async ({ seed, api }) => {
+        const data = await seed();
+
+        // The seeded dataset deliberately overloads the calendar, which makes every task
+        // slip. Start from an empty account so this measures the recurrence rule rather
+        // than contention with 90 other tasks.
+        await seed.clearTasks();
+
+        const template = await TaskDetails.create({
+            title: 'Mondays and Tuesdays only',
+            duration: 30,
+            userRef: data.primary.user._id,
+            startDate: moment().startOf('day').toDate(),
+            dueDate: moment().endOf('day').toDate(),
+            recurrence: { freq: 'weekly', interval: 1, byWeekday: [1, 2] },
+            isSeriesTemplate: true,
+        });
+
+        await schedule(api);
+
+        const user = await loadUser();
+        const events = await taskEvents(user);
+        const occurrenceIds = new Set(
+            (await TaskDetails.find({ seriesRef: template._id })).map((o) => o._id.toString())
+        );
+
+        const seriesEvents = events.filter(
+            (e) => e.taskRef && occurrenceIds.has(e.taskRef.toString())
+        );
+
+        expect(seriesEvents.length).toBeGreaterThan(0);
+        for (const event of seriesEvents) {
+            expect(['Monday', 'Tuesday']).toContain(dayName(event.startDate));
+        }
+    });
+
+    test('a daily series across the horizon does not trip the iteration guard', async ({ seed, api }) => {
+        const data = await seed();
+
+        // A daily series over a 60 day horizon is the worst realistic case for the
+        // scheduling loop; the suite timeout is the real assertion.
+        await TaskDetails.create({
+            title: 'Daily grind',
+            duration: 30,
+            userRef: data.primary.user._id,
+            startDate: moment().startOf('day').toDate(),
+            dueDate: moment().endOf('day').toDate(),
+            recurrence: { freq: 'daily', interval: 1 },
+            isSeriesTemplate: true,
+        });
+
+        await schedule(api);
+
+        const user = await loadUser();
+        const events = await taskEvents(user);
+        for (const event of events) {
+            expect(user.workingDays).toContain(dayName(event.startDate));
+        }
     });
 });

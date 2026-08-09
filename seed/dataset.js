@@ -90,6 +90,7 @@ module.exports = {
         });
 
         // --- Repeating tasks --------------------------------------------------------------
+        // Legacy `repeat` strings, kept so the on-the-fly migration path stays covered.
         const repeating = [];
         for (const repeat of ['daily', 'weekly', 'monthly']) {
             repeating.push(
@@ -101,6 +102,37 @@ module.exports = {
                 })
             );
         }
+
+        // --- Recurrence rules (series templates) -----------------------------------------
+        // The scheduler materialises occurrences from these; the templates themselves are
+        // never scheduled and never appear in the task list.
+        const weekdaysSeries = await b.createTask(user, {
+            title: 'Team standup',
+            notes: 'Every Monday and Tuesday',
+            dueDate: b.endOfDay(b.anchor, 1),
+            startDate: b.at(b.anchor, { days: 0 }),
+            duration: 15,
+            isSeriesTemplate: true,
+            recurrence: { freq: 'weekly', interval: 1, byWeekday: [1, 2] },
+        });
+
+        const fortnightlySeries = await b.createTask(user, {
+            title: 'Fortnightly retro',
+            dueDate: b.endOfDay(b.anchor, 1),
+            startDate: b.at(b.anchor, { days: 0 }),
+            duration: 60,
+            isSeriesTemplate: true,
+            recurrence: { freq: 'weekly', interval: 2, byWeekday: [4] },
+        });
+
+        const monthlySeries = await b.createTask(user, {
+            title: 'Monthly invoice run',
+            dueDate: b.endOfDay(b.anchor, 1),
+            startDate: b.at(b.anchor, { days: 0 }),
+            duration: 45,
+            isSeriesTemplate: true,
+            recurrence: { freq: 'monthly', interval: 1, byMonthDay: [1, -1] },
+        });
 
         // --- Edge cases: nothing here should crash the API or hang the scheduler ----------
         const zeroDuration = await b.createTask(user, {
@@ -394,6 +426,9 @@ module.exports = {
                 blocker,
                 blocked,
                 future,
+                weekdaysSeries,
+                fortnightlySeries,
+                monthlySeries,
                 boundaryStart,
                 boundaryEnd,
                 meeting,
@@ -425,6 +460,7 @@ module.exports = {
                 active: active.length,
                 backlog: backlog.length,
                 repeating: repeating.length,
+                series: 3,
                 completed: completed.length,
                 events: events.length,
             },

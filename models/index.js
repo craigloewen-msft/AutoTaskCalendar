@@ -28,6 +28,17 @@ UserDetail.virtual('eventList', {
     foreignField: 'userRef'
 });
 
+// A recurrence rule. Lives on the series template; occurrences carry seriesRef instead.
+// Shape mirrors iCalendar RRULE so a future .ics/Google mapping stays mechanical.
+const RecurrenceRule = new Schema({
+    freq: String,            // 'daily' | 'weekly' | 'monthly' | 'yearly'
+    interval: { type: Number, default: 1 },  // every N periods
+    byWeekday: [Number],     // 0=Sun..6=Sat, for weekly
+    byMonthDay: [Number],    // 1..31, or -1 for the last day, for monthly
+    endsOn: Date,            // null = never
+    endsAfter: Number,       // occurrence count, null = never
+}, { _id: false });
+
 const TaskDetail = new Schema({
     title: String,
     dueDate: Date,
@@ -40,6 +51,13 @@ const TaskDetail = new Schema({
     completedDate: Date,
     scheduledDate: Date,
     repeat: String,
+    recurrence: { type: RecurrenceRule, default: null },
+    // Set on generated occurrences, pointing at the template that owns the rule.
+    seriesRef: { type: Schema.Types.ObjectId, ref: 'taskInfo', default: null },
+    // The local-midnight date this occurrence is for. Unique per series.
+    occurrenceDate: { type: Date, default: null },
+    // Templates hold the rule and are never scheduled or completed.
+    isSeriesTemplate: { type: Boolean, default: false },
     isBacklog: Boolean,
     priority: { type: Number, default: 100 },
     dependsOn: [{ type: Schema.Types.ObjectId, ref: 'taskInfo' }],
@@ -96,6 +114,9 @@ const ProjectDetail = new Schema({
     goalRef: { type: Schema.Types.ObjectId, ref: 'goalInfo', index: true },
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo', index: true },
 });
+
+// Expansion upserts on this key, which is what keeps re-runs from duplicating occurrences.
+TaskDetail.index({ seriesRef: 1, occurrenceDate: 1 });
 
 // Add a new schema for events
 const EventDetail = new Schema({

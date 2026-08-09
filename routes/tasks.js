@@ -3,6 +3,7 @@ const router = express.Router();
 const { UserDetails, TaskDetails, ProjectDetails } = require('../models');
 const { returnFailure } = require('../utils/helpers');
 const { getTaskListFromUsername, completeTask, generateTaskEvents } = require('../controllers/taskController');
+const { validateRecurrence, normaliseRecurrence } = require('../controllers/recurrence');
 
 // Resolve an optional Compass project, making sure it belongs to the caller.
 async function resolveProjectRef(projectRef, userId) {
@@ -63,7 +64,9 @@ function createTaskRoutes(config, authenticateToken) {
             return res.send(returnFailure('Not logged in'));
         }
 
-        let { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration, taskRepeat, isBacklog, dependsOn, priority, projectRef } = req.body;
+        // The front end posts `repeat`; `taskRepeat` is accepted for older callers.
+        let { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration, repeat, taskRepeat, recurrence, isBacklog, dependsOn, priority, projectRef } = req.body;
+        const repeatValue = repeat !== undefined ? repeat : taskRepeat;
 
         if (!title || !duration || !startDate) {
             return res.send(returnFailure('Title, duration, and start date are required'));
@@ -75,6 +78,16 @@ function createTaskRoutes(config, authenticateToken) {
 
         if (!isBacklog && !dueDate) {
             return res.send(returnFailure('Due date is required for non-backlog tasks'));
+        }
+
+        const recurrenceError = validateRecurrence(recurrence);
+        if (recurrenceError) {
+            return res.send(returnFailure(recurrenceError));
+        }
+
+        // A backlog task has no due date to advance, so recurrence is meaningless.
+        if (isBacklog && (recurrence || repeatValue)) {
+            return res.send(returnFailure('A backlog task cannot repeat'));
         }
 
         // Validate dependencies
@@ -104,6 +117,7 @@ function createTaskRoutes(config, authenticateToken) {
             }
 
             // Create the new task
+            const normalisedRecurrence = normaliseRecurrence(recurrence);
             const task = new TaskDetails({
                 title: req.body.title,
                 dueDate: taskDate,
@@ -113,7 +127,11 @@ function createTaskRoutes(config, authenticateToken) {
                 userRef: user._id,
                 breakUpTask: breakUpTask,
                 breakUpTaskChunkDuration: breakUpTaskChunkDuration,
-                repeat: taskRepeat,
+                repeat: repeatValue,
+                recurrence: normalisedRecurrence,
+                // A task holding a rule is a template; the scheduler materialises its
+                // occurrences and never schedules the template itself.
+                isSeriesTemplate: !!(normalisedRecurrence || repeatValue),
                 isBacklog: isBacklog || false,
                 dependsOn: dependsOn || [],
                 priority: priority != null ? priority : 100,
@@ -139,7 +157,16 @@ function createTaskRoutes(config, authenticateToken) {
 
         try {
             let { task } = req.body;
-            
+
+            const recurrenceError = validateRecurrence(task.recurrence);
+            if (recurrenceError) {
+                return res.send(returnFailure(recurrenceError));
+            }
+
+            if (task.isBacklog && (task.recurrence || task.repeat)) {
+                return res.send(returnFailure('A backlog task cannot repeat'));
+            }
+
             // Validate dependencies if they're being updated
             if (task.dependsOn && task.dependsOn.length > 0) {
                 // Make sure task doesn't depend on itself
@@ -170,10 +197,36 @@ function createTaskRoutes(config, authenticateToken) {
                 task.projectRef = resolvedProject;
             }
 
+            // Editing any occurrence edits the whole series, so redirect the write to the
+            // template that owns the rule.
+            let targetId = task._id;
+            const existing = await TaskDetails.findOne({ _id: task._id, userRef: user._id });
+            if (existing && existing.seriesRef) {
+                targetId = existing.seriesRef;
+            }
+
+            const update = { ...task };
+            delete update._id;
+
+            if (task.recurrence !== undefined) {
+                update.recurrence = normaliseRecurrence(task.recurrence);
+                update.isSeriesTemplate = !!(update.recurrence || task.repeat);
+
+                // A series that stopped repeating goes back to being a plain task, so its
+                // now-orphaned incomplete occurrences are cleared out.
+                if (!update.recurrence && !task.repeat) {
+                    await TaskDetails.deleteMany({
+                        userRef: user._id,
+                        seriesRef: targetId,
+                        $or: [{ completed: false }, { completed: null }],
+                    });
+                }
+            }
+
             // Scope the update to the owner so a task id alone cannot edit someone else's task.
-            let actualTask = await TaskDetails.findOneAndUpdate(
-                { _id: task._id, userRef: user._id },
-                task
+            const actualTask = await TaskDetails.findOneAndUpdate(
+                { _id: targetId, userRef: user._id },
+                update
             );
 
             if (!actualTask) {
@@ -204,8 +257,22 @@ function createTaskRoutes(config, authenticateToken) {
             if (!task) {
                 return res.send(returnFailure('Task not found'));
             }
-            // `document.remove()` was removed in Mongoose 8; deleteOne() is the replacement.
-            await task.deleteOne();
+
+            // Deleting any occurrence deletes the whole series.
+            const seriesId = task.seriesRef || (task.isSeriesTemplate ? task._id : null);
+            if (seriesId) {
+                // Incomplete occurrences go; completed ones stay as history.
+                await TaskDetails.deleteMany({
+                    userRef: user._id,
+                    seriesRef: seriesId,
+                    $or: [{ completed: false }, { completed: null }],
+                });
+                await TaskDetails.deleteOne({ _id: seriesId, userRef: user._id });
+            } else {
+                // `document.remove()` was removed in Mongoose 8; deleteOne() is the replacement.
+                await task.deleteOne();
+            }
+
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.id);
             return res.json({ success: true, taskList: returnTaskList });
