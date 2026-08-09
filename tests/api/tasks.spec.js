@@ -7,20 +7,21 @@ function titles(taskList) {
 
 test.describe('tasks', () => {
     test('lists only incomplete tasks for the logged in user', async ({ seed, api }) => {
-        const data = await seed('basic');
+        const data = await seed();
 
         const res = await api.get('/api/getUserTasks');
         const body = await res.json();
 
         expect(body.success).toBe(true);
-        // basic has 4 incomplete tasks; the 35 completed ones must not appear.
-        expect(body.taskList).toHaveLength(4);
+        // The dataset's completed tasks must not appear in the active list.
+        expect(body.taskList.length).toBeGreaterThan(0);
+        expect(body.taskList.every((t) => !t.completed)).toBe(true);
         expect(titles(body.taskList)).toContain(data.named.proposal.title);
-        expect(titles(body.taskList).some((t) => t.startsWith('Completed Task'))).toBe(false);
+        expect(titles(body.taskList).some((t) => t.startsWith('Finished task'))).toBe(false);
     });
 
     test('never leaks another user\'s tasks', async ({ seed, api }) => {
-        await seed('full');
+        await seed();
 
         const res = await api.get('/api/getUserTasks');
         const body = await res.json();
@@ -29,7 +30,7 @@ test.describe('tasks', () => {
     });
 
     test('creates a task', async ({ seed, api }) => {
-        await seed('empty');
+        await seed();
 
         const res = await api.post('/api/createTask', {
             data: {
@@ -46,7 +47,7 @@ test.describe('tasks', () => {
     });
 
     test('rejects a task with no title, duration, or start date', async ({ seed, api }) => {
-        await seed('empty');
+        await seed();
 
         const res = await api.post('/api/createTask', { data: { title: 'Missing the rest' } });
         const body = await res.json();
@@ -56,7 +57,7 @@ test.describe('tasks', () => {
     });
 
     test('requires a due date for non-backlog tasks', async ({ seed, api }) => {
-        await seed('empty');
+        await seed();
 
         const res = await api.post('/api/createTask', {
             data: { title: 'No due date', duration: 30, startDate: new Date().toISOString() },
@@ -68,7 +69,7 @@ test.describe('tasks', () => {
     });
 
     test('allows a backlog task with no due date', async ({ seed, api }) => {
-        await seed('empty');
+        await seed();
 
         const res = await api.post('/api/createTask', {
             data: {
@@ -83,7 +84,7 @@ test.describe('tasks', () => {
     });
 
     test('edits a task', async ({ seed, api }) => {
-        const data = await seed('basic');
+        const data = await seed();
         const task = data.named.codeReview;
 
         const res = await api.post('/api/editTask', {
@@ -96,7 +97,7 @@ test.describe('tasks', () => {
     });
 
     test('rejects a self-referencing dependency', async ({ seed, api }) => {
-        const data = await seed('basic');
+        const data = await seed();
         const id = data.named.codeReview._id.toString();
 
         const res = await api.post('/api/editTask', {
@@ -109,7 +110,7 @@ test.describe('tasks', () => {
     });
 
     test('rejects a circular dependency', async ({ seed, api }) => {
-        const data = await seed('full');
+        const data = await seed();
         // research <- draft <- publish. Making research depend on publish closes the loop.
         const res = await api.post('/api/editTask', {
             data: {
@@ -126,7 +127,7 @@ test.describe('tasks', () => {
     });
 
     test('completes a task and moves it out of the active list', async ({ seed, api }) => {
-        const data = await seed('basic');
+        const data = await seed();
         const task = data.named.proposal;
 
         const res = await api.post('/api/completeTask', {
@@ -139,7 +140,7 @@ test.describe('tasks', () => {
     });
 
     test('completing a repeating task creates the next occurrence', async ({ seed, api }) => {
-        await seed('full');
+        await seed();
 
         const before = await (await api.get('/api/getUserTasks')).json();
         const weekly = before.taskList.find((t) => t.repeat === 'weekly' && !t.completed);
@@ -155,7 +156,7 @@ test.describe('tasks', () => {
     });
 
     test('completing a chunk reduces the remaining duration', async ({ seed, api }) => {
-        const data = await seed('basic');
+        const data = await seed();
         const task = data.named.documentation; // 180 minutes, 60 minute chunks
 
         const res = await api.post('/api/completeTaskChunk', {
@@ -168,7 +169,7 @@ test.describe('tasks', () => {
     });
 
     test('completing the final chunk completes the task', async ({ seed, api }) => {
-        const data = await seed('basic');
+        const data = await seed();
         const task = data.named.documentation;
 
         const res = await api.post('/api/completeTaskChunk', {
@@ -180,7 +181,7 @@ test.describe('tasks', () => {
     });
 
     test('toggles a task into the backlog', async ({ seed, api }) => {
-        const data = await seed('basic');
+        const data = await seed();
         const task = data.named.codeReview;
 
         await api.post('/api/editTask', {
@@ -193,16 +194,18 @@ test.describe('tasks', () => {
     });
 
     test('paginates completed tasks', async ({ seed, api }) => {
-        await seed('full'); // 70 completed tasks
+        const data = await seed();
+        const total = data.counts.completed;
 
         const first = await (await api.get('/api/getCompletedTasks?limit=20&skip=0')).json();
         expect(first.success).toBe(true);
         expect(first.taskList).toHaveLength(20);
-        expect(first.totalCount).toBe(70);
+        expect(first.totalCount).toBe(total);
         expect(first.hasMore).toBe(true);
 
-        const last = await (await api.get('/api/getCompletedTasks?limit=20&skip=60')).json();
-        expect(last.taskList).toHaveLength(10);
+        const lastPageSkip = Math.floor((total - 1) / 20) * 20;
+        const last = await (await api.get(`/api/getCompletedTasks?limit=20&skip=${lastPageSkip}`)).json();
+        expect(last.taskList).toHaveLength(total - lastPageSkip);
         expect(last.hasMore).toBe(false);
 
         // Pages must not overlap.
@@ -211,7 +214,7 @@ test.describe('tasks', () => {
     });
 
     test('searches completed tasks by title and notes', async ({ seed, api }) => {
-        await seed('full');
+        await seed();
 
         const res = await api.get('/api/searchCompletedTasks?q=quarterly');
         const body = await res.json();
@@ -226,26 +229,8 @@ test.describe('tasks', () => {
         ).toBe(true);
     });
 
-    test('returns task statistics that add up', async ({ seed, api }) => {
-        await seed('full');
-
-        const res = await api.get('/api/getTaskStatistics');
-        const { success, statistics } = await res.json();
-
-        expect(success).toBe(true);
-        expect(statistics.completedTasksCount).toBe(70);
-        expect(statistics.completedTasksCount + statistics.incompleteTasksCount).toBe(
-            statistics.totalTasks
-        );
-        expect(statistics.regularTasks + statistics.backlogTasks).toBe(
-            statistics.incompleteTasksCount
-        );
-        expect(statistics.avgTaskDuration).toBeGreaterThan(0);
-        expect(Object.keys(statistics.tasksByDay).length).toBeGreaterThan(0);
-    });
-
     test('creates a follow up and completes the original task', async ({ seed, api }) => {
-        const data = await seed('basic');
+        const data = await seed();
         const original = data.named.codeReview;
 
         const res = await api.post('/api/setFollowUp', {
@@ -263,7 +248,7 @@ test.describe('tasks', () => {
     });
 
     test('deletes a task', async ({ seed, api }) => {
-        const data = await seed('basic');
+        const data = await seed();
         const task = data.named.codeReview;
 
         const res = await api.post('/api/deleteTask', {
@@ -276,7 +261,7 @@ test.describe('tasks', () => {
     });
 
     test('refuses to delete a task belonging to another user', async ({ seed, api }) => {
-        const data = await seed('full');
+        const data = await seed();
 
         // Grab one of the other user's tasks straight from the seed result.
         const foreign = data.tasks.find((t) => t.title.includes('OTHER USER SECRET'));

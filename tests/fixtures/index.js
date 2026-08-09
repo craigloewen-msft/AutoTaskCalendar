@@ -6,13 +6,14 @@
  *   const { test, expect } = require('../fixtures');
  *
  *   test('does a thing', async ({ seed, api }) => {
- *     const data = await seed('full');
+ *     const data = await seed();
  *     const res = await api.get('/api/getUserTasks');
  *     ...
  *   });
  *
  * Fixtures available:
- *   seed(scenario)  reseed the database, returns the created data
+ *   seed()          reseed the database, returns the created data
+ *   seed.clearTasks()  wipe the primary user's tasks/events, for empty-state tests
  *   api             request context authenticated as the seeded primary user
  *   apiAnon         request context with no credentials, for auth-failure tests
  *   loginAs(u, p)   build an authenticated request context for any user
@@ -23,6 +24,7 @@ const base = require('@playwright/test');
 const mongoose = require('mongoose');
 
 const { runSeed } = require('../../seed');
+const { TaskDetails, EventDetails } = require('../../models');
 const instance = require('../../instance');
 
 const baseURL = process.env.AUTOTASKCALENDAR_BASE_URL || `http://127.0.0.1:${instance.apiPort}`;
@@ -34,9 +36,17 @@ const baseURL = process.env.AUTOTASKCALENDAR_BASE_URL || `http://127.0.0.1:${ins
  * closing there would pull the connection out from under later files. Playwright tears the
  * worker process down at the end of the run, which closes it for us.
  *
- * The pool can still go stale across the long gap between projects, so we ping before
- * reusing it and reconnect if the ping fails.
+ * The connection sits idle for long stretches (a whole project's worth of API tests can
+ * pass without a reseed), and idle TCP sockets to the container get dropped. `maxIdleTimeMS`
+ * retires pooled sockets before they can go stale, which is what stops the driver handing
+ * out a dead one and throwing MongoPoolClearedError mid-seed.
  */
+const CONNECT_OPTIONS = {
+    maxIdleTimeMS: 10_000,
+    serverSelectionTimeoutMS: 10_000,
+    heartbeatFrequencyMS: 5_000,
+};
+
 async function ensureConnected() {
     if (mongoose.connection.readyState === 1) {
         try {
@@ -44,7 +54,6 @@ async function ensureConnected() {
             return;
         } catch {
             // Stale pool: fall through and rebuild the connection.
-            await mongoose.connection.close().catch(() => {});
         }
     }
 
@@ -52,7 +61,7 @@ async function ensureConnected() {
         await mongoose.connection.close().catch(() => {});
     }
 
-    await mongoose.connect(instance.mongoUrl);
+    await mongoose.connect(instance.mongoUrl, CONNECT_OPTIONS);
 }
 
 /**
@@ -77,35 +86,75 @@ async function createAuthedContext(playwright, username, password) {
     return { context, token: body.token, user: body.user };
 }
 
+/**
+ * Transient infrastructure failures, as opposed to genuine test failures.
+ *
+ * The MongoDB container is reached through a wslc port-forward, which can briefly refuse
+ * connections when the host is busy. Match on the error NAME as well as the message:
+ * MongooseServerSelectionError's message is just "connect ECONNREFUSED ...", so matching
+ * message text alone misses it.
+ */
+function isTransientDbError(error) {
+    const name = error?.name || '';
+    const message = error?.message || '';
+
+    return (
+        /MongoNetworkError|MongoPoolCleared|ServerSelection|MongoTopologyClosed/i.test(name) ||
+        /pool|closed|topology|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|server selection/i.test(message)
+    );
+}
+
 const test = base.test.extend({
     /**
      * Reseed the database. Call it first in any test that depends on data.
-     * Defaults to the `basic` scenario when called with no argument.
      */
-    seed: async ({}, use, testInfo) => {
+    seed: async ({}, use) => {
         let lastResult = null;
 
-        const seed = async (scenario = 'basic') => {
-            // One retry: a pool that went stale between projects surfaces as a transient
-            // network error on the first write, and is healthy again once reconnected.
-            for (let attempt = 0; attempt < 2; attempt++) {
+        const seed = async () => {
+            // The container is reached through a port-forward that can flap when the host
+            // is busy, so retry with backoff rather than failing a test for an
+            // infrastructure hiccup.
+            let lastError = null;
+
+            for (let attempt = 0; attempt < 4; attempt++) {
                 try {
                     await ensureConnected();
-                    lastResult = await runSeed({ scenario, mongoUrl: instance.mongoUrl });
+                    lastResult = await runSeed({ mongoUrl: instance.mongoUrl });
                     return lastResult;
                 } catch (error) {
-                    const transient = /pool|closed|topology|ECONNRESET/i.test(error.message);
-                    if (attempt === 1 || !transient) {
+                    lastError = error;
+
+                    if (!isTransientDbError(error)) {
                         throw error;
                     }
+
+                    // Tear the connection down so the next attempt builds a clean pool.
                     await mongoose.connection.close().catch(() => {});
+                    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
                 }
             }
+
+            throw lastError;
         };
 
-        // Expose the most recent seed to other fixtures in the same test.
+        // Let other fixtures see whether this test already seeded.
         seed.last = () => lastResult;
-        testInfo.__seed = seed;
+
+        /**
+         * Delete the primary user's tasks and events, leaving the account intact.
+         *
+         * Lets a test set up an empty-state precondition for itself.
+         */
+        seed.clearTasks = async () => {
+            const result = lastResult || (await seed());
+            const userId = result.primary.user._id;
+
+            await TaskDetails.deleteMany({ userRef: userId });
+            await EventDetails.deleteMany({ userRef: userId });
+
+            return result;
+        };
 
         await use(seed);
     },
@@ -136,13 +185,12 @@ const test = base.test.extend({
     },
 
     /**
-     * A request context authenticated as `testuser`. The database must already be seeded,
-     * so call `seed(...)` before touching `api` (Playwright builds fixtures lazily, and
-     * this one asserts the user exists).
+     * A request context authenticated as `testuser`. Seeds first if the test has not
+     * already done so.
      */
     api: async ({ playwright, seed }, use) => {
         if (!seed.last()) {
-            await seed('basic');
+            await seed();
         }
 
         const { context } = await createAuthedContext(playwright, 'testuser', 'testpassword');
@@ -158,7 +206,7 @@ const test = base.test.extend({
      */
     loggedInPage: async ({ page, seed }, use) => {
         if (!seed.last()) {
-            await seed('basic');
+            await seed();
         }
 
         await page.goto('/#/login');

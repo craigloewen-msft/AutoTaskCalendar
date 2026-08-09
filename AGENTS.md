@@ -36,8 +36,8 @@ MongoDB runs in a `wslc` container (no compose support; `scripts/dev-db.sh` repl
 and the UI, and it runs against its own isolated database so it never disturbs your dev
 stack. **Any behaviour change ships with a spec.**
 
-See `docs/TESTING.md` to run/write/debug tests and `docs/SEEDING.md` for the fake-data
-scenarios (`empty`, `basic`, `full`, `edge`).
+See `docs/TESTING.md` to run/write/debug tests and `docs/SEEDING.md` for the seeded
+dataset.
 
 ## Layout
 
@@ -48,7 +48,7 @@ scenarios (`empty`, `basic`, `full`, `edge`).
 - `models/index.js` — all Mongoose schemas. Import these; never redefine.
 - `middleware/auth.js` — JWT `authenticateToken`. `utils/helpers.js` — `returnFailure()`.
 - `webinterface/src/` — Vue app (`views/`, `components/`, `store.js`).
-- `seed/` — fake-data factories and scenarios; `scripts/seed.js` is the CLI.
+- `seed/` — the fake-data factories and dataset; `scripts/seed.js` is the CLI.
 - `tests/` — Playwright specs (`api/`, `ui/`) and shared `fixtures/`.
 - `scripts/` — `dev.js` (dev stack), `dev-db.sh` (database), `test.js` (test stack).
 - `docs/` — one file per broad concept, each a standalone instruction manual.

@@ -61,7 +61,6 @@ const instance = resolveTestInstance();
 
 const childEnv = {
     ...process.env,
-    NODE_ENV: 'test',
     AUTOTASKCALENDAR_INSTANCE: instance.name,
     AUTOTASKCALENDAR_API_PORT: String(instance.apiPort),
     AUTOTASKCALENDAR_WEB_PORT: String(instance.webPort),
@@ -71,6 +70,11 @@ const childEnv = {
     // The suite drives the API and the built SPA from one Express server.
     AUTOTASKCALENDAR_BASE_URL: `http://127.0.0.1:${instance.apiPort}`,
 };
+
+// NOTE: deliberately NOT setting NODE_ENV=test. @vue/babel-preset-app switches to
+// CommonJS output when NODE_ENV is "test", and vue-gtag's package exports declare no
+// "require" condition, so the web build fails with "Package path . is not exported".
+// Nothing in this app needs NODE_ENV=test; app.js only ever checks for "production".
 
 function run(command, args, options = {}) {
     const result = spawnSync(command, args, {

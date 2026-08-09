@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Seed runner. Wipes the target database and builds one named scenario.
+ * Seed runner. Wipes the target database and builds the dataset.
  *
  * Used by both `npm run seed` (scripts/seed.js) and the Playwright `seed` fixture, so the
  * data a test runs against is exactly the data you can reproduce locally.
@@ -12,19 +12,7 @@ const mongoose = require('mongoose');
 const { UserDetails, TaskDetails, EventDetails } = require('../models');
 const instance = require('../instance');
 const factories = require('./factories');
-
-const scenarios = {
-    empty: require('./scenarios/empty'),
-    basic: require('./scenarios/basic'),
-    full: require('./scenarios/full'),
-    edge: require('./scenarios/edge'),
-};
-
-const DEFAULT_SCENARIO = 'basic';
-
-function listScenarios() {
-    return Object.values(scenarios).map((s) => ({ name: s.name, description: s.description }));
-}
+const dataset = require('./dataset');
 
 function resolveMongoUrl(explicitUrl) {
     if (explicitUrl) {
@@ -51,7 +39,7 @@ async function wipe() {
 }
 
 /**
- * The imperative API handed to each scenario. Persisting as we go means a scenario can
+ * The imperative API handed to the dataset builder. Persisting as we go means it can
  * reference real ObjectIds (task dependencies, event taskRefs) without extra plumbing.
  */
 function makeBuilder(anchor) {
@@ -98,18 +86,10 @@ function makeBuilder(anchor) {
 /**
  * Seed the database.
  *
- * Returns `{ scenario, anchor, users, tasks, events, ...scenarioResult }` where the
- * scenario result carries whatever handles the scenario chose to expose (named tasks, the
- * primary user, and so on) so tests can assert without re-querying.
+ * Returns `{ anchor, users, tasks, events, primary, other, named, counts }` — everything
+ * the dataset created, so tests can assert without re-querying.
  */
-async function runSeed({ scenario = DEFAULT_SCENARIO, mongoUrl, anchor, disconnect = false } = {}) {
-    const definition = scenarios[scenario];
-
-    if (!definition) {
-        const known = Object.keys(scenarios).join(', ');
-        throw new Error(`Unknown scenario "${scenario}". Known scenarios: ${known}`);
-    }
-
+async function runSeed({ mongoUrl, anchor, disconnect = false } = {}) {
     const url = resolveMongoUrl(mongoUrl);
     const ownsConnection = mongoose.connection.readyState === 0;
 
@@ -124,11 +104,9 @@ async function runSeed({ scenario = DEFAULT_SCENARIO, mongoUrl, anchor, disconne
         const { builder, created } = makeBuilder(seedAnchor);
 
         await wipe();
-        const result = (await definition.build(builder)) || {};
+        const result = (await dataset.build(builder)) || {};
 
         return {
-            scenario: definition.name,
-            description: definition.description,
             anchor: seedAnchor,
             ...created,
             ...result,
@@ -142,7 +120,4 @@ async function runSeed({ scenario = DEFAULT_SCENARIO, mongoUrl, anchor, disconne
 
 module.exports = {
     runSeed,
-    listScenarios,
-    scenarios,
-    DEFAULT_SCENARIO,
 };

@@ -7,12 +7,10 @@ This file contains test credentials for GitHub Copilot and developers to use whe
 To populate the database with test data, run:
 
 ```bash
-npm run seed                       # the default "basic" scenario
-npm run seed -- --scenario=full    # a much richer dataset
-npm run seed -- --list             # every available scenario
+npm run seed
 ```
 
-See `docs/SEEDING.md` for what each scenario contains and how to extend them.
+See `docs/SEEDING.md` for what the dataset contains and how to extend it.
 
 ## Test User Credentials
 
@@ -22,12 +20,12 @@ After running the seed script, you can login with:
 - **Password:** `testpassword`
 - **Email:** `testuser@example.com`
 
-The `full` scenario adds a second user, `otheruser` / `testpassword`, whose data exists
+Seeding also creates a second user, `otheruser` / `testpassword`, whose data exists
 only to prove it never leaks into the first user's views.
 
 ## What's Included
 
-The default `basic` scenario creates:
+The dataset creates:
 
 1. **Test User** with default working hours (9 AM - 5 PM, Monday-Friday)
 2. **Sample Tasks:**
@@ -66,8 +64,8 @@ The default `basic` scenario creates:
 
 ## Re-seeding the Database
 
-Seeding wipes all users, tasks, and events in your instance's database before building the
-scenario, so you always start from a clean, known state.
+Seeding wipes all users, tasks, and events in your instance's database before rebuilding
+the dataset, so you always start from a clean, known state.
 
 ## Important Notes
 

@@ -2,7 +2,7 @@ const { test, expect } = require('../fixtures');
 
 test.describe('calendar page', () => {
     test('renders the seeded tasks in the sidebar', async ({ seed, loggedInPage: page }) => {
-        const data = await seed('basic');
+        const data = await seed();
 
         await page.goto('/#/calendar');
 
@@ -11,7 +11,7 @@ test.describe('calendar page', () => {
     });
 
     test('marks backlog tasks with a badge', async ({ seed, loggedInPage: page }) => {
-        await seed('basic');
+        await seed();
 
         await page.goto('/#/calendar');
 
@@ -19,7 +19,7 @@ test.describe('calendar page', () => {
     });
 
     test('creates a task through the modal', async ({ seed, loggedInPage: page }) => {
-        await seed('empty');
+        await seed();
 
         await page.goto('/#/calendar');
         await page.click('button:has-text("Add Task")');
@@ -33,7 +33,7 @@ test.describe('calendar page', () => {
     });
 
     test('refuses to create a task with no title', async ({ seed, loggedInPage: page }) => {
-        await seed('empty');
+        await seed();
 
         await page.goto('/#/calendar');
         await page.click('button:has-text("Add Task")');
@@ -45,7 +45,7 @@ test.describe('calendar page', () => {
     });
 
     test('completes a task from the edit modal', async ({ seed, loggedInPage: page }) => {
-        const data = await seed('basic');
+        const data = await seed();
         const title = data.named.proposal.title;
 
         await page.goto('/#/calendar');
@@ -56,7 +56,7 @@ test.describe('calendar page', () => {
     });
 
     test('schedules tasks and draws them on the calendar', async ({ seed, loggedInPage: page }) => {
-        await seed('basic');
+        await seed();
 
         await page.goto('/#/calendar');
         await page.click('button:has-text("Schedule Tasks")');

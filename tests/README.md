@@ -9,7 +9,7 @@ npm run test:ui             # interactive UI mode
 ```
 
 **Read `docs/TESTING.md` before adding a test.** It has the templates, the fixture
-reference, and the debugging guide. `docs/SEEDING.md` covers the data scenarios.
+reference, and the debugging guide. `docs/SEEDING.md` covers the seeded dataset.
 
 The short version:
 
@@ -17,7 +17,7 @@ The short version:
 const { test, expect } = require('../fixtures');   // never from '@playwright/test'
 
 test('does the thing', async ({ seed, api }) => {
-    await seed('full');                            // pick your data first
+    const data = await seed();                     // the dataset, and everything in it
     const res = await api.get('/api/getUserTasks');
     expect((await res.json()).success).toBe(true);
 });

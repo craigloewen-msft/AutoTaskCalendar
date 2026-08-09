@@ -2,7 +2,7 @@ const { test, expect } = require('../fixtures');
 
 test.describe('auth', () => {
     test('logs in with the seeded credentials', async ({ seed, apiAnon }) => {
-        await seed('basic');
+        await seed();
 
         const res = await apiAnon.post('/api/login', {
             data: { username: 'testuser', password: 'testpassword' },
@@ -15,7 +15,7 @@ test.describe('auth', () => {
     });
 
     test('rejects a wrong password', async ({ seed, apiAnon }) => {
-        await seed('basic');
+        await seed();
 
         const res = await apiAnon.post('/api/login', {
             data: { username: 'testuser', password: 'wrong' },
@@ -26,7 +26,7 @@ test.describe('auth', () => {
     });
 
     test('rejects an unknown user', async ({ seed, apiAnon }) => {
-        await seed('empty');
+        await seed();
 
         const res = await apiAnon.post('/api/login', {
             data: { username: 'nobody', password: 'testpassword' },
@@ -36,7 +36,7 @@ test.describe('auth', () => {
     });
 
     test('registers a new user and returns a usable token', async ({ seed, apiAnon }) => {
-        await seed('empty');
+        await seed();
 
         const res = await apiAnon.post('/api/register', {
             data: { username: 'brandnew', email: 'brandnew@example.com', password: 'hunter2hunter2' },
@@ -53,7 +53,7 @@ test.describe('auth', () => {
     });
 
     test('refuses to register a duplicate username', async ({ seed, apiAnon }) => {
-        await seed('basic');
+        await seed();
 
         const res = await apiAnon.post('/api/register', {
             data: { username: 'testuser', email: 'dupe@example.com', password: 'somepassword' },
@@ -65,14 +65,14 @@ test.describe('auth', () => {
     });
 
     test('protected endpoints reject requests with no token', async ({ seed, apiAnon }) => {
-        await seed('basic');
+        await seed();
 
         const res = await apiAnon.get('/api/getUserTasks');
         expect(res.status()).toBe(401);
     });
 
     test('protected endpoints reject a garbage token', async ({ seed, playwright }) => {
-        await seed('basic');
+        await seed();
 
         const context = await playwright.request.newContext({
             baseURL: require('../fixtures').baseURL,
@@ -85,7 +85,7 @@ test.describe('auth', () => {
     });
 
     test('updates working hours and days', async ({ seed, api }) => {
-        await seed('basic');
+        await seed();
 
         const res = await api.post('/api/updateuserinfo', {
             data: {

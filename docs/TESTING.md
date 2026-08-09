@@ -73,7 +73,8 @@ directly — that is what gives you seeding and authentication.
 
 | Fixture | What it gives you |
 | --- | --- |
-| `seed(scenario)` | Wipes the database and builds a scenario. Returns the created data. |
+| `seed()` | Wipes the database and builds the dataset. Returns everything it created. |
+| `seed.clearTasks()` | Removes the primary user's tasks and events, for empty-state tests. |
 | `api` | Request context authenticated as `testuser`. |
 | `apiAnon` | Request context with no credentials, for auth-failure tests. |
 | `loginAs(user, pass)` | Authenticated request context for any seeded user. |
@@ -85,7 +86,7 @@ directly — that is what gives you seeding and authentication.
 const { test, expect } = require('../fixtures');
 
 test('rejects a task with no duration', async ({ seed, api }) => {
-    await seed('empty');
+    await seed();
 
     const res = await api.post('/api/createTask', { data: { title: 'No duration' } });
     const body = await res.json();
@@ -101,7 +102,7 @@ test('rejects a task with no duration', async ({ seed, api }) => {
 const { test, expect } = require('../fixtures');
 
 test('shows the seeded tasks', async ({ seed, loggedInPage: page }) => {
-    const data = await seed('basic');
+    const data = await seed();
 
     await page.goto('/#/calendar');
 
@@ -109,18 +110,24 @@ test('shows the seeded tasks', async ({ seed, loggedInPage: page }) => {
 });
 ```
 
-Routes are hash-based, so URLs look like `/#/calendar`, `/#/completed`, `/#/statistics`.
+Routes are hash-based, so URLs look like `/#/calendar` and `/#/completed`.
 
-### Choosing a scenario
+### Using the data
 
-| Scenario | Use it for |
-| --- | --- |
-| `empty` | Empty states, and tests that create all their own data. |
-| `basic` | Default. A few readable tasks and events. |
-| `full` | Pagination, search, statistics, scheduling, cross-user isolation. |
-| `edge` | Hostile input: odd durations, unicode, blocked dependencies. |
+The dataset contains everything worth testing — see `docs/SEEDING.md`. Reach for
+`data.named.*` and `data.counts.*` rather than hard-coding titles and numbers, so your
+assertions survive the dataset growing:
 
-See `docs/SEEDING.md` for exactly what each one contains and how to add data.
+```js
+const data = await seed();
+expect(first.totalCount).toBe(data.counts.completed);   // not: toBe(70)
+```
+
+If your test needs an empty account, set that up explicitly:
+
+```js
+await seed.clearTasks();
+```
 
 ## Testing the scheduler
 
@@ -134,7 +141,7 @@ result depends on the current time:
 - broken-up tasks never exceed their total duration
 - completed tasks are never scheduled
 - re-running the scheduler is idempotent
-- the hostile `edge` scenario completes rather than hanging
+- the hostile edge-case tasks complete rather than hanging
 
 When you change the scheduler, add an invariant rather than pinning a timestamp. Pinned
 timestamps break every time the clock moves, and everyone learns to ignore them.
@@ -223,6 +230,11 @@ AUTOTASKCALENDAR_INSTANCE=$(git rev-parse --abbrev-ref HEAD)-test npm run db:sta
 
 **Browser tests fail right after a front-end change.** The bundle is stale. Rerun with
 `AUTOTASKCALENDAR_TEST_BUILD=1 npm test`.
+
+**Lots of UI tests fail at once, seemingly at random.** Check whether a build is running
+at the same time. `npm run build` does `rm -rf ./dist` before moving the new bundle into
+place, which pulls the SPA out from under the running test server. Run builds and tests
+one after the other, not in parallel.
 
 **`browserType.launch: Executable doesn't exist`.** Run `npx playwright install chromium`.
 

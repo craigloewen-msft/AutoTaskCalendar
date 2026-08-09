@@ -2,7 +2,7 @@ const { test, expect } = require('../fixtures');
 
 test.describe('login page', () => {
     test('logs in and lands in the app', async ({ seed, page }) => {
-        await seed('basic');
+        await seed();
 
         await page.goto('/#/login');
         await page.fill('input[name="username"]', 'testuser');
@@ -16,7 +16,7 @@ test.describe('login page', () => {
     });
 
     test('shows an error for bad credentials and stays logged out', async ({ seed, page }) => {
-        await seed('basic');
+        await seed();
 
         await page.goto('/#/login');
         await page.fill('input[name="username"]', 'testuser');
@@ -29,7 +29,7 @@ test.describe('login page', () => {
     });
 
     test('redirects anonymous visitors away from protected pages', async ({ seed, page }) => {
-        await seed('basic');
+        await seed();
 
         await page.goto('/#/calendar');
 

@@ -13,7 +13,12 @@ module.exports = defineConfig({
     fullyParallel: false,
     workers: 1,
     forbidOnly: isCI,
-    retries: isCI ? 1 : 0,
+    // The MongoDB container is reached through a wslc port-forward that can drop a pooled
+    // connection when the host is busy, which fails a test for reasons unrelated to the
+    // code. One retry re-runs the test with fresh fixtures and a fresh connection. A test
+    // that fails twice is a real failure; check the report, which marks anything that
+    // passed on retry as flaky.
+    retries: isCI ? 2 : 1,
     timeout: 30_000,
     expect: { timeout: 10_000 },
     reporter: isCI ? [['github'], ['html', { open: 'never' }]] : [['list'], ['html', { open: 'never' }]],

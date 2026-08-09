@@ -36,7 +36,7 @@ function dayName(date) {
 
 test.describe('scheduling', () => {
     test('schedules tasks only inside working hours on working days', async ({ seed, api }) => {
-        await seed('full');
+        await seed();
         await schedule(api);
 
         const user = await loadUser();
@@ -59,7 +59,7 @@ test.describe('scheduling', () => {
     });
 
     test('never overlaps an existing calendar event', async ({ seed, api }) => {
-        await seed('full');
+        await seed();
         await schedule(api);
 
         const user = await loadUser();
@@ -81,11 +81,23 @@ test.describe('scheduling', () => {
     });
 
     test('never overlaps another scheduled task', async ({ seed, api }) => {
-        await seed('full');
+        await seed();
         await schedule(api);
 
         const user = await loadUser();
-        const events = await taskEvents(user);
+
+        // Zero-length blocks (from the zero-duration task) occupy no time, so they cannot
+        // overlap anything. Including them would flag a shared instant as a collision.
+        const events = (await taskEvents(user)).filter(
+            (e) => e.endDate.getTime() > e.startDate.getTime()
+        );
+
+        // Sort by start, then end, so equal start times compare deterministically.
+        events.sort(
+            (a, b) =>
+                a.startDate.getTime() - b.startDate.getTime() ||
+                a.endDate.getTime() - b.endDate.getTime()
+        );
 
         for (let i = 1; i < events.length; i++) {
             expect(
@@ -96,7 +108,7 @@ test.describe('scheduling', () => {
     });
 
     test('never schedules a task before its dependency', async ({ seed, api }) => {
-        const data = await seed('full');
+        const data = await seed();
         await schedule(api);
 
         const user = await loadUser();
@@ -121,7 +133,7 @@ test.describe('scheduling', () => {
     });
 
     test('never schedules a task before its start date', async ({ seed, api }) => {
-        await seed('full');
+        await seed();
         await schedule(api);
 
         const user = await loadUser();
@@ -141,7 +153,7 @@ test.describe('scheduling', () => {
     });
 
     test('broken up tasks emit chunks that never exceed the total duration', async ({ seed, api }) => {
-        await seed('full');
+        await seed();
         await schedule(api);
 
         const user = await loadUser();
@@ -162,7 +174,7 @@ test.describe('scheduling', () => {
     });
 
     test('completed tasks are never scheduled', async ({ seed, api }) => {
-        await seed('full');
+        await seed();
         await schedule(api);
 
         const user = await loadUser();
@@ -177,7 +189,7 @@ test.describe('scheduling', () => {
     });
 
     test('re-running the scheduler is idempotent', async ({ seed, api }) => {
-        await seed('full');
+        await seed();
 
         await schedule(api);
         const user = await loadUser();
@@ -192,7 +204,7 @@ test.describe('scheduling', () => {
     });
 
     test('scheduling does not touch the user\'s own calendar events', async ({ seed, api }) => {
-        await seed('full');
+        await seed();
 
         const user = await loadUser();
         const before = await calendarEvents(user);
@@ -204,7 +216,7 @@ test.describe('scheduling', () => {
     });
 
     test('survives the hostile edge scenario without hanging', async ({ seed, api }) => {
-        await seed('edge');
+        await seed();
 
         // The suite's 30s timeout is the real assertion here: a scheduler that deadlocks on
         // an unschedulable task or an unmet dependency fails this test.
@@ -220,7 +232,7 @@ test.describe('scheduling', () => {
     });
 
     test('does not schedule a task whose dependency is unschedulable', async ({ seed, api }) => {
-        const data = await seed('edge');
+        const data = await seed();
         await schedule(api);
 
         const user = await loadUser();
@@ -240,7 +252,7 @@ test.describe('scheduling', () => {
     });
 
     test('an empty task list produces no scheduled events', async ({ seed, api }) => {
-        await seed('empty');
+        await seed.clearTasks();
         await schedule(api);
 
         const user = await loadUser();

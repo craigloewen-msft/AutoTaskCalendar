@@ -2,7 +2,7 @@ const { test, expect } = require('../fixtures');
 
 test.describe('events', () => {
     test('creates an event', async ({ seed, api }) => {
-        await seed('empty');
+        await seed();
 
         const start = new Date(Date.now() + 86400000);
         const end = new Date(start.getTime() + 3600000);
@@ -23,7 +23,7 @@ test.describe('events', () => {
     });
 
     test('requires a title and both dates', async ({ seed, api }) => {
-        await seed('empty');
+        await seed();
 
         const res = await api.post('/api/createEvent', { data: { title: 'Only a title' } });
         const body = await res.json();
@@ -33,7 +33,7 @@ test.describe('events', () => {
     });
 
     test('updates an event', async ({ seed, api }) => {
-        const data = await seed('basic');
+        const data = await seed();
         const event = data.named.meeting;
 
         const res = await api.post('/api/updateEvent', {
@@ -46,7 +46,7 @@ test.describe('events', () => {
     });
 
     test('deletes an event', async ({ seed, api }) => {
-        const data = await seed('basic');
+        const data = await seed();
         const event = data.named.clientCall;
 
         const res = await api.post('/api/deleteEvent', {
@@ -59,7 +59,7 @@ test.describe('events', () => {
     });
 
     test('returns only events in the requested week', async ({ seed, api }) => {
-        const data = await seed('basic');
+        const data = await seed();
 
         const anchor = new Date(data.anchor);
         const res = await api.get(`/api/getUserEvents/${anchor.toISOString()}`);
@@ -83,7 +83,7 @@ test.describe('events', () => {
     });
 
     test('never returns another user\'s events', async ({ seed, api }) => {
-        const data = await seed('full');
+        const data = await seed();
 
         const res = await api.get(`/api/getUserEvents/${new Date(data.anchor).toISOString()}`);
         const body = await res.json();
