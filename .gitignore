@@ -6,6 +6,13 @@ dist/
 nohup.out
 /.phoenix
 
+# Playwright output
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+playwright/.cache/
+
 # Editor settings are personal, but the shared debug config is committed.
 .vscode/*
 !.vscode/launch.json

@@ -7,8 +7,10 @@ Express + Mongoose (MongoDB) backend, Vue 3 (vue-cli) frontend in `webinterface/
 
 ```bash
 npm install && (cd webinterface && npm install)
+npx playwright install chromium   # once, for the test suite
 npm run seed        # optional: testuser / testpassword
 npm run dev         # starts mongo, API, and web UI
+npm test            # the regression suite
 ```
 
 Nothing needs to be exported. Each git branch automatically gets its own ports, MongoDB
@@ -30,7 +32,12 @@ MongoDB runs in a `wslc` container (no compose support; `scripts/dev-db.sh` repl
 
 ## Verify
 
-`npm run build` must succeed. There is no test suite — verify changes by running the app.
+`npm run build` and `npm test` must both pass. The suite is Playwright, covering the API
+and the UI, and it runs against its own isolated database so it never disturbs your dev
+stack. **Any behaviour change ships with a spec.**
+
+See `docs/TESTING.md` to run/write/debug tests and `docs/SEEDING.md` for the fake-data
+scenarios (`empty`, `basic`, `full`, `edge`).
 
 ## Layout
 
@@ -41,7 +48,9 @@ MongoDB runs in a `wslc` container (no compose support; `scripts/dev-db.sh` repl
 - `models/index.js` — all Mongoose schemas. Import these; never redefine.
 - `middleware/auth.js` — JWT `authenticateToken`. `utils/helpers.js` — `returnFailure()`.
 - `webinterface/src/` — Vue app (`views/`, `components/`, `store.js`).
-- `scripts/` — `dev.js` (dev stack), `dev-db.sh` (database).
+- `seed/` — fake-data factories and scenarios; `scripts/seed.js` is the CLI.
+- `tests/` — Playwright specs (`api/`, `ui/`) and shared `fixtures/`.
+- `scripts/` — `dev.js` (dev stack), `dev-db.sh` (database), `test.js` (test stack).
 - `docs/` — one file per broad concept, each a standalone instruction manual.
 
 ## Documenting your work

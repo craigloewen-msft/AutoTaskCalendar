@@ -127,6 +127,30 @@ function resolveOffset(name) {
     return name === 'default' ? 0 : hashToOffset(name);
 }
 
+const DB_NAME_PREFIX = 'autotaskcalendar_';
+// MongoDB rejects database names longer than 63 bytes.
+const MAX_DB_NAME_LENGTH = 63;
+
+/**
+ * Build a Mongo-safe database name that always fits in 63 characters.
+ *
+ * Long branch names are truncated, with the port offset appended so two branches that
+ * share a prefix still get separate databases.
+ */
+function buildDbName(name, offset) {
+    const normalized = name.replace(/-/g, '_');
+    const full = `${DB_NAME_PREFIX}${normalized}`;
+
+    if (full.length <= MAX_DB_NAME_LENGTH) {
+        return full;
+    }
+
+    const suffix = `_${offset}`;
+    const room = MAX_DB_NAME_LENGTH - DB_NAME_PREFIX.length - suffix.length;
+
+    return `${DB_NAME_PREFIX}${normalized.slice(0, room)}${suffix}`;
+}
+
 function resolveInstance() {
     const name = detectName();
     const offset = resolveOffset(name);
@@ -136,7 +160,9 @@ function resolveInstance() {
     const mongoPort = resolvePort('AUTOTASKCALENDAR_MONGO_PORT', BASE_PORTS.mongoPort, offset);
     const inspectPort = resolvePort('AUTOTASKCALENDAR_INSPECT_PORT', BASE_PORTS.inspectPort, offset);
 
-    const dbName = `autotaskcalendar_${name.replace(/-/g, '_')}`;
+    // MongoDB caps database names at 63 bytes, and branch names can be long. Truncate the
+    // name portion and keep the port offset as a suffix so distinct instances stay distinct.
+    const dbName = buildDbName(name, offset);
     const mongoUrl =
         process.env.AUTOTASKCALENDAR_MONGO_URL ||
         `mongodb://127.0.0.1:${mongoPort}/${dbName}`;

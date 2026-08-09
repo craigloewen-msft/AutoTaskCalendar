@@ -7,10 +7,12 @@ This file contains test credentials for GitHub Copilot and developers to use whe
 To populate the database with test data, run:
 
 ```bash
-npm run seed
+npm run seed                       # the default "basic" scenario
+npm run seed -- --scenario=full    # a much richer dataset
+npm run seed -- --list             # every available scenario
 ```
 
-This will create a test user with sample tasks and events.
+See `docs/SEEDING.md` for what each scenario contains and how to extend them.
 
 ## Test User Credentials
 
@@ -20,9 +22,12 @@ After running the seed script, you can login with:
 - **Password:** `testpassword`
 - **Email:** `testuser@example.com`
 
+The `full` scenario adds a second user, `otheruser` / `testpassword`, whose data exists
+only to prove it never leaks into the first user's views.
+
 ## What's Included
 
-The seed script creates:
+The default `basic` scenario creates:
 
 1. **Test User** with default working hours (9 AM - 5 PM, Monday-Friday)
 2. **Sample Tasks:**
@@ -30,6 +35,7 @@ The seed script creates:
    - Review team code (due in 3 days, 1 hour)
    - Update documentation (due next week, 3 hours, chunked into 1-hour blocks)
    - Research new technologies (backlog task, 2 hours)
+   - 35 completed tasks, enough to page through the Completed Tasks screen
 
 3. **Sample Events:**
    - Team Meeting (tomorrow, 10 AM - 11 AM)
@@ -60,11 +66,12 @@ The seed script creates:
 
 ## Re-seeding the Database
 
-The seed script will automatically delete any existing test user data before creating new data. This ensures you always start with a clean state.
+Seeding wipes all users, tasks, and events in your instance's database before building the
+scenario, so you always start from a clean, known state.
 
 ## Important Notes
 
 - These credentials are for **development and testing only**
 - Do not use these credentials in production
-- The test user is recreated each time you run `npm run seed`
-- All previous test user data (tasks, events) will be deleted when re-seeding
+- The automated test suite seeds its own isolated database and never touches yours;
+  see `docs/TESTING.md`

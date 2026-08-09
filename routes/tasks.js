@@ -165,7 +165,8 @@ function createTaskRoutes(config, authenticateToken) {
             if (!task) {
                 return res.send(returnFailure('Task not found'));
             }
-            await task.remove();
+            // `document.remove()` was removed in Mongoose 8; deleteOne() is the replacement.
+            await task.deleteOne();
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.id);
             return res.json({ success: true, taskList: returnTaskList });
