@@ -10,14 +10,18 @@ would have caught it. If you add a feature, add the test that proves it works.
 ## Running the tests
 
 ```bash
-npm test                      # the whole suite, headless
-npm test -- --project=api     # API tests only (fast, ~35s)
-npm test -- --project=ui      # browser tests only
+npm test                      # the whole suite, headless (~3 min)
+npm run test:api              # API tests only (fast, ~1 min)
+npm run test:ui               # browser tests only
+npm run verify                # build + full suite: what must pass before you ship
 npm test -- tests/api/tasks.spec.js          # one file
 npm test -- -g "completes a task"            # one test by name
-npm run test:ui               # Playwright UI mode: watch, step, time-travel
+npm run test:watch            # Playwright UI mode: watch, step, time-travel
 npm run test:report           # open the HTML report from the last run
 ```
+
+**Iterating on one thing? Do not run the whole suite.** `npm test -- -g "<name>"` is
+seconds rather than minutes, and the full run is the last step before you commit.
 
 First run on a new machine needs the browser binaries once:
 
@@ -25,14 +29,81 @@ First run on a new machine needs the browser binaries once:
 npx playwright install chromium
 ```
 
-`npm test` does everything else for you: starts the test database, builds the web bundle
-if `dist/` is missing, then starts the app and runs the suite.
+`npm test` does everything else for you: starts the test database, waits for it to be
+genuinely ready, builds the web bundle if `dist/` is missing, then starts the app and runs
+the suite.
 
 After changing front-end code, force a rebuild so the browser tests see your changes:
 
 ```bash
 AUTOTASKCALENDAR_TEST_BUILD=1 npm test
 ```
+
+Forgetting this is the most common way to get a confusing UI failure: the specs run against
+the previously built bundle, so your change simply is not there. `npm run verify` always
+rebuilds.
+
+## When a test fails for reasons that are not your code
+
+MongoDB runs in a `wslc` container reached through a host port-forward. That forward can
+drop connections when the host is busy, and it can die outright while the container still
+reports "running". Either way you get `MongoPoolClearedError`, `MongoNetworkError`, or
+`read ECONNRESET` in whichever test happened to be running.
+
+Start here:
+
+```bash
+npm run db:doctor      # every instance's container, and whether its port answers
+```
+
+```
+CONTAINER                                     STATE     PORT
+autotaskcalendar-mongo-my-branch              running   27357 ok
+autotaskcalendar-mongo-my-branch-test         running   27437 REFUSED   <- dead forward
+```
+
+`REFUSED` next to a running container means the forward died. `npm run db:up` now detects
+that and restarts the container for you. If it keeps happening, recreate it (the volume,
+and therefore the data, is kept):
+
+```bash
+npm run db:down && npm run db:up
+```
+
+**Too many live forwards is the other cause.** Every running instance holds one, and past
+about three they start resetting each other's connections. `db:doctor` warns when it sees
+this. Free the ones you are not using:
+
+```bash
+npm run db:gc          # stops this branch's other containers
+npm run db:gc -- --all # stops every instance except the current one
+```
+
+`gc` only stops containers; data lives in the volumes and `db:up` brings any of them back.
+The default is deliberately scoped to your own branch, because other worktrees may belong
+to other agents.
+
+Four things absorb the rest, so you should rarely see a spurious failure:
+
+1. **`db:up` verifies the port**, not just the container state, and restarts a container
+   whose forward has died.
+2. **Global setup** (`tests/global-setup.js`) blocks until the database answers two clean
+   round trips. A fresh container accepts TCP slightly before it can serve queries.
+3. **`withDb`** (`tests/fixtures/db.js`) retries transient failures. Every direct database
+   call in a spec should go through it.
+4. **One Playwright retry** as a backstop. Anything that passes on retry is reported as
+   flaky rather than green.
+
+**Reading the database in a spec? Wrap it.**
+
+```js
+const { test, expect, withDb } = require('../fixtures');
+
+const user = await withDb(() => UserDetails.findOne({ username: 'testuser' }));
+```
+
+An unwrapped model call fails the test outright when the pool blips, and the failure looks
+exactly like a real regression.
 
 ## How isolation works
 
@@ -61,7 +132,8 @@ Everything lives in `tests/`:
 
 ```
 tests/
-  fixtures/index.js     shared fixtures (seed, api, loggedInPage, ...)
+  fixtures/index.js     shared fixtures (seed, api, loggedInPage, withDb, ...)
+  fixtures/db.js        connection handling and transient-failure retries
   api/*.spec.js         HTTP-level tests
   ui/*.spec.js          browser tests
 ```
@@ -79,6 +151,7 @@ directly — that is what gives you seeding and authentication.
 | `apiAnon` | Request context with no credentials, for auth-failure tests. |
 | `loginAs(user, pass)` | Authenticated request context for any seeded user. |
 | `loggedInPage` | A browser page already logged in as `testuser`. |
+| `withDb(fn)` | Run a database query, retrying transient connection failures. |
 
 ### API test template
 
@@ -195,7 +268,7 @@ without opening anything.
 ### Watching tests run live
 
 ```bash
-npm run test:ui        # interactive: pick tests, watch, step, time-travel
+npm run test:watch     # interactive: pick tests, watch, step, time-travel
 npm test -- --headed   # run headless suite but show the browser window
 ```
 

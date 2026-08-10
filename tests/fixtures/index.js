@@ -18,14 +18,17 @@
  *   apiAnon         request context with no credentials, for auth-failure tests
  *   loginAs(u, p)   build an authenticated request context for any user
  *   loggedInPage    a browser page already logged in as the primary user
+ *
+ * Reading the database directly? Wrap it in `withDb` (re-exported here) so a dropped
+ * connection retries instead of failing the test.
  */
 
 const base = require('@playwright/test');
-const mongoose = require('mongoose');
 
 const { runSeed } = require('../../seed');
 const { TaskDetails, EventDetails } = require('../../models');
 const instance = require('../../instance');
+const { withDb } = require('./db');
 
 const baseURL = process.env.AUTOTASKCALENDAR_BASE_URL || `http://127.0.0.1:${instance.apiPort}`;
 
@@ -36,33 +39,8 @@ const baseURL = process.env.AUTOTASKCALENDAR_BASE_URL || `http://127.0.0.1:${ins
  * closing there would pull the connection out from under later files. Playwright tears the
  * worker process down at the end of the run, which closes it for us.
  *
- * The connection sits idle for long stretches (a whole project's worth of API tests can
- * pass without a reseed), and idle TCP sockets to the container get dropped. `maxIdleTimeMS`
- * retires pooled sockets before they can go stale, which is what stops the driver handing
- * out a dead one and throwing MongoPoolClearedError mid-seed.
+ * Connection handling and transient-error retries live in ./db.js.
  */
-const CONNECT_OPTIONS = {
-    maxIdleTimeMS: 10_000,
-    serverSelectionTimeoutMS: 10_000,
-    heartbeatFrequencyMS: 5_000,
-};
-
-async function ensureConnected() {
-    if (mongoose.connection.readyState === 1) {
-        try {
-            await mongoose.connection.db.admin().ping();
-            return;
-        } catch {
-            // Stale pool: fall through and rebuild the connection.
-        }
-    }
-
-    if (mongoose.connection.readyState !== 0) {
-        await mongoose.connection.close().catch(() => {});
-    }
-
-    await mongoose.connect(instance.mongoUrl, CONNECT_OPTIONS);
-}
 
 /**
  * Log in over the real API and return a request context that carries the JWT, exactly
@@ -86,24 +64,6 @@ async function createAuthedContext(playwright, username, password) {
     return { context, token: body.token, user: body.user };
 }
 
-/**
- * Transient infrastructure failures, as opposed to genuine test failures.
- *
- * The MongoDB container is reached through a wslc port-forward, which can briefly refuse
- * connections when the host is busy. Match on the error NAME as well as the message:
- * MongooseServerSelectionError's message is just "connect ECONNREFUSED ...", so matching
- * message text alone misses it.
- */
-function isTransientDbError(error) {
-    const name = error?.name || '';
-    const message = error?.message || '';
-
-    return (
-        /MongoNetworkError|MongoPoolCleared|ServerSelection|MongoTopologyClosed/i.test(name) ||
-        /pool|closed|topology|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|server selection/i.test(message)
-    );
-}
-
 const test = base.test.extend({
     /**
      * Reseed the database. Call it first in any test that depends on data.
@@ -112,30 +72,8 @@ const test = base.test.extend({
         let lastResult = null;
 
         const seed = async () => {
-            // The container is reached through a port-forward that can flap when the host
-            // is busy, so retry with backoff rather than failing a test for an
-            // infrastructure hiccup.
-            let lastError = null;
-
-            for (let attempt = 0; attempt < 4; attempt++) {
-                try {
-                    await ensureConnected();
-                    lastResult = await runSeed({ mongoUrl: instance.mongoUrl });
-                    return lastResult;
-                } catch (error) {
-                    lastError = error;
-
-                    if (!isTransientDbError(error)) {
-                        throw error;
-                    }
-
-                    // Tear the connection down so the next attempt builds a clean pool.
-                    await mongoose.connection.close().catch(() => {});
-                    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
-                }
-            }
-
-            throw lastError;
+            lastResult = await withDb(() => runSeed({ mongoUrl: instance.mongoUrl }));
+            return lastResult;
         };
 
         // Let other fixtures see whether this test already seeded.
@@ -150,8 +88,10 @@ const test = base.test.extend({
             const result = lastResult || (await seed());
             const userId = result.primary.user._id;
 
-            await TaskDetails.deleteMany({ userRef: userId });
-            await EventDetails.deleteMany({ userRef: userId });
+            await withDb(async () => {
+                await TaskDetails.deleteMany({ userRef: userId });
+                await EventDetails.deleteMany({ userRef: userId });
+            });
 
             return result;
         };
@@ -221,4 +161,4 @@ const test = base.test.extend({
     },
 });
 
-module.exports = { test, expect: base.expect, baseURL };
+module.exports = { test, expect: base.expect, baseURL, withDb };

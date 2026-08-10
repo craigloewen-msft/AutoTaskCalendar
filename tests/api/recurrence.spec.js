@@ -1,6 +1,6 @@
 const moment = require('moment');
 
-const { test, expect } = require('../fixtures');
+const { test, expect, withDb } = require('../fixtures');
 const { TaskDetails, UserDetails } = require('../../models');
 const {
     occurrenceDatesBetween,
@@ -22,11 +22,11 @@ async function schedule(api) {
 }
 
 async function loadUser(username = 'testuser') {
-    return UserDetails.findOne({ username });
+    return withDb(() => UserDetails.findOne({ username }));
 }
 
 async function occurrencesOf(template) {
-    return TaskDetails.find({ seriesRef: template._id }).sort({ occurrenceDate: 1 });
+    return withDb(() => TaskDetails.find({ seriesRef: template._id }).sort({ occurrenceDate: 1 }));
 }
 
 // A Monday, so weekday expectations read clearly.

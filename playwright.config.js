@@ -9,15 +9,17 @@ const isCI = !!process.env.CI;
 
 module.exports = defineConfig({
     testDir: './tests',
+    // Waits for the database to be genuinely ready, so the first test of a run does not
+    // eat the container's cold start.
+    globalSetup: require.resolve('./tests/global-setup.js'),
     // Tests share one database, so they run one at a time and reseed what they need.
     fullyParallel: false,
     workers: 1,
     forbidOnly: isCI,
     // The MongoDB container is reached through a wslc port-forward that can drop a pooled
-    // connection when the host is busy, which fails a test for reasons unrelated to the
-    // code. One retry re-runs the test with fresh fixtures and a fresh connection. A test
-    // that fails twice is a real failure; check the report, which marks anything that
-    // passed on retry as flaky.
+    // connection when the host is busy. Direct database access should go through `withDb`
+    // (tests/fixtures/db.js), which retries; this is the backstop for everything else. A
+    // test that fails twice is a real failure; the report marks retried passes as flaky.
     retries: isCI ? 2 : 1,
     timeout: 30_000,
     expect: { timeout: 10_000 },

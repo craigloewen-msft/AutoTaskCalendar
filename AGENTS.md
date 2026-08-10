@@ -28,13 +28,18 @@ Keep all comments short and concise, usually just 1 or 2 sentences max.
 
 MongoDB runs in a `wslc` container (no compose support; `scripts/dev-db.sh` replaces it):
 `npm run db:up | db:down | db:reset | db:status | db:logs`.
-`scripts/dev-db.sh nuke-all` removes every instance's container and volume.
+`npm run db:doctor` lists every instance's container and whether its port actually answers;
+`npm run db:gc` stops the ones you are not using. `scripts/dev-db.sh nuke-all` removes every
+instance's container and volume.
 
 ## Verify
 
-`npm run build` and `npm test` must both pass. The suite is Playwright, covering the API
+`npm run verify` (build + full suite) must pass. The suite is Playwright, covering the API
 and the UI, and it runs against its own isolated database so it never disturbs your dev
 stack. **Any behaviour change ships with a spec.**
+
+While iterating, stay narrow: `npm run test:api` (~1 min) or `npm test -- -g "<name>"`
+(seconds). Save the full run for just before you commit.
 
 See `docs/TESTING.md` to run/write/debug tests and `docs/SEEDING.md` for the seeded
 dataset.

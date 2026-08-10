@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const moment = require('moment');
 
-const { test, expect } = require('../fixtures');
+const { test, expect, withDb } = require('../fixtures');
 const { EventDetails, TaskDetails, UserDetails } = require('../../models');
 
 const MS_PER_MINUTE = 60 * 1000;
@@ -17,18 +17,22 @@ async function schedule(api) {
 }
 
 async function loadUser(username = 'testuser') {
-    return UserDetails.findOne({ username });
+    return withDb(() => UserDetails.findOne({ username }));
 }
 
 async function taskEvents(user) {
-    return EventDetails.find({
-        userRef: user._id,
-        type: { $in: ['task', 'task-chunk'] },
-    }).sort({ startDate: 1 });
+    return withDb(() =>
+        EventDetails.find({
+            userRef: user._id,
+            type: { $in: ['task', 'task-chunk'] },
+        }).sort({ startDate: 1 })
+    );
 }
 
 async function calendarEvents(user) {
-    return EventDetails.find({ userRef: user._id, type: 'calendar' }).sort({ startDate: 1 });
+    return withDb(() =>
+        EventDetails.find({ userRef: user._id, type: 'calendar' }).sort({ startDate: 1 })
+    );
 }
 
 function dayName(date) {
