@@ -47,7 +47,7 @@ and nothing else.
 
 ```mermaid
 flowchart LR
-  R["Role<br/>title · description · color<br/>startDate · endDate?"] --> G["Goal<br/>title · description<br/>startDate · endDate?<br/>roleRef"]
+  R["Role<br/>title · description<br/>startDate · endDate?"] --> G["Goal<br/>title · description<br/>startDate · endDate?<br/>roleRef"]
   G --> P["Project<br/>title · description<br/>startDate? · endDate?<br/>goalRef"]
   P -.->|"optional"| T["Task<br/>+ projectRef"]
 ```
@@ -117,7 +117,7 @@ Roles contain their goals, goals contain their projects — each record exactly 
 {
   "success": true,
   "roles": [{
-    "_id": "...", "title": "Engineer", "description": "...", "color": "#667eea",
+    "_id": "...", "title": "Engineer", "description": "...",
     "startDate": "...", "endDate": null, "sortOrder": 0,
     "goalList": [{
       "_id": "...", "title": "Ship v2 by June", "description": "...",
@@ -190,6 +190,12 @@ unparseable date is ignored rather than erroring.
 - On edit, only fields present in the body are touched, so a partial update cannot silently
   blank a date.
 
+Date parsing itself comes from `parseDate()` in `utils/helpers.js`, which is deliberately
+policy-free: it returns `{ provided, valid, date }` and lets the caller decide what a
+missing or unusable value means. Compass wraps it twice — `requireDate()` treats a bad
+value as fatal for body fields, and `optionalDate()` silently ignores one for the
+`completedFrom`/`completedTo` query params.
+
 ### Delete semantics
 
 Deleting something with children **fails** by default:
@@ -236,10 +242,6 @@ All of the interpretation happens in the page:
 | **Someday** drawer | project with no `startDate` |
 | **Archive** drawer | `endDate` set and already past |
 | `N active` | count of incomplete tasks whose `projectRef` matches |
-
-The editor drawer is the same component for a role, a goal, or a project; they differ only
-by the parent picker and the role's colour field. **"End" is the primary lifecycle action
-and Delete is secondary** — ending preserves history, and Delete never touches tasks.
 
 ### On the Calendar page
 
@@ -309,7 +311,8 @@ actually happens.
   sleep schedule"* exists precisely to render this.
 - Collapsed **Someday** / **Archive** / **Unaligned** sections styled as real drawers.
 - `Calendar.vue`: tint sidebar task entries and DayPilot blocks with the owning role's colour
-  (walk `projectRef → goalRef → roleRef` client-side); add a role filter control.
+  (walk `projectRef → goalRef → roleRef` client-side, then `buildRoleColorMap()` from
+  `utils/roleColors.js`); add a role filter control.
 - Soft guardrail hints (>5 active roles, >3 goals per role) — never blocking.
 - If completed-per-project counts are wanted on the cards, add a **separate** small endpoint.
   Do not extend `getCompass`.

@@ -57,7 +57,6 @@ const virtualsOn = { toJSON: { virtuals: true }, toObject: { virtuals: true } };
 const RoleDetail = new Schema({
     title: String,
     description: String,
-    color: String,
     startDate: Date,
     // No end date means the role is still active.
     endDate: Date,

@@ -28,7 +28,6 @@ test.describe('compass', () => {
 
         const engineer = findRole(body, 'Engineer');
         expect(engineer).toBeTruthy();
-        expect(engineer.color).toBe('#667eea');
         expect(engineer.description).toBe(data.named.engineerRole.description);
 
         const shipV2 = findGoal(engineer, 'Ship v2 by June');

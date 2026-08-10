@@ -38,7 +38,7 @@
           class="role-block"
         >
           <div class="role-row">
-            <span class="role-swatch" :style="{ backgroundColor: role.color || '#667eea' }"></span>
+            <span class="role-swatch" :style="{ backgroundColor: roleColors[role._id] }"></span>
             <span class="role-title">{{ role.title }}</span>
             <span class="item-dates">{{ dateRange(role) }}</span>
             <button class="link-btn" :aria-label="'Edit ' + role.title" @click="openEdit('role', role)">✎</button>
@@ -121,6 +121,7 @@
 <script>
 import { BContainer } from "bootstrap-vue-next";
 import CompassEditorDrawer from "../components/CompassEditorDrawer.vue";
+import { buildRoleColorMap } from "../utils/roleColors";
 
 /**
  * Compass: roles > goals > projects.
@@ -142,6 +143,10 @@ export default {
     };
   },
   computed: {
+    // Colours are derived from role order, never stored, so nobody has to pick one.
+    roleColors() {
+      return buildRoleColorMap(this.roles);
+    },
     activeRoles() {
       return this.roles.filter((role) => !this.hasEnded(role));
     },

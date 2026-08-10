@@ -30,16 +30,6 @@
           ></textarea>
         </div>
 
-        <div v-if="level === 'role'" class="form-group">
-          <label for="compass-color">Colour</label>
-          <input
-            id="compass-color"
-            v-model="form.color"
-            type="color"
-            class="form-control compass-color-input"
-          />
-        </div>
-
         <div v-if="level !== 'role'" class="form-group">
           <label for="compass-parent">{{ parentLabel }}*</label>
           <select id="compass-parent" v-model="form.parentId" class="form-control">
@@ -122,7 +112,6 @@ export default {
       form: {
         title: "",
         description: "",
-        color: "#667eea",
         startDate: "",
         endDate: "",
         parentId: null,
@@ -158,7 +147,6 @@ export default {
     if (item) {
       this.form.title = item.title || "";
       this.form.description = item.description || "";
-      this.form.color = item.color || "#667eea";
       this.form.startDate = this.toInputDate(item.startDate);
       this.form.endDate = this.toInputDate(item.endDate);
       this.form.parentId = item.roleRef || item.goalRef || null;
@@ -189,11 +177,9 @@ export default {
         endDate: this.isActive ? null : this.form.endDate || null,
       };
 
-      if (this.level === "role") {
-        payload.color = this.form.color;
-      } else if (this.level === "goal") {
+      if (this.level === "goal") {
         payload.roleRef = this.form.parentId;
-      } else {
+      } else if (this.level === "project") {
         payload.goalRef = this.form.parentId;
       }
 
@@ -269,11 +255,6 @@ export default {
 
 .drawer-body .form-group {
   margin-bottom: 16px;
-}
-
-.compass-color-input {
-  height: 42px;
-  padding: 4px;
 }
 
 .compass-active-toggle {
