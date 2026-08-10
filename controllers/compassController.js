@@ -1,4 +1,5 @@
 const { TaskDetails, RoleDetails, GoalDetails, ProjectDetails } = require('../models');
+const { parseDate } = require('../utils/helpers');
 
 /**
  * Compass: roles > goals > projects. See docs/COMPASS.md.
@@ -40,31 +41,27 @@ function fail(message) {
     throw new CompassError(message);
 }
 
-// Returns a Date, null for blank input, or throws when the value is unusable.
-function parseDate(value, fieldName, { required }) {
-    if (value === undefined || value === null || value === '') {
+// Strict policy: a blank value is only allowed when optional, and a bad one is fatal.
+function requireDate(value, fieldName, { required }) {
+    const { provided, valid, date } = parseDate(value);
+
+    if (!provided) {
         if (required) {
             fail(`${fieldName} is required`);
         }
         return null;
     }
 
-    const parsed = new Date(value);
-    if (isNaN(parsed.getTime())) {
+    if (!valid) {
         fail(`${fieldName} is not a valid date`);
     }
 
-    return parsed;
+    return date;
 }
 
-// Lenient variant for query strings: an unparseable date is ignored rather than fatal.
-function parseOptionalDate(value) {
-    if (!value) {
-        return null;
-    }
-
-    const parsed = new Date(value);
-    return isNaN(parsed.getTime()) ? null : parsed;
+// Lenient policy for query strings: an unparseable date is ignored rather than fatal.
+function optionalDate(value) {
+    return parseDate(value).date;
 }
 
 /**
@@ -117,12 +114,8 @@ async function buildFields(level, body, user, existing) {
         fields.description = body.description || '';
     }
 
-    if (level === 'role' && (isCreate || body.color !== undefined)) {
-        fields.color = body.color || '#667eea';
-    }
-
     if (isCreate || body.startDate !== undefined) {
-        fields.startDate = parseDate(body.startDate, 'Start date', {
+        fields.startDate = requireDate(body.startDate, 'Start date', {
             required: isCreate && config.startDateRequired,
         });
 
@@ -133,7 +126,7 @@ async function buildFields(level, body, user, existing) {
     }
 
     if (isCreate || body.endDate !== undefined) {
-        fields.endDate = parseDate(body.endDate, 'End date', { required: false });
+        fields.endDate = requireDate(body.endDate, 'End date', { required: false });
     }
 
     if (body.sortOrder !== undefined) {
@@ -275,8 +268,8 @@ function completedFilter(userId, from, to) {
  */
 async function getCompassPayload(user, { completedFrom, completedTo } = {}) {
     const sort = { sortOrder: 1, startDate: 1 };
-    const from = parseOptionalDate(completedFrom);
-    const to = parseOptionalDate(completedTo);
+    const from = optionalDate(completedFrom);
+    const to = optionalDate(completedTo);
 
     const roles = await RoleDetails.find({ userRef: user._id })
         .sort(sort)

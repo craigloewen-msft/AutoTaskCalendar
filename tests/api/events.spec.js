@@ -90,4 +90,16 @@ test.describe('events', () => {
 
         expect(body.events.some((e) => e.title.includes('OTHER USER SECRET'))).toBe(false);
     });
+
+    test('rejects an unparseable date instead of leaking a cast error', async ({ seed, api }) => {
+        await seed();
+
+        const res = await api.get('/api/getUserEvents/not-a-date');
+        const body = await res.json();
+
+        expect(body.success).toBe(false);
+        expect(body.log).toContain('valid date');
+        // The raw Mongoose failure must never reach the caller.
+        expect(body.log).not.toContain('Cast to date');
+    });
 });

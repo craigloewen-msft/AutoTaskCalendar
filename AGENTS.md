@@ -46,7 +46,8 @@ dataset.
 - `routes/` — HTTP endpoints; `controllers/` — business logic.
 - `controllers/scheduling.js` — the task-scheduling algorithm. Highest-risk code.
 - `models/index.js` — all Mongoose schemas. Import these; never redefine.
-- `middleware/auth.js` — JWT `authenticateToken`. `utils/helpers.js` — `returnFailure()`.
+- `middleware/auth.js` — JWT `authenticateToken`. `utils/helpers.js` — `returnFailure()`,
+  `parseDate()`.
 - `webinterface/src/` — Vue app (`views/`, `components/`, `store.js`).
 - `seed/` — the fake-data factories and dataset; `scripts/seed.js` is the CLI.
 - `tests/` — Playwright specs (`api/`, `ui/`) and shared `fixtures/`.

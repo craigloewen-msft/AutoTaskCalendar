@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { google } = require('googleapis');
 const { UserDetails } = require('../models');
-const { returnFailure } = require('../utils/helpers');
+const { returnFailure, parseDate } = require('../utils/helpers');
 const {
   getEventListFromUsername,
   createEvent,
@@ -85,7 +85,13 @@ function createEventRoutes(config, authenticateToken) {
     }
     try {
       const { EventDetails } = require('../models');
-      const date = new Date(req.params.date);
+      const { valid, date } = parseDate(req.params.date);
+
+      // Without this an unusable date reaches Mongoose and surfaces as a raw CastError.
+      if (!valid || !date) {
+        return res.send(returnFailure('A valid date is required'));
+      }
+
       const startOfWeek = new Date(date);
       startOfWeek.setUTCDate(startOfWeek.getUTCDate() - startOfWeek.getUTCDay());
       startOfWeek.setUTCHours(0, 0, 0);
