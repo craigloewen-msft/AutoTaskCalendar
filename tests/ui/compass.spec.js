@@ -102,6 +102,19 @@ test.describe('compass page', () => {
         await expect(page.locator('.role-title', { hasText: 'Neighbour' })).toBeVisible();
     });
 
+    test('keeps Compass civil dates stable in a non-UTC browser', async ({ nonUtcPage: page }) => {
+        await page.goto('/#/compass');
+        await page.click('button:has-text("+ Role")');
+        await page.fill('#compass-title', 'Timezone role');
+        await page.fill('#compass-start', '2024-03-01');
+        await page.click('.drawer-footer button:has-text("Save")');
+
+        const role = page.locator('.role-block', { hasText: 'Timezone role' });
+        await expect(role).toContainText('Mar 2024');
+        await role.locator('.role-row .link-btn').click();
+        await expect(page.locator('#compass-start')).toHaveValue('2024-03-01');
+    });
+
     test('offers projects grouped by role and goal on the task modal', async ({
         seed,
         loggedInPage: page,

@@ -74,6 +74,7 @@ export default {
           username: this.input.username,
           password: this.input.password,
           email: this.input.email,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           githubUsername: this.input.githubUsername,
         })
         .then((response) => {

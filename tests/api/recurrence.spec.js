@@ -32,6 +32,7 @@ async function occurrencesOf(template) {
 // A Monday, so weekday expectations read clearly.
 const MONDAY = moment('2024-01-01').toDate();
 const days = (dates) => dates.map((d) => moment(d).format('YYYY-MM-DD'));
+const dateOnly = (offset = 0) => moment.utc().add(offset, 'days').format('YYYY-MM-DD');
 
 test.describe('recurrence rules', () => {
     test('weekly byWeekday generates only the chosen days', () => {
@@ -137,6 +138,27 @@ test.describe('recurrence rules', () => {
         expect(dates.every((d) => moment(d).hour() === 0)).toBe(true);
     });
 
+    test('keeps recurrence dates stable across the fall DST transition', () => {
+        const dates = occurrenceDatesBetween(
+            { freq: 'weekly', interval: 1, byWeekday: [0] },
+            '2024-10-27',
+            '2024-11-10',
+            '2024-10-27'
+        );
+        expect(days(dates)).toEqual(['2024-10-27', '2024-11-03', '2024-11-10']);
+        expect(dates.every((date) => date.getUTCHours() === 0)).toBe(true);
+    });
+
+    test('generates current occurrences for series older than the iteration guard', () => {
+        const dates = occurrenceDatesBetween(
+            { freq: 'daily', interval: 1 },
+            '2026-01-01',
+            '2026-01-03',
+            '2010-01-01'
+        );
+        expect(days(dates)).toEqual(['2026-01-01', '2026-01-02', '2026-01-03']);
+    });
+
     test('describes a rule in plain English', () => {
         expect(describeRecurrence({ freq: 'weekly', interval: 1, byWeekday: [1, 2] }))
             .toBe('Every week on Monday and Tuesday');
@@ -188,15 +210,15 @@ test.describe('recurrence expansion', () => {
         expect(second.map((o) => o._id.toString())).toEqual(first.map((o) => o._id.toString()));
     });
 
-    test('each occurrence is due at the end of its own day', async ({ seed, api }) => {
+    test('each occurrence carries its own canonical due day', async ({ seed, api }) => {
         const data = await seed();
         await schedule(api);
 
         const occurrences = await occurrencesOf(data.named.weekdaysSeries);
 
         for (const occurrence of occurrences) {
-            expect(moment(occurrence.dueDate).isSame(occurrence.occurrenceDate, 'day')).toBe(true);
-            expect(moment(occurrence.dueDate).hour()).toBe(23);
+            expect(occurrence.dueDate.getTime()).toBe(occurrence.occurrenceDate.getTime());
+            expect(occurrence.dueDate.getUTCHours()).toBe(0);
         }
     });
 
@@ -372,10 +394,10 @@ test.describe('recurrence expansion', () => {
         const occurrences = await occurrencesOf(data.named.weekdaysSeries);
         expect(occurrences.length).toBeGreaterThan(0);
 
-        // occurrenceDate is always local midnight; scheduledDate carries a real clock time.
+        // occurrenceDate is a canonical UTC civil-date marker; scheduledDate is an instant.
         for (const occurrence of occurrences) {
-            expect(moment(occurrence.occurrenceDate).hour()).toBe(0);
-            expect(moment(occurrence.occurrenceDate).minute()).toBe(0);
+            expect(occurrence.occurrenceDate.getUTCHours()).toBe(0);
+            expect(occurrence.occurrenceDate.getUTCMinutes()).toBe(0);
         }
 
         // Scheduling sets placement but must never rewrite identity. Were these one field,
@@ -403,6 +425,20 @@ test.describe('recurrence expansion', () => {
         expect(occurrence.seriesRecurrence).toBeTruthy();
         expect(occurrence.seriesRecurrence.freq).toBe('weekly');
         expect(occurrence.seriesRecurrence.byWeekday).toEqual([1, 2]);
+    });
+
+    test('serializes an attached series cutoff as a civil date', async ({ seed, api }) => {
+        const data = await seed();
+        await TaskDetails.updateOne(
+            { _id: data.named.weekdaysSeries._id },
+            { $set: { 'recurrence.endsOn': moment.utc().add(30, 'days').startOf('day').toDate() } }
+        );
+        await schedule(api);
+        const list = await (await api.get('/api/getUserTasks')).json();
+        const occurrence = list.taskList.find(
+            (task) => task.seriesRef === data.named.weekdaysSeries._id.toString()
+        );
+        expect(occurrence.seriesRecurrence.endsOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
     test('editing an occurrence does not corrupt its template', async ({ seed, api }) => {
@@ -450,8 +486,8 @@ test.describe('recurrence expansion', () => {
             data: {
                 title: 'Instant series',
                 duration: 30,
-                startDate: new Date().toISOString(),
-                dueDate: new Date(Date.now() + 86400000).toISOString(),
+                startDate: dateOnly(),
+                dueDate: dateOnly(1),
                 recurrence: { freq: 'weekly', interval: 1, byWeekday: [1, 2] },
             },
         });
@@ -469,8 +505,8 @@ test.describe('recurrence validation through the API', () => {
     const base = () => ({
         title: 'Repeating thing',
         duration: 30,
-        startDate: new Date().toISOString(),
-        dueDate: new Date(Date.now() + 86400000).toISOString(),
+        startDate: dateOnly(),
+        dueDate: dateOnly(1),
     });
 
     test('creates a task with a recurrence rule', async ({ seed, api }) => {
@@ -485,6 +521,14 @@ test.describe('recurrence validation through the API', () => {
         const created = await TaskDetails.findOne({ userRef: user._id, title: 'Repeating thing' });
         expect(created.recurrence.freq).toBe('weekly');
         expect(created.recurrence.byWeekday).toEqual([1, 2]);
+    });
+
+    test('rejects an impossible recurrence cutoff', async ({ seed, api }) => {
+        await seed();
+        const res = await api.post('/api/createTask', {
+            data: { ...base(), recurrence: { freq: 'daily', endsOn: '2024-02-31' } },
+        });
+        expect((await res.json()).success).toBe(false);
     });
 
     test('createTask persists a plain repeat string', async ({ seed, api }) => {
@@ -526,7 +570,7 @@ test.describe('recurrence validation through the API', () => {
             data: {
                 title: 'Repeating backlog',
                 duration: 30,
-                startDate: new Date().toISOString(),
+                startDate: dateOnly(),
                 isBacklog: true,
                 recurrence: { freq: 'weekly', interval: 1 },
             },

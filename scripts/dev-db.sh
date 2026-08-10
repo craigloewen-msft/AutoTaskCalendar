@@ -71,32 +71,38 @@ volume_exists() {
     wslc_clean volume list --format json | json_names | grep -Fxq "$VOLUME_NAME"
 }
 
-# Is the published port accepting connections on the host?
+# Run a real MongoDB command through the host port-forward.
 #
-# Retries a few times: under load a single probe can be refused spuriously, and treating
-# that as a dead forward would restart a perfectly healthy container.
-port_open() {
-    local attempt
-    for attempt in 1 2 3; do
-        if (exec 3<>"/dev/tcp/127.0.0.1/${MONGO_PORT}") >/dev/null 2>&1; then
-            return 0
-        fi
-        sleep 1
-    done
-    return 1
+# A stale wslc forward can accept TCP while dropping every MongoDB handshake, so a socket
+# probe and an in-container ping are not enough. This checks the exact route the app uses.
+mongo_ping() {
+    AUTOTASKCALENDAR_HEALTHCHECK_URL="$MONGO_URL" node - <<'NODE' >/dev/null 2>&1
+const mongoose = require('mongoose');
+
+(async () => {
+    try {
+        await mongoose.connect(process.env.AUTOTASKCALENDAR_HEALTHCHECK_URL, {
+            serverSelectionTimeoutMS: 2_000,
+            connectTimeoutMS: 2_000,
+            socketTimeoutMS: 2_000,
+            maxPoolSize: 1,
+        });
+        await mongoose.connection.db.admin().ping();
+        await mongoose.connection.close();
+    } catch (error) {
+        await mongoose.connection.close().catch(() => {});
+        process.exitCode = 1;
+    }
+})();
+NODE
 }
 
-# Block until mongod answers THROUGH THE PUBLISHED PORT.
-#
-# Probing inside the container proves mongod is alive but says nothing about the host
-# port-forward, which can die while the container still reports "running". Everything talks
-# to the database over 127.0.0.1:$MONGO_PORT, so that is what has to be verified.
+# Block until mongod answers through the published port.
 wait_for_ready() {
     local deadline=$((SECONDS + READINESS_TIMEOUT_SECONDS))
 
     while (( SECONDS < deadline )); do
-        if port_open && wslc exec "$CONTAINER_NAME" mongosh --quiet --eval 'db.adminCommand("ping")' \
-            >/dev/null 2>&1; then
+        if mongo_ping; then
             return 0
         fi
         sleep 1
@@ -112,12 +118,12 @@ cmd_up() {
     if container_running; then
         # "Running" is not the same as reachable: the host port-forward can die while the
         # container stays up, and every caller reaches mongo through that forward.
-        if port_open; then
+        if mongo_ping; then
             echo "mongo already running for instance '$INSTANCE_NAME' on port $MONGO_PORT"
             return 0
         fi
 
-        echo "Container '$CONTAINER_NAME' is running but port $MONGO_PORT is refused; restarting it..."
+        echo "Container '$CONTAINER_NAME' is running but its published Mongo connection is stale; restarting it..."
         wslc stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
         wslc start "$CONTAINER_NAME" >/dev/null
         wait_for_ready

@@ -2,14 +2,38 @@ const mongoose = require('mongoose');
 const passportLocalMongoose = require('passport-local-mongoose');
 
 const Schema = mongoose.Schema;
+const { dateOnlyFromMarker } = require('../utils/temporal');
+
+function serializeCivilDate(ret, path) {
+    if (ret[path]) ret[path] = dateOnlyFromMarker(ret[path]);
+}
+
+function taskTemporalTransform(doc, ret) {
+    serializeCivilDate(ret, 'startDate');
+    serializeCivilDate(ret, 'dueDate');
+    serializeCivilDate(ret, 'occurrenceDate');
+    if (ret.recurrence?.endsOn) ret.recurrence.endsOn = dateOnlyFromMarker(ret.recurrence.endsOn);
+    return ret;
+}
+
+function compassTemporalTransform(doc, ret) {
+    serializeCivilDate(ret, 'startDate');
+    serializeCivilDate(ret, 'endDate');
+    return ret;
+}
 
 const UserDetail = new Schema({
     username: { type: String, index: true },
     password: String,
     email: String,
     lastLoginDate: Date,
+    // Deprecated compatibility fields. Migrated users use timezone-aware wall-clock values.
     workingStartTime: Date,
     workingDuration: Number,
+    timeZone: { type: String, default: 'UTC' },
+    workingStartMinutes: { type: Number, default: 540 },
+    workingEndMinutes: { type: Number, default: 1020 },
+    temporalDataVersion: { type: Number, default: 0 },
     workingDays: [String],
     googleAccessToken: String,
     googleRefreshToken: String,
@@ -56,8 +80,8 @@ const TaskDetail = new Schema({
     recurrence: { type: RecurrenceRule, default: null },
     // Set on generated occurrences, pointing at the template that owns the rule.
     seriesRef: { type: Schema.Types.ObjectId, ref: 'taskInfo', default: null },
-    // Scheduler INPUT: which occurrence of the series this is, at local midnight. Stable
-    // identity, so not the same as scheduledDate, which slips when a day is already full.
+    // Scheduler INPUT: canonical UTC marker for the civil date this occurrence represents.
+    // Stable identity, unlike scheduledDate, which slips when a day is already full.
     occurrenceDate: { type: Date, default: null },
     isBacklog: Boolean,
     priority: { type: Number, default: 100 },
@@ -65,13 +89,16 @@ const TaskDetail = new Schema({
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
     // Optional Compass link. A task with no project behaves exactly as before.
     projectRef: { type: Schema.Types.ObjectId, ref: 'projectInfo', default: null },
-});
+}, { toJSON: { transform: taskTemporalTransform }, toObject: { transform: taskTemporalTransform } });
 
 // --- Compass: roles > goals > projects. See docs/COMPASS.md. ---
 // Children carry the parent ref; parents expose children through a virtual, so the whole
 // tree is one populate() call. `virtuals: true` on toJSON is required or the populated
 // children vanish when Express serialises the response.
-const virtualsOn = { toJSON: { virtuals: true }, toObject: { virtuals: true } };
+const virtualsOn = {
+    toJSON: { virtuals: true, transform: compassTemporalTransform },
+    toObject: { virtuals: true, transform: compassTemporalTransform },
+};
 
 const RoleDetail = new Schema({
     title: String,
@@ -114,7 +141,7 @@ const ProjectDetail = new Schema({
     sortOrder: { type: Number, default: 0 },
     goalRef: { type: Schema.Types.ObjectId, ref: 'goalInfo', index: true },
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo', index: true },
-});
+}, { toJSON: { transform: compassTemporalTransform }, toObject: { transform: compassTemporalTransform } });
 
 // Expansion dedupes on this key, so re-runs never duplicate occurrences.
 TaskDetail.index({ seriesRef: 1, occurrenceDate: 1 });
@@ -127,6 +154,10 @@ const EventDetail = new Schema({
     notes: String,
     type: String,
     externalEventID: String,
+    allDay: { type: Boolean, default: false },
+    allDayStart: { type: String, default: null },
+    allDayEnd: { type: String, default: null },
+    sourceTimeZone: { type: String, default: null },
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo' },
     taskRef: { type: Schema.Types.ObjectId, ref: 'taskInfo' },
 });

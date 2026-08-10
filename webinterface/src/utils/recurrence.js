@@ -5,6 +5,8 @@
  * the user reads must match what the API stores. Change one, change both.
  */
 
+import { formatCivilDate } from './temporal';
+
 export const WEEKDAY_NAMES = [
   'Sunday',
   'Monday',
@@ -32,13 +34,11 @@ function ordinal(n) {
 }
 
 function formatDate(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatCivilDate(
+    value,
+    { day: 'numeric', month: 'short', year: 'numeric' },
+    'en-GB'
+  );
 }
 
 /** Render a rule as a sentence, e.g. "Every week on Monday and Tuesday". */

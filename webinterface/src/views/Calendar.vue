@@ -60,6 +60,18 @@
             Next <span class="nav-icon">▶</span>
           </button>
         </div>
+        <div v-if="allDayEvents.length" class="all-day-events" data-test="all-day-row">
+          <span class="all-day-label">All day</span>
+          <span
+            v-for="event in allDayEvents"
+            :key="event._id"
+            class="all-day-event"
+            :data-event-date="event.allDayStart"
+            :data-event-end="event.allDayEnd"
+          >
+            {{ allDayEventRange(event) }} · {{ event.title }}
+          </span>
+        </div>
         <div class="calendar-container">
           <DayPilotCalendar :config="config" ref="calendar" id="dp" />
         </div>
@@ -299,6 +311,16 @@
 import { DayPilot, DayPilotCalendar } from "@daypilot/daypilot-lite-vue";
 import { BButton, BModal, BFormCheckbox } from 'bootstrap-vue-next';
 import RepeatEditor from "../components/RepeatEditor.vue";
+import {
+  addCalendarDays,
+  apiDateOnly,
+  calendarDayDifference,
+  dayPilotWallToIso,
+  dateOnlyInTimeZone,
+  instantToDayPilotWall,
+  instantPartsInTimeZone,
+  localDateOnly,
+} from "../utils/temporal";
 
 // The sidebar shows this far ahead; the scheduler materialises 60 days of occurrences.
 const SIDEBAR_WINDOW_DAYS = 14;
@@ -320,7 +342,21 @@ export default {
         businessBeginsHour: 10,
         businessEndsHour: 18,
         cellDuration: 15,
-        startDate: new DayPilot.Date().firstDayOfWeek(),
+        onBeforeCellRender: (args) => {
+          const user = this.$store.state.user || {};
+          const start = user.workingStartMinutes ?? 9 * 60;
+          const end = user.workingEndMinutes ?? 17 * 60;
+          const workingDays = user.workingDays || [];
+          const instant = dayPilotWallToIso(args.cell.start);
+          const parts = instantPartsInTimeZone(instant, user.timeZone);
+          args.cell.properties.business = !!parts &&
+            workingDays.includes(parts.weekday) &&
+            parts.minutes >= start &&
+            parts.minutes < end;
+        },
+        startDate: new DayPilot.Date(
+          dateOnlyInTimeZone(this.$store.state.user?.timeZone)
+        ).firstDayOfWeek(),
         onTimeRangeSelected: async (args) => {
           const modal = await DayPilot.Modal.prompt(
             "Create a new event:",
@@ -335,8 +371,8 @@ export default {
           try {
             const response = await this.$http.post("/api/createEvent", {
               title: modal.result,
-              startDate: new Date(args.start),
-              endDate: new Date(args.end),
+              startDate: dayPilotWallToIso(args.start),
+              endDate: dayPilotWallToIso(args.end),
             });
             if (response.data.success) {
               // Add the event to the calendar if the backend creation was successful
@@ -363,8 +399,8 @@ export default {
             try {
               const response = await this.$http.post("/api/updateEvent", {
                 eventId: args.e.data.id,
-                startDate: new Date(args.newStart.toString()),
-                endDate: new Date(args.newEnd.toString()),
+                startDate: dayPilotWallToIso(args.newStart),
+                endDate: dayPilotWallToIso(args.newEnd),
               });
               if (!response.data.success) {
                 console.error(response.data.log);
@@ -378,8 +414,8 @@ export default {
           try {
             const response = await this.$http.post("/api/updateEvent", {
               eventId: args.e.data.id,
-              startDate: new Date(args.newStart.toString()),
-              endDate: new Date(args.newEnd.toString()),
+              startDate: dayPilotWallToIso(args.newStart),
+              endDate: dayPilotWallToIso(args.newEnd),
             });
             if (!response.data.success) {
               console.error(response.data.log);
@@ -397,6 +433,9 @@ export default {
           }
         },
         eventDeleteHandling: "Update",
+        onAfterEventRender: (args) => {
+          args.div.dataset.eventStart = args.e.data.start.toString();
+        },
         onEventDeleted: async (args) => {
           try {
             const response = await this.$http.post("/api/deleteEvent", {
@@ -431,15 +470,22 @@ export default {
       },
       showAdvancedOptions: false,
       showModal: false,
-      currentDate: new Date(),
+      currentDate: dateOnlyInTimeZone(this.$store.state.user?.timeZone),
       selectedTask: null,
       selectedEvent: null,
+      allDayEvents: [],
       taskModalShow: false,
       // Compass roles, nested with their goals and projects.
       compassRoles: [],
     };
   },
   methods: {
+    allDayEventRange(event) {
+      const lastDay = addCalendarDays(event.allDayEnd, -1);
+      return lastDay && lastDay !== event.allDayStart
+        ? `${event.allDayStart} – ${lastDay}`
+        : event.allDayStart;
+    },
     onBreakUpTaskChange(value) {
       if (value) {
         this.input.taskBreakUpTaskChunkDuration = 60;
@@ -462,8 +508,10 @@ export default {
       }
     },
     async loadCalendarEvents() {
+      const requestedDate =
+        apiDateOnly(this.currentDate) || localDateOnly(this.currentDate);
       const eventDataResponse = await this.$http.get(
-        `/api/getUserEvents/${this.currentDate}`
+        `/api/getUserEvents/${requestedDate}`
       );
 
       if (!eventDataResponse.data.success) {
@@ -471,37 +519,10 @@ export default {
       }
 
       const events = eventDataResponse.data.events;
-      // use map function to transform the events
-      const eventsToAdd = events.map((event) => {
-        let eventStartDate = new Date(event.startDate);
-        let inputStartDate =
-          eventStartDate.getFullYear() +
-          "-" +
-          ("0" + (eventStartDate.getMonth() + 1)).slice(-2) +
-          "-" +
-          ("0" + eventStartDate.getDate()).slice(-2) +
-          "T" +
-          ("0" + eventStartDate.getHours()).slice(-2) +
-          ":" +
-          ("0" + eventStartDate.getMinutes()).slice(-2) +
-          ":" +
-          ("0" + eventStartDate.getSeconds()).slice(-2) +
-          "Z";
-
-        let eventEndDate = new Date(event.endDate);
-        let inputEndDate =
-          eventEndDate.getFullYear() +
-          "-" +
-          ("0" + (eventEndDate.getMonth() + 1)).slice(-2) +
-          "-" +
-          ("0" + eventEndDate.getDate()).slice(-2) +
-          "T" +
-          ("0" + eventEndDate.getHours()).slice(-2) +
-          ":" +
-          ("0" + eventEndDate.getMinutes()).slice(-2) +
-          ":" +
-          ("0" + eventEndDate.getSeconds()).slice(-2) +
-          "Z";
+      this.allDayEvents = events.filter((event) => event.allDay);
+      const eventsToAdd = events.filter((event) => !event.allDay).map((event) => {
+        const inputStartDate = instantToDayPilotWall(event.startDate);
+        const inputEndDate = instantToDayPilotWall(event.endDate);
 
         let eventColor = "#A27CF9";
         let eventTags = null;
@@ -523,6 +544,7 @@ export default {
           text: event.title,
           backColor: eventColor,
           tags: eventTags,
+          toolTip: event.title,
         };
       });
       this.calendar.update({ events: eventsToAdd });
@@ -558,23 +580,9 @@ export default {
         this.$refs.addtaskmodal.hide();
       });
 
-      // this.input.taskDueDate comes in format '2023-03-01', convert that to start of the day in this timezone
-      let inputDueDate = null;
-      if (this.input.taskDueDate) {
-        inputDueDate = this.changeShortCalendarFormatToDate(
-          this.input.taskDueDate
-        );
-        // Make taskDueDate at the end of the day by adding 23 hours, 59 minutes, 59 seconds
-        inputDueDate = new Date(
-          new Date(inputDueDate).getTime() + 86399000
-        ).toISOString();
-      }
-
-      // Do same for startDate
-      let inputStartDate = this.changeShortCalendarFormatToDate(
-        this.input.taskStartDate ||
-          this.changeDateToShortCalendarFormat(new Date())
-      );
+      const inputDueDate = this.input.taskDueDate || null;
+      const inputStartDate = this.input.taskStartDate ||
+        dateOnlyInTimeZone(this.$store.state.user.timeZone);
 
       try {
         const response = await this.$http.post("/api/createTask/", {
@@ -614,14 +622,10 @@ export default {
         return;
       }
 
-      // Get follow up date
-      let followUpDate = new Date();
-      followUpDate.setDate(
-        followUpDate.getDate() + parseInt(this.input.followUpDays, 10)
+      const followUpDate = addCalendarDays(
+        dateOnlyInTimeZone(this.$store.state.user.timeZone),
+        parseInt(this.input.followUpDays, 10)
       );
-
-      // Set time to 12 AM for that date
-      followUpDate.setHours(0, 0, 0, 0);
 
       try {
         const response = await this.$http.post("/api/setFollowUp/", {
@@ -645,14 +649,10 @@ export default {
 
       // Set all of the input to the current task
       this.selectedTask.title = this.input.taskTitle;
-      this.selectedTask.dueDate = this.input.taskDueDate ? this.changeShortCalendarFormatToDate(
-        this.input.taskDueDate
-      ) : null;
+      this.selectedTask.dueDate = this.input.taskDueDate || null;
       this.selectedTask.duration = this.input.taskDuration;
       this.selectedTask.notes = this.input.taskNotes;
-      this.selectedTask.startDate = this.changeShortCalendarFormatToDate(
-        this.input.taskStartDate
-      );
+      this.selectedTask.startDate = this.input.taskStartDate;
       this.selectedTask.breakUpTask = this.input.taskBreakUpTask;
       this.selectedTask.breakUpTaskChunkDuration =
         this.input.taskBreakUpTaskChunkDuration;
@@ -732,9 +732,7 @@ export default {
       }
     },
     addDays(date, days) {
-      var result = new Date(date);
-      result.setDate(result.getDate() + days);
-      return result;
+      return addCalendarDays(apiDateOnly(date) || localDateOnly(date), days);
     },
     prevWeek() {
       this.config.startDate = this.config.startDate.addDays(-7);
@@ -759,19 +757,8 @@ export default {
         console.error(error);
       }
     },
-    changeShortCalendarFormatToDate(inString) {
-      let returnDate = new Date(inString + "T00:00:00").toISOString();
-      return returnDate;
-    },
     changeDateToShortCalendarFormat(inDate) {
-      let returnDate =
-        inDate.getFullYear() +
-        "-" +
-        ("0" + (inDate.getMonth() + 1)).slice(-2) +
-        "-" +
-        ("0" + inDate.getDate()).slice(-2);
-
-      return returnDate;
+      return localDateOnly(inDate);
     },
     openAddTaskModal() {
       this.selectedTask = null;
@@ -807,13 +794,9 @@ export default {
 
       // Make all this input be that of the task's
       this.input.taskTitle = inputTask.title;
-      this.input.taskDueDate = inputTask.dueDate ? this.changeDateToShortCalendarFormat(
-        new Date(inputTask.dueDate)
-      ) : null;
+      this.input.taskDueDate = apiDateOnly(inputTask.dueDate) || null;
       this.input.taskDuration = inputTask.duration;
-      this.input.taskStartDate = this.changeDateToShortCalendarFormat(
-        new Date(inputTask.startDate)
-      );
+      this.input.taskStartDate = apiDateOnly(inputTask.startDate);
       this.input.taskNotes = inputTask.notes;
       this.input.taskBreakUpTask = inputTask.breakUpTask;
       this.input.taskBreakUpTaskChunkDuration =
@@ -855,34 +838,8 @@ export default {
       this.selectedEvent = null;
     },
     getTaskDaysBetweenDeadlineAndSchedule(inTask) {
-      let dueDate = new Date(inTask.dueDate);
-      let scheduledDate = new Date(inTask.scheduledDate);
-
-      if (dueDate && scheduledDate) {
-        // Get the number of milliseconds per day:
-        const MILLISECONDS_PER_DAY = 1000 * 60 * 60 * 24;
-
-        // Create new Date objects with zeroed out time values:
-        const dueDateWithoutTime = new Date(
-          dueDate.getFullYear(),
-          dueDate.getMonth(),
-          dueDate.getDate()
-        );
-        const scheduledDateWithoutTime = new Date(
-          scheduledDate.getFullYear(),
-          scheduledDate.getMonth(),
-          scheduledDate.getDate()
-        );
-
-        // Calculate the difference in milliseconds ensuring to not include time:
-        const differenceInMilliseconds =
-          dueDateWithoutTime.getTime() - scheduledDateWithoutTime.getTime();
-
-        // Convert the difference to days:
-        return Math.floor(differenceInMilliseconds / MILLISECONDS_PER_DAY);
-      } else {
-        return null;
-      }
+      if (!inTask.dueDate || !inTask.scheduledDate) return null;
+      return calendarDayDifference(inTask.dueDate, inTask.scheduledDate);
     },
     handleSubmit() {
       // DO nothing on general modal submit
@@ -1032,17 +989,7 @@ export default {
   mounted() {
     this.loadData();
 
-    let startDate = new Date(this.$store.state.user.workingStartTime);
-    // Add user working duration to startDate to get endDate with getTime
-    let endDate = new Date();
-    endDate.setTime(
-      startDate.getTime() +
-        this.$store.state.user.workingDuration * 60 * 60 * 1000
-    );
-
-    this.config.businessBeginsHour =
-      this.getBusinessHourNumberFromDate(startDate);
-    this.config.businessEndsHour = this.getBusinessHourNumberFromDate(endDate);
+    // The per-cell callback handles minute precision and browser/user timezone differences.
 
     // Call the highlightCurrentTimeCell method initially
     this.highlightCurrentTimeCell();
@@ -1463,6 +1410,26 @@ export default {
 .toggle-icon {
   font-size: 10px;
   transition: transform 0.2s ease;
+}
+
+.all-day-events {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.all-day-label {
+  font-weight: 600;
+}
+
+.all-day-event {
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #a27cf9;
+  color: #fff;
 }
 
 .advanced-options-content {

@@ -1,5 +1,63 @@
 const { UserDetails, EventDetails } = require('../models');
 const { google } = require('googleapis');
+const moment = require('moment-timezone');
+const {
+  parseInstant,
+  parseDateOnly,
+  startOfDateInZone,
+  normaliseTimeZone,
+} = require('../utils/temporal');
+
+function parseGoogleTimedInstant(value, timeZone) {
+  const parsed = parseInstant(value);
+  if (parsed.valid && parsed.date) return parsed.date;
+  if (!value || !timeZone) return null;
+
+  const local = moment.tz(
+    value,
+    moment.ISO_8601,
+    true,
+    normaliseTimeZone(timeZone)
+  );
+  return local.isValid() ? local.toDate() : null;
+}
+
+function transformGoogleEventData(eventData, fallbackTimeZone) {
+  const allDay = !!(eventData.start?.date && eventData.end?.date);
+  if (allDay) {
+    const start = parseDateOnly(eventData.start.date);
+    const end = parseDateOnly(eventData.end.date);
+    if (!start.valid || !start.value || !end.valid || !end.value || end.value <= start.value) {
+      throw new Error('Google all-day event has invalid dates');
+    }
+    const sourceTimeZone = normaliseTimeZone(
+      eventData.start.timeZone || eventData.end.timeZone || fallbackTimeZone
+    );
+    return {
+      allDay: true,
+      allDayStart: start.value,
+      allDayEnd: end.value,
+      sourceTimeZone,
+      startDate: startOfDateInZone(start.value, sourceTimeZone),
+      endDate: startOfDateInZone(end.value, sourceTimeZone),
+    };
+  }
+
+  const sourceTimeZone = eventData.start.timeZone || eventData.end.timeZone || fallbackTimeZone;
+  const startDate = parseGoogleTimedInstant(eventData.start?.dateTime, sourceTimeZone);
+  const endDate = parseGoogleTimedInstant(eventData.end?.dateTime, sourceTimeZone);
+  if (!startDate || !endDate || endDate <= startDate) {
+    throw new Error('Google timed event has invalid timestamps');
+  }
+  return {
+    allDay: false,
+    allDayStart: null,
+    allDayEnd: null,
+    sourceTimeZone,
+    startDate,
+    endDate,
+  };
+}
 
 async function getEventListFromUsername(inUsername) {
   let user = await UserDetails.findOne({ username: inUsername }).populate('eventList');
@@ -8,13 +66,12 @@ async function getEventListFromUsername(inUsername) {
 
 async function createEvent(userId, title, startDate, endDate, notes, type) {
   try {
-    // Create the new event
     const event = new EventDetails({
-      title: title,
-      startDate: startDate,
-      endDate: endDate,
-      notes: notes,
-      type: type,
+      title,
+      startDate,
+      endDate,
+      notes,
+      type,
       userRef: userId
     });
     await event.save();
@@ -97,7 +154,7 @@ async function refreshGoogleCalendarAccessToken(inUser, config) {
   }
 }
 
-async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod, config) {
+async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod, config, calendarTimeZones = {}) {
   try {
     // Check if user has a Google Calendar access token
     if (!inUser.googleAccessToken) {
@@ -114,7 +171,7 @@ async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod, config) {
     const calendar = google.calendar({ version: "v3", auth: oauth2Client });
 
     // Array of calendar IDs
-    const calendarIds = inUser.selectedCalendars;
+    const calendarIds = inUser.selectedCalendars || [];
 
     // Array of promises that get events for each calendar
     const eventsPromises = calendarIds.map(async (calendarId) => {
@@ -126,7 +183,10 @@ async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod, config) {
         singleEvents: true,
         orderBy: "startTime",
       });
-      return eventsResponse.data.items;
+      return (eventsResponse.data.items || []).map((event) => ({
+        ...event,
+        calendarId,
+      }));
     });
 
     // Wait for all promises to resolve
@@ -141,24 +201,26 @@ async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod, config) {
 
     const events = await Promise.all(
       eventsData.map(async (eventData) => {
-        let event = await EventDetails.findOne({
-          externalEventID: eventData.id,
-          userRef: inUser._id
-        });
-
-        if (!event) {
-          event = new EventDetails({
-            externalEventID: eventData.id,
-            userRef: inUser._id,
-            title: eventData.summary,
-            startDate: eventData.start.dateTime || eventData.start.date,
-            endDate: eventData.end.dateTime || eventData.end.date,
-            notes: eventData.description,
-            type: "google"
-          });
-          await event.save();
-        }
-
+        const temporal = transformGoogleEventData(
+          eventData,
+          calendarTimeZones[eventData.organizer?.email] ||
+            calendarTimeZones[eventData.calendarId] ||
+            inUser.timeZone
+        );
+        const event = await EventDetails.findOneAndUpdate(
+          { externalEventID: eventData.id, userRef: inUser._id },
+          {
+            $set: {
+              userRef: inUser._id,
+              title: eventData.summary,
+              notes: eventData.description,
+              type: 'google',
+              ...temporal,
+            },
+            $setOnInsert: { externalEventID: eventData.id },
+          },
+          { new: true, upsert: true }
+        );
         return event;
       })
     );
@@ -166,7 +228,7 @@ async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod, config) {
     let eventIds = events.map((event) => event._id);
 
     // Delete all events that are not in the Google Calendar
-    let deleteResult = await EventDetails.deleteMany({
+    await EventDetails.deleteMany({
       userRef: inUser._id,
       type: "google",
       _id: { $nin: eventIds }
@@ -180,7 +242,13 @@ async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod, config) {
     if (err.code == 401) {
       await refreshGoogleCalendarAccessToken(inUser, config);
       // Try again
-      return syncCalendarsToDatabase(inUser, startPeriod, endPeriod, config);
+      return syncCalendarsToDatabase(
+        inUser,
+        startPeriod,
+        endPeriod,
+        config,
+        calendarTimeZones
+      );
     }
 
     return false;
@@ -193,5 +261,6 @@ module.exports = {
   updateEvent,
   deleteEvent,
   refreshGoogleCalendarAccessToken,
-  syncCalendarsToDatabase
+  syncCalendarsToDatabase,
+  transformGoogleEventData
 };

@@ -1,6 +1,13 @@
 const { TaskDetails, EventDetails } = require('../models');
-const moment = require('moment');
 const { expandRecurrences } = require('./recurrence');
+const {
+    dateOnlyInZone,
+    addDateOnlyDays,
+    zonedDateTime,
+    todayInZone,
+    taskEligibleInstant,
+} = require('../utils/temporal');
+const momentTz = require('moment-timezone');
 
 // ============================================================================
 // Constants
@@ -97,25 +104,18 @@ function validateNoCycles(tasks) {
 /**
  * Get the start and end times for working hours on a given day.
  */
-function getWorkingHoursForDay(date, workingStartTime, workingDurationHours) {
-    const start = new Date(date);
-    start.setHours(
-        workingStartTime.getHours(),
-        workingStartTime.getMinutes(),
-        workingStartTime.getSeconds(),
-        0
-    );
-
-    const end = new Date(start.getTime() + workingDurationHours * MS_PER_HOUR);
-
+function getWorkingHoursForDay(date, workingStartMinutes, workingEndMinutes, timeZone) {
+    const civilDate = dateOnlyInZone(date, timeZone);
+    const start = zonedDateTime(civilDate, workingStartMinutes, timeZone);
+    const end = zonedDateTime(civilDate, workingEndMinutes, timeZone);
     return { start, end };
 }
 
 /**
  * Check if a date falls on a working day.
  */
-function isWorkingDay(date, workingDays) {
-    const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+function isWorkingDay(date, workingDays, timeZone = 'UTC') {
+    const dayName = momentTz(date).tz(timeZone).format('dddd');
     return workingDays.includes(dayName);
 }
 
@@ -186,8 +186,9 @@ function findBestTaskForSlot(context, availableTime) {
             continue;
         }
 
-        // Skip if task hasn't started yet
-        if (currentTime.getTime() <= task.startDate.getTime()) {
+        // Civil task dates become timeline instants in the user's timezone.
+        const eligibleAt = taskEligibleInstant(task.startDate, context.timeZone);
+        if (!eligibleAt || currentTime.getTime() < eligibleAt.getTime()) {
             continue;
         }
 
@@ -365,14 +366,14 @@ function handleEventOverlap(context) {
  * Returns true if we skipped a day (caller should continue loop).
  */
 function handleNonWorkingDay(context) {
-    const { currentTime, workingDays } = context;
+    const { currentTime, workingDays, timeZone } = context;
 
-    if (isWorkingDay(currentTime, workingDays)) {
+    if (isWorkingDay(currentTime, workingDays, timeZone)) {
         return false;
     }
 
-    // Move to the start of the next day. moment's add() is DST-safe; += MS_PER_DAY drifts.
-    context.currentTime = moment(currentTime).add(1, 'day').startOf('day').toDate();
+    const currentDate = dateOnlyInZone(currentTime, timeZone);
+    context.currentTime = zonedDateTime(addDateOnlyDays(currentDate, 1), 0, timeZone);
     return true;
 }
 
@@ -381,9 +382,14 @@ function handleNonWorkingDay(context) {
  * Returns { handled, workingHours } where handled is true if we adjusted time.
  */
 function handleOutsideWorkingHours(context) {
-    const { currentTime, workingStartTime, workingDuration } = context;
+    const { currentTime, workingStartMinutes, workingEndMinutes, timeZone } = context;
 
-    const { start, end } = getWorkingHoursForDay(currentTime, workingStartTime, workingDuration);
+    const { start, end } = getWorkingHoursForDay(
+        currentTime,
+        workingStartMinutes,
+        workingEndMinutes,
+        timeZone
+    );
 
     const beforeStart = currentTime.getTime() < start.getTime();
     const afterEnd = currentTime.getTime() >= end.getTime();
@@ -394,8 +400,12 @@ function handleOutsideWorkingHours(context) {
     }
 
     if (afterEnd) {
-        // Move to the start of the next day's working hours. DST-safe via moment.
-        context.currentTime = moment(start).add(1, 'day').toDate();
+        const currentDate = dateOnlyInZone(start, timeZone);
+        context.currentTime = zonedDateTime(
+            addDateOnlyDays(currentDate, 1),
+            workingStartMinutes,
+            timeZone
+        );
         return { handled: true, workingHours: { start, end } };
     }
 
@@ -455,7 +465,12 @@ function trackProgress(context) {
  */
 async function buildSchedulingContext(user) {
     const currentTime = new Date();
-    const schedulingHorizon = moment(currentTime).add(SCHEDULING_HORIZON_DAYS, 'days').toDate();
+    const today = todayInZone(user.timeZone, currentTime);
+    const schedulingHorizon = zonedDateTime(
+        addDateOnlyDays(today, SCHEDULING_HORIZON_DAYS + 1),
+        0,
+        user.timeZone
+    );
 
     // Get all incomplete tasks to build dependency map. Series templates own a rule and
     // are never work items, so they are excluded wherever tasks are treated as schedulable.
@@ -501,8 +516,9 @@ async function buildSchedulingContext(user) {
         // User settings
         userId: user._id,
         workingDays: user.workingDays,
-        workingStartTime: user.workingStartTime,
-        workingDuration: user.workingDuration,
+        timeZone: user.timeZone,
+        workingStartMinutes: user.workingStartMinutes,
+        workingEndMinutes: user.workingEndMinutes,
 
         // Tasks
         pendingTasks: [...regularTasks, ...backlogTasks],

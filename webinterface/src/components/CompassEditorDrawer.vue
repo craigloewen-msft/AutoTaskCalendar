@@ -101,6 +101,7 @@
 </template>
 
 <script>
+import { apiDateOnly, dateOnlyInTimeZone } from "../utils/temporal";
 // One editor for all three Compass levels: they differ only by parent and a couple fields.
 export default {
   name: "CompassEditorDrawer",
@@ -197,19 +198,13 @@ export default {
       this.form.parentId = this.parentId;
       // Roles and goals need a start date, so default new ones to today.
       if (this.level !== "project") {
-        this.form.startDate = this.toInputDate(new Date());
+        this.form.startDate = dateOnlyInTimeZone(this.$store.state.user.timeZone);
       }
     }
   },
   methods: {
-    // Date inputs want YYYY-MM-DD in local time.
     toInputDate(value) {
-      if (!value) return "";
-      const date = new Date(value);
-      if (isNaN(date.getTime())) return "";
-      const month = `0${date.getMonth() + 1}`.slice(-2);
-      const day = `0${date.getDate()}`.slice(-2);
-      return `${date.getFullYear()}-${month}-${day}`;
+      return apiDateOnly(value);
     },
     submit() {
       const payload = {

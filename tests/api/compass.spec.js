@@ -16,7 +16,9 @@ function findGoal(role, title) {
 
 // An ISO date offset from today, for building completed windows.
 function daysFromNow(days) {
-    return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
 }
 
 test.describe('compass', () => {
@@ -168,6 +170,14 @@ test.describe('compass', () => {
 
             expect(body.success).toBe(false);
             expect(body.log).toContain('Title');
+        });
+
+        test('rejects impossible civil dates', async ({ seed, api }) => {
+            await seed();
+            const res = await api.post('/api/createRole', {
+                data: { title: 'Impossible date', startDate: '2024-02-31' },
+            });
+            expect((await res.json()).success).toBe(false);
         });
 
         test('requires a start date on roles and goals', async ({ seed, api }) => {
@@ -346,6 +356,13 @@ test.describe('compass', () => {
             expect(body.completedCounts).toEqual({ roles: 0, goals: 0, projects: 0 });
         });
 
+        test('completedTo includes the whole selected civil date', async ({ seed, api }) => {
+            const data = await seed();
+            const selected = data.named.endedGoal.endDate.toISOString().slice(0, 10);
+            const body = await compass(api, `?completedFrom=${selected}&completedTo=${selected}`);
+            expect(body.completedCounts.goals).toBeGreaterThan(0);
+        });
+
         test('an unparseable date is ignored rather than fatal', async ({ seed, api }) => {
             await seed();
             const body = await compass(api, '?completedFrom=not-a-date');
@@ -394,8 +411,8 @@ test.describe('compass', () => {
                 data: {
                     title: 'Aligned task',
                     duration: 30,
-                    startDate: new Date().toISOString(),
-                    dueDate: new Date(Date.now() + 86400000).toISOString(),
+                    startDate: daysFromNow(0),
+                    dueDate: daysFromNow(1),
                     projectRef: projectId,
                 },
             });
@@ -420,8 +437,8 @@ test.describe('compass', () => {
                 data: {
                     title: 'Bad project',
                     duration: 30,
-                    startDate: new Date().toISOString(),
-                    dueDate: new Date(Date.now() + 86400000).toISOString(),
+                    startDate: daysFromNow(0),
+                    dueDate: daysFromNow(1),
                     projectRef: '507f1f77bcf86cd799439011',
                 },
             });

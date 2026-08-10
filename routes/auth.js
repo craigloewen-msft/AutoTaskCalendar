@@ -4,6 +4,29 @@ const jwt = require('jsonwebtoken');
 const passport = require('passport');
 const { UserDetails } = require('../models');
 const { returnFailure, returnBasicUserInfo } = require('../utils/helpers');
+const {
+    TEMPORAL_DATA_VERSION,
+    DEFAULT_WORKING_START_MINUTES,
+    DEFAULT_WORKING_END_MINUTES,
+    isValidTimeZone,
+    parseWallTime,
+} = require('../utils/temporal');
+const { migrateTemporalData } = require('../utils/temporalMigration');
+
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+function validateWorkingPreferences(body) {
+    const start = parseWallTime(body.workingStartTime);
+    const end = parseWallTime(body.workingEndTime);
+    if (!start.valid || !end.valid) return { error: 'Working hours must use HH:mm' };
+    if (end.minutes <= start.minutes) return { error: 'Working end time must be after start time' };
+    if (!isValidTimeZone(body.timeZone)) return { error: 'A valid IANA timezone is required' };
+    if (!Array.isArray(body.workingDays) || body.workingDays.length === 0 ||
+        body.workingDays.some((day) => !WEEKDAYS.includes(day))) {
+        return { error: 'At least one valid working day is required' };
+    }
+    return { start: start.minutes, end: end.minutes };
+}
 
 const JWTTimeout = 4 * 604800; // 28 Days
 
@@ -25,14 +48,22 @@ function createAuthRoutes(config, authenticateToken) {
                         return res.json(returnFailure('Failure to login'));
                     }
 
-                    await UserDetails.updateOne({ "username": user.username }, { "lastLoginDate": new Date() });
+                    try {
+                        await migrateTemporalData(user, req.body.timeZone);
+                        user.lastLoginDate = new Date();
+                        await user.save();
 
-                    let token = jwt.sign({ id: user.username }, config.secret, { expiresIn: JWTTimeout });
-
-                    let returnUserInfo = await returnBasicUserInfo(user);
-
-                    let response = { success: true, auth: true, token: token, user: returnUserInfo };
-                    return res.json(response);
+                        const token = jwt.sign(
+                            { id: user.username },
+                            config.secret,
+                            { expiresIn: JWTTimeout }
+                        );
+                        const returnUserInfo = await returnBasicUserInfo(user);
+                        return res.json({ success: true, auth: true, token, user: returnUserInfo });
+                    } catch (error) {
+                        console.error(error);
+                        return res.json(returnFailure('Server error while updating account data'));
+                    }
                 });
 
             })(req, res, next);
@@ -58,7 +89,6 @@ function createAuthRoutes(config, authenticateToken) {
                 }
             });
         } catch (error) {
-            let errorToString = error.toString();
             return res.json(returnFailure(error));
         }
     });
@@ -76,16 +106,18 @@ function createAuthRoutes(config, authenticateToken) {
                 return res.json(returnFailure("Username already exists"));
             }
 
-            // TODO: Fix this to be accurate to the user's timezone
-            let nowDate = new Date();
-            let startDate = new Date(nowDate.setHours(14, 0, 0, 0));
+            if (!isValidTimeZone(req.body.timeZone)) {
+                return res.json(returnFailure('A valid IANA timezone is required'));
+            }
 
-            let registeredUser = await UserDetails.register({ 
-                username: req.body.username, 
-                email: req.body.email, 
-                workingStartTime: startDate, 
-                workingDuration: 8, 
-                workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] 
+            let registeredUser = await UserDetails.register({
+                username: req.body.username,
+                email: req.body.email,
+                timeZone: req.body.timeZone,
+                workingStartMinutes: DEFAULT_WORKING_START_MINUTES,
+                workingEndMinutes: DEFAULT_WORKING_END_MINUTES,
+                temporalDataVersion: TEMPORAL_DATA_VERSION,
+                workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
             }, req.body.password);
 
             let token = jwt.sign({ id: req.body.username }, config.secret, { expiresIn: JWTTimeout });
@@ -108,38 +140,24 @@ function createAuthRoutes(config, authenticateToken) {
                 return res.send(returnFailure('Not logged in'));
             }
 
-            const { workingStartTime, workingEndTime, workingDays, timeZoneOffset, selectedCalendars } = req.body;
+            const validation = validateWorkingPreferences(req.body);
+            if (validation.error) {
+                return res.send(returnFailure(validation.error));
+            }
 
-            let timeZoneDifferenceMins = timeZoneOffset;
-
-            // Update user object
-            let startDate = new Date();
-            startDate.setHours(
-                Number(workingStartTime.split(':')[0]) + (timeZoneDifferenceMins / 60),
-                Number(workingStartTime.split(':')[1]),
-                0,
-                0
-            );
-            let endDate = new Date();
-            endDate.setHours(
-                Number(workingEndTime.split(':')[0]) + (timeZoneDifferenceMins / 60),
-                Number(workingEndTime.split(':')[1]),
-                0,
-                0
-            );
-
-            // workingDuration is hours between start date and end date
-            let workingDuration = (endDate.getTime() - startDate.getTime()) / 1000 / 60 / 60;
-
-            user.workingStartTime = startDate;
-            user.workingDuration = workingDuration;
-            user.workingDays = workingDays;
-            user.selectedCalendars = selectedCalendars;
+            user.timeZone = req.body.timeZone;
+            user.workingStartMinutes = validation.start;
+            user.workingEndMinutes = validation.end;
+            user.temporalDataVersion = TEMPORAL_DATA_VERSION;
+            user.workingDays = req.body.workingDays;
+            user.selectedCalendars = Array.isArray(req.body.selectedCalendars)
+                ? req.body.selectedCalendars
+                : [];
 
             // Save the updated user object
             let savedUser = await user.save();
 
-            let response = { success: true, user: savedUser };
+            let response = { success: true, user: await returnBasicUserInfo(savedUser) };
             return res.json(response);
         }
         catch (error) {

@@ -62,6 +62,7 @@ const externalMongoUrl = process.env.AUTOTASKCALENDAR_TEST_MONGO_URL;
 
 const childEnv = {
     ...process.env,
+    TZ: 'UTC',
     AUTOTASKCALENDAR_INSTANCE: instance.name,
     AUTOTASKCALENDAR_API_PORT: String(instance.apiPort),
     AUTOTASKCALENDAR_WEB_PORT: String(instance.webPort),
@@ -99,8 +100,12 @@ console.log(
     `  database   ${externalMongoUrl ? 'externally managed' : instance.dbName}\n`
 );
 
-// 1. Start an isolated local container unless the caller supplied the test database.
-if (!externalMongoUrl && run('scripts/dev-db.sh', ['up']) !== 0) {
+// Stale forwards multiply connection resets and make every retry expensive. Stop only this
+// branch's unused dev partner; other branches remain isolated and untouched.
+run('scripts/dev-db.sh', ['gc']);
+
+// 1. The test database container, isolated from the dev one.
+if (run('scripts/dev-db.sh', ['up']) !== 0) {
     process.exit(1);
 }
 

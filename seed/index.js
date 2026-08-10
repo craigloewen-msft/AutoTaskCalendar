@@ -8,6 +8,21 @@
  */
 
 const mongoose = require('mongoose');
+const moment = require('moment');
+const { parseDateOnly } = require('../utils/temporal');
+
+function seedCivilDate(value) {
+    if (!value) return null;
+    return parseDateOnly(moment(value).format('YYYY-MM-DD')).date;
+}
+
+function normalizeCivilFields(doc, fields) {
+    for (const field of fields) {
+        if (doc[field]) doc[field] = seedCivilDate(doc[field]);
+    }
+    if (doc.recurrence?.endsOn) doc.recurrence.endsOn = seedCivilDate(doc.recurrence.endsOn);
+    return doc;
+}
 
 const { UserDetails, TaskDetails, EventDetails, RoleDetails, GoalDetails, ProjectDetails } = require('../models');
 const instance = require('../instance');
@@ -61,7 +76,10 @@ function makeBuilder(anchor) {
         },
 
         async createTask(user, overrides = {}) {
-            const doc = factories.makeTask({ anchor, ...overrides });
+            const doc = normalizeCivilFields(
+                factories.makeTask({ anchor, ...overrides }),
+                ['startDate', 'dueDate', 'occurrenceDate']
+            );
             const task = await TaskDetails.create({ ...doc, userRef: user._id });
             created.tasks.push(task);
             return task;
@@ -83,21 +101,21 @@ function makeBuilder(anchor) {
         },
 
         async createRole(user, overrides = {}) {
-            const doc = factories.makeRole({ anchor, ...overrides });
+            const doc = normalizeCivilFields(factories.makeRole({ anchor, ...overrides }), ['startDate', 'endDate']);
             const role = await RoleDetails.create({ ...doc, userRef: user._id });
             created.roles.push(role);
             return role;
         },
 
         async createGoal(user, role, overrides = {}) {
-            const doc = factories.makeGoal({ anchor, ...overrides });
+            const doc = normalizeCivilFields(factories.makeGoal({ anchor, ...overrides }), ['startDate', 'endDate']);
             const goal = await GoalDetails.create({ ...doc, roleRef: role._id, userRef: user._id });
             created.goals.push(goal);
             return goal;
         },
 
         async createProject(user, goal, overrides = {}) {
-            const doc = factories.makeProject({ anchor, ...overrides });
+            const doc = normalizeCivilFields(factories.makeProject({ anchor, ...overrides }), ['startDate', 'endDate']);
             const project = await ProjectDetails.create({ ...doc, goalRef: goal._id, userRef: user._id });
             created.projects.push(project);
             return project;

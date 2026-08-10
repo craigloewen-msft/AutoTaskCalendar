@@ -13,6 +13,7 @@
     "googleapis": "^166.0.0",
     "jsonwebtoken": "^9.0.2",
     "moment": "^2.30.1",
+    "moment-timezone": "^0.6.0",
     "mongoose": "^8.19.3",
     "nodemon": "^3.1.11",
     "passport": "^0.7.0",

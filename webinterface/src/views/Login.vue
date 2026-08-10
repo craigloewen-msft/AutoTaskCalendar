@@ -52,6 +52,7 @@ export default {
         .post(devEndPoint + "login/", {
           username: this.input.username,
           password: this.input.password,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         })
         .then((response) => {
           if (response.data.success) {

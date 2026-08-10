@@ -143,21 +143,15 @@ shown regardless.
 
 ## Timezones
 
-All recurrence maths is **server-local**, matching the scheduler's working-hours logic and
-the seed factories. `occurrenceDate` is stored at local midnight.
+Recurrence uses canonical UTC markers for civil dates. `occurrenceDate` is a date identity,
+not a timeline instant, and API responses serialize it as `YYYY-MM-DD`.
 
-Two rules when touching this code:
+The user's persisted IANA timezone determines today's date and when an occurrence becomes
+eligible to schedule. The generator itself walks UTC calendar fields so identity cannot shift
+when the server timezone or DST changes.
 
-- **Never use UTC getters** (`getUTCDay`) or `moment.utc()` for weekday logic. "Every
-  Monday" silently becomes Sunday for users behind UTC.
-- **Never advance days with `+ MS_PER_DAY`.** It drifts an hour across a DST boundary and
-  eventually skips or repeats a date. Use `moment().add(n, 'days')`.
-
-**Known limitation:** there is no per-user timezone. `UserDetail` has no such field and the
-scheduler builds working hours from server-local time, so recurrence follows the same
-convention rather than inventing a parallel one. A user in a different timezone from the
-server gets the server's idea of "Monday". Fixing that is a separate piece of work that
-would need to move the scheduler too.
+Never advance calendar days with fixed milliseconds. Use the helpers in `utils/temporal.js`.
+See `docs/DATE_AND_TIME.md` for the full contract.
 
 ## Legacy `repeat` strings
 

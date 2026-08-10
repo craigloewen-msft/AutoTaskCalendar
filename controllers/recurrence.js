@@ -7,13 +7,18 @@
  * materialised from it over a rolling horizon. A task IS a template exactly when it has a
  * recurrence rule; there is no separate flag to keep in sync.
  *
- * TIMEZONES: everything here is SERVER-LOCAL, matching the scheduler and seed factories.
- * Never use UTC getters for weekday logic, and never advance days with `+ MS_PER_DAY`:
- * both drift across DST. Always go through moment's `add()`.
+ * Calendar dates are canonical UTC markers. The user's IANA timezone only determines
+ * which civil date is "today" and when occurrences become eligible on the timeline.
  */
 
 const moment = require('moment');
 const { TaskDetails } = require('../models');
+const {
+    parseDateOnly,
+    dateOnlyFromMarker,
+    addDateOnlyDays,
+    todayInZone,
+} = require('../utils/temporal');
 
 const FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'];
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -83,7 +88,8 @@ function validateRecurrence(rule) {
     }
 
     if (rule.endsOn !== undefined && rule.endsOn !== null) {
-        if (!moment(rule.endsOn).isValid()) {
+        const endsOn = parseDateOnly(rule.endsOn);
+        if (!endsOn.provided || !endsOn.valid) {
             return 'Recurrence endsOn must be a valid date';
         }
     }
@@ -105,7 +111,7 @@ function normaliseRecurrence(rule) {
         interval: rule.interval ? Number(rule.interval) : 1,
         byWeekday: [],
         byMonthDay: [],
-        endsOn: rule.endsOn ? moment(rule.endsOn).toDate() : null,
+        endsOn: rule.endsOn ? parseDateOnly(rule.endsOn).date : null,
         endsAfter: rule.endsAfter ? Number(rule.endsAfter) : null,
     };
 
@@ -189,7 +195,8 @@ function describeRecurrence(rule) {
     }
 
     if (rule.endsOn) {
-        text += `, until ${moment(rule.endsOn).format('D MMM YYYY')}`;
+        const endsOn = dateOnlyFromMarker(rule.endsOn) || String(rule.endsOn);
+        text += `, until ${moment.utc(endsOn, 'YYYY-MM-DD', true).format('D MMM YYYY')}`;
     } else if (rule.endsAfter) {
         text += `, ${rule.endsAfter} times`;
     }
@@ -201,9 +208,12 @@ function describeRecurrence(rule) {
 // Occurrence generation
 // ============================================================================
 
-/** Local midnight for a date, which is how occurrenceDate is always stored. */
-function startOfLocalDay(date) {
-    return moment(date).startOf('day');
+/** Canonical UTC marker for a civil date. */
+function civilDay(date) {
+    const value = typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
+        ? date
+        : dateOnlyFromMarker(date);
+    return moment.utc(value, 'YYYY-MM-DD', true).startOf('day');
 }
 
 function hasMonthlyDayFilter(rule) {
@@ -280,21 +290,28 @@ function occurrenceDatesBetween(rule, from, to, anchor) {
     }
 
     const interval = rule.interval && rule.interval > 0 ? rule.interval : 1;
-    const anchorDay = startOfLocalDay(anchor);
-    const windowStart = startOfLocalDay(from);
-    const windowEnd = startOfLocalDay(to);
-    const hardEnd = rule.endsOn ? startOfLocalDay(rule.endsOn) : null;
+    const anchorDay = civilDay(anchor);
+    const windowStart = civilDay(from);
+    const windowEnd = civilDay(to);
+    const hardEnd = rule.endsOn ? civilDay(rule.endsOn) : null;
 
     const dates = [];
-    // Counts every occurrence since the anchor, including ones before the window, so
-    // endsAfter means "N occurrences ever".
     let produced = 0;
+    let cursor = anchorDay.clone();
 
-    // Walk day by day from the anchor, bounded by the window, endsOn, endsAfter, and a
-    // hard iteration cap so a pathological rule can never spin.
-    const cursor = anchorDay.clone();
+    // Count-limited rules must walk from the anchor. Unlimited rules can jump near the
+    // requested window while retaining the anchor for interval phase calculations.
+    if (!rule.endsAfter && cursor.isBefore(windowStart, 'day')) {
+        cursor = windowStart.clone();
+        if (rule.freq === 'daily') {
+            const remainder = cursor.diff(anchorDay, 'days') % interval;
+            if (remainder) cursor.add(interval - remainder, 'days');
+        }
+    }
+
     let iterations = 0;
-    const MAX_ITERATIONS = 4000;
+    const daysToWalk = Math.max(0, windowEnd.diff(cursor, 'days'));
+    const MAX_ITERATIONS = Math.min(1_000_000, daysToWalk + 1);
 
     while (cursor.isSameOrBefore(windowEnd, 'day') && iterations < MAX_ITERATIONS) {
         iterations++;
@@ -311,7 +328,6 @@ function occurrenceDatesBetween(rule, from, to, anchor) {
             }
         }
 
-        // moment's add() is DST-safe; `+ MS_PER_DAY` is not.
         cursor.add(1, 'day');
     }
 
@@ -343,8 +359,9 @@ const INHERITED_FIELDS = [
  * Completed occurrences are never pruned or regenerated — they are the user's history.
  */
 async function expandRecurrences(user, horizonDays) {
-    const today = moment().startOf('day');
-    const horizonEnd = today.clone().add(horizonDays, 'days');
+    const todayValue = todayInZone(user.timeZone);
+    const today = civilDay(todayValue);
+    const horizonEnd = civilDay(addDateOnlyDays(todayValue, horizonDays));
 
     // Any task carrying a rule is a template. Legacy `repeat` strings are promoted on the
     // fly, so old data starts behaving without a migration.
@@ -384,9 +401,9 @@ async function expandSeries(template, rule, today, horizonEnd) {
     const anchor = template.startDate || template.occurrenceDate || today.toDate();
 
     // Generate from today rather than the anchor: past occurrences are pruned anyway.
-    const from = moment.max(today.clone(), startOfLocalDay(anchor));
+    const from = moment.max(today.clone(), civilDay(anchor));
     const dates = occurrenceDatesBetween(rule, from.toDate(), horizonEnd.toDate(), anchor);
-    const wanted = dates.map((d) => startOfLocalDay(d).toDate());
+    const wanted = dates.map((d) => civilDay(d).toDate());
     const wantedTimes = new Set(wanted.map((d) => d.getTime()));
 
     const existing = await TaskDetails.find({
@@ -425,8 +442,7 @@ async function expandSeries(template, rule, today, horizonEnd) {
             userRef: template.userRef,
             seriesRef: template._id,
             occurrenceDate: date,
-            // Due at the end of its own day, which drives scheduling priority.
-            dueDate: moment(date).endOf('day').toDate(),
+            dueDate: date,
             startDate: date,
             completed: false,
             completedDate: null,

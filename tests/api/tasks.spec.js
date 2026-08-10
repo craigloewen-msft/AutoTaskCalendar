@@ -5,6 +5,12 @@ function titles(taskList) {
     return taskList.map((t) => t.title);
 }
 
+function dateOnly(days = 0) {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+}
+
 test.describe('tasks', () => {
     test('lists only incomplete tasks for the logged in user', async ({ seed, api }) => {
         const data = await seed();
@@ -36,14 +42,38 @@ test.describe('tasks', () => {
             data: {
                 title: 'Write the release notes',
                 duration: 45,
-                startDate: new Date().toISOString(),
-                dueDate: new Date(Date.now() + 86400000).toISOString(),
+                startDate: dateOnly(),
+                dueDate: dateOnly(1),
             },
         });
         const body = await res.json();
 
         expect(body.success).toBe(true);
         expect(titles(body.taskList)).toContain('Write the release notes');
+    });
+
+    test('keeps task dates stable through create and edit', async ({ seed, api }) => {
+        await seed();
+        const res = await api.post('/api/createTask', {
+            data: { title: 'DST date task', duration: 30, startDate: '2024-03-10', dueDate: '2024-03-10' },
+        });
+        const created = (await res.json()).taskList.find((task) => task.title === 'DST date task');
+        expect(created.startDate).toBe('2024-03-10');
+        expect(created.dueDate).toBe('2024-03-10');
+
+        await api.post('/api/editTask', { data: { task: { ...created, notes: 'edited' } } });
+        const after = await (await api.get('/api/getUserTasks')).json();
+        const edited = after.taskList.find((task) => task._id === created._id);
+        expect(edited.startDate).toBe('2024-03-10');
+        expect(edited.dueDate).toBe('2024-03-10');
+    });
+
+    test('rejects impossible civil dates', async ({ seed, api }) => {
+        await seed();
+        const res = await api.post('/api/createTask', {
+            data: { title: 'Impossible', duration: 30, startDate: '2024-02-31', dueDate: '2024-03-01' },
+        });
+        expect((await res.json()).success).toBe(false);
     });
 
     test('rejects a task with no title, duration, or start date', async ({ seed, api }) => {
@@ -60,7 +90,7 @@ test.describe('tasks', () => {
         await seed();
 
         const res = await api.post('/api/createTask', {
-            data: { title: 'No due date', duration: 30, startDate: new Date().toISOString() },
+            data: { title: 'No due date', duration: 30, startDate: dateOnly() },
         });
         const body = await res.json();
 
@@ -75,7 +105,7 @@ test.describe('tasks', () => {
             data: {
                 title: 'Someday idea',
                 duration: 30,
-                startDate: new Date().toISOString(),
+                startDate: dateOnly(),
                 isBacklog: true,
             },
         });
@@ -202,7 +232,7 @@ test.describe('tasks', () => {
         const res = await api.post('/api/setFollowUp', {
             data: {
                 title: 'Follow up on the code review',
-                followUpDate: new Date(Date.now() + 3 * 86400000).toISOString(),
+                followUpDate: dateOnly(3),
                 taskID: original._id.toString(),
             },
         });
@@ -211,6 +241,11 @@ test.describe('tasks', () => {
         expect(body.success).toBe(true);
         expect(titles(body.taskList)).toContain('Follow up on the code review');
         expect(titles(body.taskList)).not.toContain(original.title);
+        const followUp = body.taskList.find(
+            (task) => task.title === 'Follow up on the code review'
+        );
+        expect(followUp.startDate).toBe(dateOnly(3));
+        expect(followUp.dueDate).toBe(dateOnly(3));
     });
 
     test('deletes a task', async ({ seed, api }) => {

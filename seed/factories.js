@@ -10,6 +10,7 @@
 
 const moment = require('moment');
 const { faker } = require('@faker-js/faker');
+const { TEMPORAL_DATA_VERSION } = require('../utils/temporal');
 
 // Fixed seed: the same scenario always produces the same words, notes, and titles.
 const FAKER_SEED = 20240101;
@@ -28,9 +29,14 @@ function at(anchor, { days = 0, hours = 0, minutes = 0 } = {}) {
     return moment(anchor).add(days, 'days').add(hours, 'hours').add(minutes, 'minutes').toDate();
 }
 
-// End of a day relative to the anchor, which is how the UI stores due dates.
+// Legacy name retained for dataset readability; task due dates are civil-date markers.
 function endOfDay(anchor, days = 0) {
-    return moment(anchor).add(days, 'days').endOf('day').toDate();
+    return civilDate(anchor, days);
+}
+
+// Canonical UTC marker for a civil date.
+function civilDate(anchor, days = 0) {
+    return moment.utc(moment(anchor).add(days, 'days').format('YYYY-MM-DD'), 'YYYY-MM-DD').toDate();
 }
 
 const DEFAULT_WORKING_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -47,9 +53,10 @@ function makeUser(overrides = {}) {
         attributes: {
             username: 'testuser',
             email: 'testuser@example.com',
-            // 09:00 local start, 8 hour day.
-            workingStartTime: at(anchor, { hours: 9 }),
-            workingDuration: 8,
+            timeZone: 'UTC',
+            workingStartMinutes: 9 * 60,
+            workingEndMinutes: 17 * 60,
+            temporalDataVersion: TEMPORAL_DATA_VERSION,
             workingDays: [...DEFAULT_WORKING_DAYS],
             ...rest,
         },
@@ -66,8 +73,8 @@ function makeTask(overrides = {}) {
     return {
         title: `${faker.hacker.verb()} ${faker.hacker.noun()}`,
         notes: faker.lorem.sentence(),
-        dueDate: endOfDay(anchor, 1),
-        startDate: at(anchor, { days: -1 }),
+        dueDate: civilDate(anchor, 1),
+        startDate: civilDate(anchor, -1),
         duration: 60,
         breakUpTask: false,
         breakUpTaskChunkDuration: null,
@@ -156,6 +163,7 @@ module.exports = {
     resetRandomness,
     defaultAnchor,
     at,
+    civilDate,
     endOfDay,
     makeUser,
     makeTask,

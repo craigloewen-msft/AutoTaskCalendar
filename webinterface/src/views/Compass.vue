@@ -142,6 +142,7 @@
 </template>
 
 <script>
+import { dateOnlyInTimeZone, formatCivilDate } from "../utils/temporal";
 import { BContainer } from "bootstrap-vue-next";
 import CompassEditorDrawer from "../components/CompassEditorDrawer.vue";
 import { buildRoleColorMap } from "../utils/roleColors";
@@ -229,11 +230,7 @@ export default {
       return this.activeTasksByProject[projectId] || 0;
     },
     formatDate(value) {
-      if (!value) return "";
-      return new Date(value).toLocaleDateString(undefined, {
-        month: "short",
-        year: "numeric",
-      });
+      return formatCivilDate(value, { month: "short", year: "numeric" });
     },
     dateRange(item) {
       if (!item.startDate && !item.endDate) return "someday";
@@ -355,7 +352,8 @@ export default {
     async endItem({ level, item }) {
       try {
         const url = this.endpointFor("edit", level);
-        if (await this.post(url, { _id: item._id, endDate: new Date().toISOString() })) {
+        const endDate = dateOnlyInTimeZone(this.$store.state.user.timeZone);
+        if (await this.post(url, { _id: item._id, endDate })) {
           this.closeEditor();
         }
       } catch (error) {

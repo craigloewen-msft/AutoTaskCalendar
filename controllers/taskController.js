@@ -1,5 +1,6 @@
 const { UserDetails, TaskDetails } = require('../models');
 const moment = require('moment');
+const { addDateOnlyDays, dateOnlyFromMarker, parseDateOnly } = require('../utils/temporal');
 const mongoose = require('mongoose');
 const { generateTaskEvents } = require('./scheduling');
 const { effectiveRule } = require('./recurrence');
@@ -37,7 +38,10 @@ async function attachSeriesRules(taskList) {
     }
 
     const templates = await TaskDetails.find({ _id: { $in: seriesIds } }, 'recurrence');
-    const ruleById = new Map(templates.map((t) => [t._id.toString(), t.recurrence]));
+    const ruleById = new Map(templates.map((template) => {
+        const plain = template.toObject ? template.toObject() : template;
+        return [template._id.toString(), plain.recurrence];
+    }));
 
     return taskList.map((task) => {
         if (!task.seriesRef) return task;
@@ -77,23 +81,14 @@ const completeTask = async (task, user) => {
             _id: new mongoose.Types.ObjectId(),
         });
 
-        switch (rule.freq) {
-            case 'daily':
-                newTask.startDate = moment(task.startDate).add(1, 'days').toDate();
-                newTask.dueDate = moment(task.dueDate).add(1, 'days').toDate();
-                break;
-            case 'weekly':
-                newTask.startDate = moment(task.startDate).add(1, 'weeks').toDate();
-                newTask.dueDate = moment(task.dueDate).add(1, 'weeks').toDate();
-                break;
-            case 'monthly':
-                newTask.startDate = moment(task.startDate).add(1, 'months').toDate();
-                newTask.dueDate = moment(task.dueDate).add(1, 'months').toDate();
-                break;
-            case 'yearly':
-                newTask.startDate = moment(task.startDate).add(1, 'years').toDate();
-                newTask.dueDate = moment(task.dueDate).add(1, 'years').toDate();
-                break;
+        const amount = { daily: 1, weekly: 7 }[rule.freq];
+        if (amount) {
+            newTask.startDate = parseDateOnly(addDateOnlyDays(dateOnlyFromMarker(task.startDate), amount)).date;
+            newTask.dueDate = parseDateOnly(addDateOnlyDays(dateOnlyFromMarker(task.dueDate), amount)).date;
+        } else {
+            const unit = rule.freq === 'monthly' ? 'months' : 'years';
+            newTask.startDate = moment.utc(task.startDate).add(1, unit).startOf('day').toDate();
+            newTask.dueDate = moment.utc(task.dueDate).add(1, unit).startOf('day').toDate();
         }
 
         await newTask.save();

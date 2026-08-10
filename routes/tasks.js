@@ -5,6 +5,16 @@ const { returnFailure } = require('../utils/helpers');
 const { getTaskListFromUsername, completeTask, generateTaskEvents } = require('../controllers/taskController');
 const { validateRecurrence, normaliseRecurrence, expandRecurrences } = require('../controllers/recurrence');
 const { SCHEDULING_HORIZON_DAYS } = require('../controllers/scheduling');
+const { parseDateOnly } = require('../utils/temporal');
+
+function parseTaskDate(value, label, { required = false } = {}) {
+    const parsed = parseDateOnly(value);
+    if (!parsed.provided) {
+        return required ? { error: `${label} is required` } : { date: null };
+    }
+    if (!parsed.valid) return { error: `${label} must use YYYY-MM-DD` };
+    return { date: parsed.date };
+}
 
 // Resolve an optional Compass project, making sure it belongs to the caller.
 async function resolveProjectRef(projectRef, userId) {
@@ -86,6 +96,12 @@ function createTaskRoutes(config, authenticateToken) {
             return res.send(returnFailure(recurrenceError));
         }
 
+        const parsedStart = parseTaskDate(startDate, 'Start date', { required: true });
+        const parsedDue = parseTaskDate(dueDate, 'Due date', { required: !isBacklog });
+        if (parsedStart.error || parsedDue.error) {
+            return res.send(returnFailure(parsedStart.error || parsedDue.error));
+        }
+
         // A backlog task has no due date to advance, so recurrence is meaningless.
         if (isBacklog && (recurrence || repeatValue)) {
             return res.send(returnFailure('A backlog task cannot repeat'));
@@ -109,9 +125,6 @@ function createTaskRoutes(config, authenticateToken) {
         }
 
         try {
-            // Make the due date at the end of the specified day:
-            let taskDate = dueDate ? new Date(req.body.dueDate) : null;
-
             const resolvedProject = await resolveProjectRef(projectRef, user._id);
             if (resolvedProject === undefined) {
                 return res.send(returnFailure('Invalid project'));
@@ -120,10 +133,10 @@ function createTaskRoutes(config, authenticateToken) {
             const normalisedRecurrence = normaliseRecurrence(recurrence);
             const task = new TaskDetails({
                 title: req.body.title,
-                dueDate: taskDate,
+                dueDate: parsedDue.date,
                 notes: notes,
                 duration: req.body.duration,
-                startDate: startDate,
+                startDate: parsedStart.date,
                 userRef: user._id,
                 breakUpTask: breakUpTask,
                 breakUpTaskChunkDuration: breakUpTaskChunkDuration,
@@ -161,6 +174,10 @@ function createTaskRoutes(config, authenticateToken) {
 
         try {
             let { task } = req.body;
+
+            if (!task || !task._id) {
+                return res.send(returnFailure('Task id is required'));
+            }
 
             const recurrenceError = validateRecurrence(task.recurrence);
             if (recurrenceError) {
@@ -210,9 +227,21 @@ function createTaskRoutes(config, authenticateToken) {
                 targetId = existing.seriesRef;
             }
 
+            const parsedStart = task.startDate !== undefined
+                ? parseTaskDate(task.startDate, 'Start date', { required: true })
+                : null;
+            const parsedDue = task.dueDate !== undefined
+                ? parseTaskDate(task.dueDate, 'Due date', { required: !task.isBacklog })
+                : null;
+            if (parsedStart?.error || parsedDue?.error) {
+                return res.send(returnFailure(parsedStart?.error || parsedDue?.error));
+            }
+
             const update = { ...task };
             delete update._id;
             delete update.seriesRecurrence;
+            if (parsedStart) update.startDate = parsedStart.date;
+            if (parsedDue) update.dueDate = parsedDue.date;
 
             // Per-occurrence state must never land on the template: it would make the
             // template an occurrence of itself and break expansion.
@@ -397,10 +426,15 @@ function createTaskRoutes(config, authenticateToken) {
             return res.send(returnFailure('Title, and followUpDate are required'));
         }
 
+        const parsedFollowUp = parseTaskDate(followUpDate, 'Follow up date', { required: true });
+        if (parsedFollowUp.error) {
+            return res.send(returnFailure(parsedFollowUp.error));
+        }
+
         try {
             // If taskID exists get task and complete it
             if (taskID) {
-                let inputTask = await TaskDetails.findOne({ _id: taskID });
+                let inputTask = await TaskDetails.findOne({ _id: taskID, userRef: user._id });
 
                 if (inputTask) {
                     // Complete task
@@ -417,10 +451,10 @@ function createTaskRoutes(config, authenticateToken) {
             // Create the new follow up task
             const task = new TaskDetails({
                 title: title,
-                dueDate: followUpDate,
+                dueDate: parsedFollowUp.date,
                 notes: "",
                 duration: 20,
-                startDate: followUpDate,
+                startDate: parsedFollowUp.date,
                 userRef: user._id,
                 breakUpTask: false,
                 breakUpTaskChunkDuration: null,

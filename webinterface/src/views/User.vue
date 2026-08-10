@@ -20,17 +20,17 @@
               Working Hours
             </h3>
             <p class="section-description">Configure your available working time</p>
-            
+
             <BRow>
               <BCol md="6" class="mb-3">
-                <BFormGroup 
-                  label="Start Time" 
+                <BFormGroup
+                  label="Start Time"
                   label-for="startTime"
                   description="When does your workday begin?"
                 >
-                  <BFormInput 
-                    id="startTime" 
-                    v-model="input.startTime" 
+                  <BFormInput
+                    id="startTime"
+                    v-model="input.startTime"
                     type="time"
                     class="modern-input"
                   />
@@ -38,14 +38,14 @@
               </BCol>
 
               <BCol md="6" class="mb-3">
-                <BFormGroup 
-                  label="End Time" 
+                <BFormGroup
+                  label="End Time"
                   label-for="endTime"
                   description="When does your workday end?"
                 >
-                  <BFormInput 
-                    id="endTime" 
-                    v-model="input.endTime" 
+                  <BFormInput
+                    id="endTime"
+                    v-model="input.endTime"
                     type="time"
                     class="modern-input"
                   />
@@ -53,8 +53,22 @@
               </BCol>
             </BRow>
 
-            <BFormGroup 
-              label="Working Days" 
+            <BFormGroup
+              label="Timezone"
+              label-for="timeZone"
+              description="Scheduling stays in this timezone until you change it."
+              class="mb-3"
+            >
+              <BFormInput
+                id="timeZone"
+                v-model="input.timeZone"
+                type="text"
+                class="modern-input"
+              />
+            </BFormGroup>
+
+            <BFormGroup
+              label="Working Days"
               label-for="weekdays"
               description="Select the days you're available to work"
               class="mb-0"
@@ -82,12 +96,12 @@
               Calendar Integration
             </h3>
             <p class="section-description">Sync your tasks with Google Calendar</p>
-            
+
             <div v-if="userCalendarList.length === 0" class="empty-state">
               <div class="empty-icon">📭</div>
               <p class="empty-text">No calendars connected yet</p>
-              <BButton 
-                variant="primary" 
+              <BButton
+                variant="primary"
                 size="lg"
                 @click="connectCalendar"
                 class="connect-button"
@@ -111,9 +125,9 @@
                   </div>
                 </BFormCheckbox>
               </div>
-              
-              <BButton 
-                variant="outline-primary" 
+
+              <BButton
+                variant="outline-primary"
                 @click="connectCalendar"
                 class="mt-3"
               >
@@ -125,8 +139,8 @@
 
           <!-- Save Button -->
           <div class="text-center">
-            <BButton 
-              variant="primary" 
+            <BButton
+              variant="primary"
               size="lg"
               @click="submitUserUpdates"
               class="save-button"
@@ -167,6 +181,9 @@ export default {
         endTime: null,
         selectedWeekdays: this.$store.state.user.workingDays || [],
         selectedCalendars: this.$store.state.user.selectedCalendars || [],
+        timeZone:
+          this.$store.state.user.timeZone ||
+          Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
     };
   },
@@ -177,7 +194,7 @@ export default {
         workingEndTime: this.input.endTime,
         workingDays: this.input.selectedWeekdays,
         selectedCalendars: this.input.selectedCalendars,
-        timeZoneOffset: new Date().getTimezoneOffset(),
+        timeZone: this.input.timeZone,
       };
 
       try {
@@ -194,14 +211,6 @@ export default {
       } catch (error) {
         console.error(error);
       }
-    },
-    convertDateToHourString(inDate) {
-      let inputDate = new Date(inDate);
-      let returnValue =
-        inputDate.getHours().toString().padStart(2, "0") +
-        ":" +
-        inputDate.getMinutes().toString().padStart(2, "0");
-      return returnValue;
     },
     async connectCalendar() {
       try {
@@ -226,16 +235,8 @@ export default {
     },
   },
   created() {
-    let startDate = new Date(this.$store.state.user.workingStartTime);
-    // Add user working duration to startDate to get endDate with getTime
-    let endDate = new Date();
-    endDate.setTime(
-      startDate.getTime() +
-        this.$store.state.user.workingDuration * 60 * 60 * 1000
-    );
-
-    this.input.startTime = this.convertDateToHourString(startDate);
-    this.input.endTime = this.convertDateToHourString(endDate);
+    this.input.startTime = this.$store.state.user.workingStartTime || "09:00";
+    this.input.endTime = this.$store.state.user.workingEndTime || "17:00";
   },
   mounted() {
     this.refreshCalendarData();
@@ -248,9 +249,9 @@ export default {
           name: "description",
           content: "Manage your AutoTaskCalendar profile settings, working hours, Google Calendar integration, and task scheduling preferences.",
         },
-        { 
-          name: "keywords", 
-          content: "user profile, settings, working hours, calendar preferences, account management" 
+        {
+          name: "keywords",
+          content: "user profile, settings, working hours, calendar preferences, account management"
         },
         { name: "robots", content: "noindex, nofollow" },
       ],

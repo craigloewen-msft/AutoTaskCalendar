@@ -1,4 +1,4 @@
-const { test, expect } = require('../fixtures');
+const { test, expect, withDb } = require('../fixtures');
 
 test.describe('calendar page', () => {
     test('renders the seeded tasks in the sidebar', async ({ seed, loggedInPage: page }) => {
@@ -32,6 +32,20 @@ test.describe('calendar page', () => {
         await expect(page.locator('.task-list')).toContainText('Task created from the UI');
     });
 
+    test('keeps a task civil date in a non-UTC browser', async ({ nonUtcPage: page }) => {
+        await page.goto('/#/calendar');
+        await page.click('button:has-text("Add Task")');
+        await page.fill('#task-title', 'Non UTC task');
+        await page.fill('#task-due-date', '2030-03-10');
+        await page.fill('#task-duration', '30');
+        await page.click('.modal-footer button:has-text("OK")');
+
+        const task = page.locator('.task-item', { hasText: 'Non UTC task' }).first();
+        await expect(task).toBeVisible();
+        await task.click();
+        await expect(page.locator('#task-due-date')).toHaveValue('2030-03-10');
+    });
+
     test('refuses to create a task with no title', async ({ seed, loggedInPage: page }) => {
         await seed();
 
@@ -63,6 +77,43 @@ test.describe('calendar page', () => {
 
         // DayPilot renders each scheduled block as an event div.
         await expect(page.locator('.calendar_default_event').first()).toBeVisible();
+    });
+
+    test('renders a known timed instant at browser-local wall time', async ({ seed, nonUtcPage: page }) => {
+        const data = seed.last();
+        await page.goto('/#/calendar');
+        const event = page.locator('.calendar_default_event', { hasText: data.named.meeting.title });
+        await expect(event).toBeVisible();
+        const expected = await page.evaluate((iso) => {
+            const date = new Date(iso);
+            const pad = (value) => String(value).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+                `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+        }, data.named.meeting.startDate.toISOString());
+        await expect(event).toHaveAttribute('data-event-start', expected);
+    });
+
+    test('renders synced all-day events in the all-day row', async ({ seed, loggedInPage: page }) => {
+        const data = await seed();
+        const { EventDetails } = require('../../models');
+        const date = data.anchor.format('YYYY-MM-DD');
+        const end = data.anchor.clone().add(1, 'day').format('YYYY-MM-DD');
+        await withDb(() => EventDetails.create({
+            title: 'All-day timezone test',
+            allDay: true,
+            allDayStart: date,
+            allDayEnd: end,
+            startDate: data.anchor.toDate(),
+            endDate: data.anchor.clone().add(1, 'day').toDate(),
+            type: 'google',
+            userRef: data.primary.user._id,
+        }));
+
+        await page.goto('/#/calendar');
+        const allDay = page.locator('.all-day-event', { hasText: 'All-day timezone test' });
+        await expect(allDay).toBeVisible();
+        await expect(allDay).toHaveAttribute('data-event-date', date);
+        await expect(allDay).toHaveAttribute('data-event-end', end);
     });
 
     test('never renders an "Invalid Date" group header', async ({ seed, loggedInPage: page }) => {
@@ -112,6 +163,16 @@ test.describe('calendar page', () => {
         await expect(
             page.locator('.task-item', { hasText: 'Mon and Tue only' }).first().locator('.recurring-icon')
         ).toBeVisible();
+    });
+
+    test('shows a recurrence cutoff on the selected civil date west of UTC', async ({ nonUtcPage: page }) => {
+        await page.goto('/#/calendar');
+        await page.click('button:has-text("Add Task")');
+        await page.click('.advanced-options-toggle');
+        await page.selectOption('#task-repeat', 'daily');
+        await page.check('#repeat-ends-on');
+        await page.fill('#repeat-ends-on-date', '2030-03-31');
+        await expect(page.locator('[data-test=repeat-summary]')).toContainText('until 31 Mar 2030');
     });
 
     test('warns when a chosen day is not a working day, but still saves', async ({ seed, loggedInPage: page }) => {
@@ -166,5 +227,9 @@ test.describe('calendar page', () => {
 function isoDay(offsetDays) {
     const d = new Date();
     d.setDate(d.getDate() + offsetDays);
-    return d.toISOString().slice(0, 10);
+    return [
+        d.getFullYear(),
+        String(d.getMonth() + 1).padStart(2, '0'),
+        String(d.getDate()).padStart(2, '0'),
+    ].join('-');
 }

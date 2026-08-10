@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { google } = require('googleapis');
 const { UserDetails } = require('../models');
-const { returnFailure, parseDate } = require('../utils/helpers');
+const { returnFailure } = require('../utils/helpers');
+const { parseInstant, localWeekBounds } = require('../utils/temporal');
 const {
   getEventListFromUsername,
   createEvent,
@@ -25,9 +26,17 @@ function createEventRoutes(config, authenticateToken) {
     if (!title || !startDate || !endDate) {
       return res.send(returnFailure('Title, start date, and end date are required'));
     }
+    const start = parseInstant(startDate);
+    const end = parseInstant(endDate);
+    if (!start.valid || !start.date || !end.valid || !end.date) {
+      return res.send(returnFailure('Start date and end date must be valid timestamps'));
+    }
+    if (end.date <= start.date) {
+      return res.send(returnFailure('End date must be after start date'));
+    }
 
     try {
-      const event = await createEvent(user._id, title, startDate, endDate, notes, 'calendar');
+      const event = await createEvent(user._id, title, start.date, end.date, notes, 'calendar');
       return res.json({ success: true, event });
     } catch (error) {
       console.error(error);
@@ -48,7 +57,24 @@ function createEventRoutes(config, authenticateToken) {
     }
 
     try {
-      const event = await updateEvent(eventId, user._id, title, startDate, endDate, notes);
+      const existing = await require('../models').EventDetails.findOne({ _id: eventId, userRef: user._id });
+      if (!existing) return res.send(returnFailure('Event not found'));
+      const parsedStart = startDate !== undefined ? parseInstant(startDate) : { valid: true, date: existing.startDate };
+      const parsedEnd = endDate !== undefined ? parseInstant(endDate) : { valid: true, date: existing.endDate };
+      if (!parsedStart.valid || !parsedStart.date || !parsedEnd.valid || !parsedEnd.date) {
+        return res.send(returnFailure('Start date and end date must be valid timestamps'));
+      }
+      if (parsedEnd.date <= parsedStart.date) {
+        return res.send(returnFailure('End date must be after start date'));
+      }
+      const event = await updateEvent(
+        eventId,
+        user._id,
+        title,
+        startDate !== undefined ? parsedStart.date : undefined,
+        endDate !== undefined ? parsedEnd.date : undefined,
+        notes
+      );
       res.send({ success: true, event });
     } catch (err) {
       res.send(returnFailure(err.message));
@@ -85,24 +111,15 @@ function createEventRoutes(config, authenticateToken) {
     }
     try {
       const { EventDetails } = require('../models');
-      const { valid, date } = parseDate(req.params.date);
-
-      // Without this an unusable date reaches Mongoose and surfaces as a raw CastError.
-      if (!valid || !date) {
+      const bounds = localWeekBounds(req.params.date, user.timeZone);
+      if (!bounds) {
         return res.send(returnFailure('A valid date is required'));
       }
 
-      const startOfWeek = new Date(date);
-      startOfWeek.setUTCDate(startOfWeek.getUTCDate() - startOfWeek.getUTCDay());
-      startOfWeek.setUTCHours(0, 0, 0);
-      const endOfWeek = new Date(date);
-      endOfWeek.setUTCDate(endOfWeek.getUTCDate() + (7 - endOfWeek.getUTCDay()));
-      endOfWeek.setUTCHours(23, 59, 59);
-
-      // Get the user's events from the database
       const events = await EventDetails.find({
         userRef: user._id,
-        startDate: { $gte: startOfWeek, $lt: endOfWeek },
+        startDate: { $lt: bounds.end },
+        endDate: { $gt: bounds.start },
       });
 
       return res.json({ success: true, events });
@@ -260,7 +277,26 @@ function createEventRoutes(config, authenticateToken) {
       let twoWeeksBefore = new Date(now.getTime() - 12096e5);
       let monthAfter = new Date(now.getTime() + 2629800000);
 
-      await syncCalendarsToDatabase(user, twoWeeksBefore, monthAfter, config);
+      let calendarTimeZones = {};
+      try {
+        const auth = new google.auth.OAuth2();
+        auth.setCredentials({ access_token: user.googleAccessToken });
+        const calendar = google.calendar({ version: 'v3', auth });
+        const entries = await calendar.calendarList.list();
+        calendarTimeZones = Object.fromEntries(
+          (entries.data.items || []).map((entry) => [entry.id, entry.timeZone])
+        );
+      } catch (error) {
+        console.error('[Google OAuth] Could not load calendar timezones:', error.message);
+      }
+
+      await syncCalendarsToDatabase(
+        user,
+        twoWeeksBefore,
+        monthAfter,
+        config,
+        calendarTimeZones
+      );
 
       return res.send({ success: true });
     } catch (err) {

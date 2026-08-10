@@ -52,8 +52,8 @@ dataset.
 - `controllers/scheduling.js` — the task-scheduling algorithm. Highest-risk code.
 - `controllers/recurrence.js` — recurrence rules and occurrence expansion. See `docs/RECURRING_TASKS.md`.
 - `models/index.js` — all Mongoose schemas. Import these; never redefine.
-- `middleware/auth.js` — JWT `authenticateToken`. `utils/helpers.js` — `returnFailure()`,
-  `parseDate()`.
+- `middleware/auth.js` — JWT `authenticateToken`. `utils/helpers.js` — `returnFailure()`;
+  `utils/temporal.js` owns date/time parsing and timezone boundaries.
 - `webinterface/src/` — Vue app (`views/`, `components/`, `store.js`).
 - `seed/` — the fake-data factories and dataset; `scripts/seed.js` is the CLI.
 - `tests/` — Playwright specs (`api/`, `ui/`) and shared `fixtures/`.
@@ -71,6 +71,6 @@ short index and put the depth in `docs/`. See `docs/TEST_CREDENTIALS.md` for the
 
 - `config.js` (gitignored) overrides `defaultconfig.js`; production reads env vars instead.
 - API errors return HTTP 200 with `{success: false}` via `returnFailure()`.
-- Dates use `moment`; watch UTC vs. local conversions and per-user timezone offsets.
-- Recurrence date maths is server-local: never use UTC getters or `+ MS_PER_DAY` (DST drift).
+- Distinguish instants, civil dates, and wall times; follow `docs/DATE_AND_TIME.md`.
+- Never implement timezone conversion with numeric offsets or advance calendar days by milliseconds.
 - Keep code comments to one or two sentences.

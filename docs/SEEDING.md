@@ -4,6 +4,9 @@ The `seed/` directory generates realistic, deterministic fake data. It backs bot
 development (`npm run seed`) and the test suite (the `seed` fixture), so the data you
 debug by hand is exactly the data the tests run against.
 
+Task/Compass dates are canonical civil-date markers; events remain instants. Seeded users
+include an IANA timezone and minute-precision working hours. See `docs/DATE_AND_TIME.md`.
+
 The dataset holds everything worth testing. If a shape is worth testing, it belongs in
 the dataset — a single thing to understand and a single thing to keep correct.
 
@@ -91,7 +94,7 @@ data is always relative to now and tests never depend on the wall clock:
 
 ```js
 b.at(b.anchor, { days: 2, hours: 10 })   // 10:00 the day after tomorrow
-b.endOfDay(b.anchor, 3)                  // 23:59:59, three days out
+b.endOfDay(b.anchor, 3)                  // civil-date marker, three days out
 b.at(b.anchor, { days: -30 })            // 30 days ago
 ```
 

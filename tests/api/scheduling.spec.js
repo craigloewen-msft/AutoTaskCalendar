@@ -3,6 +3,8 @@ const moment = require('moment');
 
 const { test, expect, withDb } = require('../fixtures');
 const { EventDetails, TaskDetails, UserDetails } = require('../../models');
+const { getWorkingHoursForDay, isWorkingDay } = require('../../controllers/scheduling');
+const { taskEligibleInstant } = require('../../utils/temporal');
 
 const MS_PER_MINUTE = 60 * 1000;
 
@@ -48,19 +50,46 @@ test.describe('scheduling', () => {
         const events = await taskEvents(user);
         expect(events.length).toBeGreaterThan(0);
 
-        const startHour = user.workingStartTime.getHours();
-        const startMinute = user.workingStartTime.getMinutes();
-
         for (const event of events) {
-            expect(user.workingDays).toContain(dayName(event.startDate));
+            expect(isWorkingDay(event.startDate, user.workingDays, user.timeZone)).toBe(true);
 
-            const dayStart = new Date(event.startDate);
-            dayStart.setHours(startHour, startMinute, 0, 0);
-            const dayEnd = new Date(dayStart.getTime() + user.workingDuration * 60 * MS_PER_MINUTE);
-
-            expect(event.startDate.getTime()).toBeGreaterThanOrEqual(dayStart.getTime());
-            expect(event.endDate.getTime()).toBeLessThanOrEqual(dayEnd.getTime());
+            const { start, end } = getWorkingHoursForDay(
+                event.startDate,
+                user.workingStartMinutes,
+                user.workingEndMinutes,
+                user.timeZone
+            );
+            expect(event.startDate.getTime()).toBeGreaterThanOrEqual(start.getTime());
+            expect(event.endDate.getTime()).toBeLessThanOrEqual(end.getTime());
         }
+    });
+
+    test('builds wall-clock work windows across DST and non-hour zones', () => {
+        const spring = getWorkingHoursForDay(
+            new Date('2024-03-10T12:00:00Z'),
+            0,
+            8 * 60,
+            'America/New_York'
+        );
+        expect(spring.start.toISOString()).toBe('2024-03-10T05:00:00.000Z');
+        expect(spring.end.toISOString()).toBe('2024-03-10T12:00:00.000Z');
+
+        const fall = getWorkingHoursForDay(
+            new Date('2024-11-03T12:00:00Z'),
+            0,
+            8 * 60,
+            'America/New_York'
+        );
+        expect(fall.start.toISOString()).toBe('2024-11-03T04:00:00.000Z');
+        expect(fall.end.toISOString()).toBe('2024-11-03T13:00:00.000Z');
+
+        const kathmandu = getWorkingHoursForDay(
+            new Date('2024-01-15T12:00:00Z'),
+            9 * 60 + 30,
+            17 * 60 + 30,
+            'Asia/Kathmandu'
+        );
+        expect(kathmandu.start.toISOString()).toBe('2024-01-15T03:45:00.000Z');
     });
 
     test('never overlaps an existing calendar event', async ({ seed, api }) => {
@@ -153,7 +182,7 @@ test.describe('scheduling', () => {
             expect(
                 event.startDate.getTime(),
                 `"${task.title}" was scheduled before its start date`
-            ).toBeGreaterThanOrEqual(task.startDate.getTime());
+            ).toBeGreaterThanOrEqual(taskEligibleInstant(task.startDate, user.timeZone).getTime());
         }
     });
 
@@ -316,7 +345,9 @@ test.describe('scheduling', () => {
             expect(
                 event.startDate.getTime(),
                 `"${occurrence.title}" was scheduled before its occurrence date`
-            ).toBeGreaterThanOrEqual(occurrence.occurrenceDate.getTime());
+            ).toBeGreaterThanOrEqual(
+                taskEligibleInstant(occurrence.occurrenceDate, user.timeZone).getTime()
+            );
         }
     });
 

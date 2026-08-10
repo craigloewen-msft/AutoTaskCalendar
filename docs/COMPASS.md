@@ -221,6 +221,8 @@ through finished goals the same way it pages through finished tasks.
 - `title` is required everywhere. `startDate` is required on roles and goals, optional on
   projects.
 - `endDate`, when present, must be on or after `startDate`.
+- Dates are strict inclusive civil dates (`YYYY-MM-DD`), not instants. See
+  `docs/DATE_AND_TIME.md`; an item remains live through its selected end day.
 - `roleRef` / `goalRef` / `projectRef` must exist **and belong to the caller**. This is the
   cross-tenant boundary; `findOwned()` in the controller is the single chokepoint, and it
   has explicit test coverage.
@@ -229,11 +231,8 @@ through finished goals the same way it pages through finished tasks.
 - On edit, only fields present in the body are touched, so a partial update cannot silently
   blank a date.
 
-Date parsing itself comes from `parseDate()` in `utils/helpers.js`, which is deliberately
-policy-free: it returns `{ provided, valid, date }` and lets the caller decide what a
-missing or unusable value means. Compass wraps it twice — `requireDate()` treats a bad
-value as fatal for body fields, and `optionalDate()` silently ignores one for the
-`completedFrom`/`completedTo` query params.
+Date parsing uses strict civil-date helpers from `utils/temporal.js`. Compass treats invalid
+body fields as fatal and silently ignores invalid optional query filters.
 
 ### Delete semantics
 

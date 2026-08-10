@@ -1,5 +1,5 @@
 const { TaskDetails, RoleDetails, GoalDetails, ProjectDetails } = require('../models');
-const { parseDate } = require('../utils/helpers');
+const { parseDateOnly, addDateOnlyDays, todayInZone } = require('../utils/temporal');
 
 /**
  * Compass: roles > goals > projects. See docs/COMPASS.md.
@@ -42,16 +42,15 @@ function fail(message) {
 }
 
 /**
- * Compass's error policy on top of the shared parser in utils/helpers.
+ * Compass's error policy on top of the shared parser in utils/temporal.
  *
- * These wrappers stay here rather than moving into utils because they throw CompassError,
- * which only this module's callers know how to translate. `parseDate()` itself is
- * deliberately policy-free so it can be reused by code that wants different behaviour.
+ * These wrappers stay here because they throw CompassError, which only this module's
+ * callers know how to translate. The shared parser supplies strict civil-date semantics.
  */
 
 // Body fields: a blank value is only allowed when optional, and a bad one is fatal.
 function parseDateOrFail(value, fieldName, { required }) {
-    const { provided, valid, date } = parseDate(value);
+    const { provided, valid, date } = parseDateOnly(value);
 
     if (!provided) {
         if (required) {
@@ -69,17 +68,22 @@ function parseDateOrFail(value, fieldName, { required }) {
 
 // Query strings: an unparseable date is ignored rather than fatal.
 function parseDateOrIgnore(value) {
-    return parseDate(value).date;
+    return parseDateOnly(value).date;
 }
 
-// An item is finished once it has an end date that has already passed.
-function endedFilter(now = new Date()) {
-    return { endDate: { $ne: null, $lte: now } };
+// End dates are inclusive civil dates. An item archives on the following UTC marker.
+function todayMarker(timeZone, now = new Date()) {
+    return parseDateOnly(todayInZone(timeZone, now)).date;
 }
 
-// ...and live until then, which includes anything with no end date at all.
-function liveFilter(now = new Date()) {
-    return { $or: [{ endDate: null }, { endDate: { $exists: false } }, { endDate: { $gt: now } }] };
+function liveFilter(timeZone, now = new Date()) {
+    return {
+        $or: [
+            { endDate: null },
+            { endDate: { $exists: false } },
+            { endDate: { $gte: todayMarker(timeZone, now) } },
+        ],
+    };
 }
 
 /**
@@ -265,14 +269,13 @@ async function setTaskProject(taskId, projectId, user) {
 }
 
 // Finished means an end date that has already passed, optionally inside a window.
-function completedFilter(userId, from, to) {
-    const endDate = { $ne: null, $lte: new Date() };
+function completedFilter(userId, timeZone, from, to) {
+    const endDate = { $ne: null, $lt: todayMarker(timeZone) };
 
-    if (from) {
-        endDate.$gte = from;
-    }
-    if (to && to < endDate.$lte) {
-        endDate.$lte = to;
+    if (from) endDate.$gte = from;
+    if (to) {
+        const exclusive = parseDateOnly(addDateOnlyDays(to, 1)).date;
+        if (exclusive < endDate.$lt) endDate.$lt = exclusive;
     }
 
     return { userRef: userId, endDate };
@@ -298,7 +301,7 @@ async function getCompassPayload(user, { completedFrom, completedTo } = {}) {
     const sort = { sortOrder: 1, startDate: 1 };
     const from = parseDateOrIgnore(completedFrom);
     const to = parseDateOrIgnore(completedTo);
-    const live = liveFilter();
+    const live = liveFilter(user.timeZone);
 
     const roles = await RoleDetails.find({ userRef: user._id, ...live })
         .sort(sort)
@@ -314,9 +317,9 @@ async function getCompassPayload(user, { completedFrom, completedTo } = {}) {
         });
 
     const [completedRoles, completedGoals, completedProjects, unalignedTaskCount] = await Promise.all([
-        RoleDetails.countDocuments(completedFilter(user._id, from, to)),
-        GoalDetails.countDocuments(completedFilter(user._id, from, to)),
-        ProjectDetails.countDocuments(completedFilter(user._id, from, to)),
+        RoleDetails.countDocuments(completedFilter(user._id, user.timeZone, from, to)),
+        GoalDetails.countDocuments(completedFilter(user._id, user.timeZone, from, to)),
+        ProjectDetails.countDocuments(completedFilter(user._id, user.timeZone, from, to)),
         TaskDetails.countDocuments({
             userRef: user._id,
             $or: [{ completed: false }, { completed: null }],
@@ -356,6 +359,7 @@ async function getCompassArchive(user, { level, limit, skip, completedFrom, comp
 
     const filter = completedFilter(
         user._id,
+        user.timeZone,
         parseDateOrIgnore(completedFrom),
         parseDateOrIgnore(completedTo)
     );

@@ -204,6 +204,14 @@ await seed.clearTasks();
 
 ## Testing the scheduler
 
+Date/time tests run with the server process pinned to `TZ=UTC`. Use `nonUtcPage` for a
+logged-in `America/Los_Angeles` browser and pass `{ anchor }` to `seed()` for deterministic
+civil-date scenarios. See `docs/DATE_AND_TIME.md`.
+
+`scripts/dev-db.sh up` performs a Mongo protocol ping through the published host port. A TCP
+socket alone does not prove a wslc forward is usable; stale forwards are restarted before
+Playwright begins.
+
 `controllers/scheduling.js` is the highest-risk code in the repo. Its tests
 (`tests/api/scheduling.spec.js`) assert **invariants**, not exact timestamps, because the
 result depends on the current time:

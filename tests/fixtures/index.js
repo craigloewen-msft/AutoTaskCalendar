@@ -18,6 +18,7 @@
  *   apiAnon         request context with no credentials, for auth-failure tests
  *   loginAs(u, p)   build an authenticated request context for any user
  *   loggedInPage    a browser page already logged in as the primary user
+ *   nonUtcPage      logged-in page in America/Los_Angeles
  *
  * Reading the database directly? Wrap it in `withDb` (re-exported here) so a dropped
  * connection retries instead of failing the test.
@@ -26,7 +27,7 @@
 const base = require('@playwright/test');
 
 const { runSeed } = require('../../seed');
-const { TaskDetails, EventDetails } = require('../../models');
+const { TaskDetails, EventDetails, UserDetails } = require('../../models');
 const instance = require('../../instance');
 const { withDb } = require('./db');
 
@@ -71,8 +72,8 @@ const test = base.test.extend({
     seed: async ({}, use) => {
         let lastResult = null;
 
-        const seed = async () => {
-            lastResult = await withDb(() => runSeed({ mongoUrl: instance.mongoUrl }));
+        const seed = async (options = {}) => {
+            lastResult = await withDb(() => runSeed({ mongoUrl: instance.mongoUrl, ...options }));
             return lastResult;
         };
 
@@ -107,6 +108,27 @@ const test = base.test.extend({
         const context = await playwright.request.newContext({ baseURL });
         await use(context);
         await context.dispose();
+    },
+
+    nonUtcPage: async ({ browser, seed }, use) => {
+        if (!seed.last()) await seed();
+
+        await withDb(() => UserDetails.updateOne(
+            { username: 'testuser' },
+            { $set: { timeZone: 'America/Los_Angeles' } }
+        ));
+        const context = await browser.newContext({
+            baseURL,
+            timezoneId: 'America/Los_Angeles',
+        });
+        const page = await context.newPage();
+        await page.goto('/#/login');
+        await page.fill('input[name="username"]', 'testuser');
+        await page.fill('input[name="password"]', 'testpassword');
+        await page.click('button:has-text("Sign in")');
+        await page.waitForFunction(() => !!localStorage.getItem('token'));
+        await use(page);
+        await context.close();
     },
 
     /**
