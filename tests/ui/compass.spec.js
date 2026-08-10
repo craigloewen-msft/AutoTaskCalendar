@@ -27,6 +27,68 @@ test.describe('compass page', () => {
         await expect(someday).toContainText('Rewrite the CLI');
     });
 
+    test('hides ended items until the archive drawer is opened', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        await seed();
+
+        await page.goto('/#/compass');
+        await expect(page.locator('.role-title').first()).toBeVisible();
+
+        // The ended role is summarised, not rendered, until the drawer asks for it.
+        await expect(page.locator('.role-title', { hasText: 'Volunteer board member' })).toHaveCount(0);
+
+        const archive = page.locator('details', { hasText: 'Archive' });
+        await expect(archive).toContainText('1 ended roles');
+
+        await archive.locator('summary').click();
+        await expect(archive.locator('.project-title', { hasText: 'Volunteer board member' })).toBeVisible();
+    });
+
+    test('will not let a role or goal be ended while it still has live children', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        await seed();
+
+        await page.goto('/#/compass');
+
+        // Engineer has live goals beneath it.
+        const engineer = page.locator('.role-block', { hasText: 'Engineer' });
+        await engineer.locator('.role-row .link-btn').click();
+
+        await expect(page.locator('.drawer-title')).toHaveText('Edit role');
+        await expect(page.locator('.drawer-footer button:has-text("End role")')).toBeDisabled();
+        // The checkbox is the other route to the same outcome, so it is guarded too.
+        await expect(page.locator('.compass-active-toggle input')).toBeDisabled();
+        await expect(page.locator('.compass-blocked-hint')).toContainText('active goal');
+
+        await page.click('.drawer-close');
+
+        // Same rule one level down: a goal that still has projects.
+        const shipV2 = engineer.locator('.goal-block', { hasText: 'Ship v2 by June' });
+        await shipV2.locator('.goal-row .link-btn').click();
+
+        await expect(page.locator('.drawer-title')).toHaveText('Edit goal');
+        await expect(page.locator('.drawer-footer button:has-text("End goal")')).toBeDisabled();
+        await expect(page.locator('.compass-blocked-hint')).toContainText('active project');
+    });
+
+    test('allows ending a leaf project', async ({ seed, loggedInPage: page }) => {
+        await seed();
+
+        await page.goto('/#/compass');
+
+        const project = page.locator('.project-row', { hasText: 'Migration plan' });
+        await project.locator('.link-btn').click();
+
+        await expect(page.locator('.drawer-title')).toHaveText('Edit project');
+        // Projects have no children in the hierarchy, so ending one is always allowed.
+        await expect(page.locator('.drawer-footer button:has-text("End project")')).toBeEnabled();
+        await expect(page.locator('.compass-blocked-hint')).toHaveCount(0);
+    });
+
     test('creates a role through the drawer', async ({ seed, loggedInPage: page }) => {
         await seed();
 

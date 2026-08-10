@@ -60,11 +60,15 @@
             v-model="form.endDate"
             type="date"
             class="form-control"
-            :disabled="isActive"
+            :disabled="isActive || !canEnd"
           />
           <label class="compass-active-toggle">
-            <input type="checkbox" v-model="isActive" /> Still active (no end date)
+            <input type="checkbox" v-model="isActive" :disabled="!canEnd" />
+            Still active (no end date)
           </label>
+          <small v-if="!canEnd" class="form-text compass-blocked-hint">
+            {{ endBlockedHint }}
+          </small>
         </div>
       </div>
 
@@ -73,6 +77,8 @@
           <button
             v-if="existing && !existing.endDate"
             class="btn btn-secondary"
+            :disabled="!canEnd"
+            :title="canEnd ? '' : endBlockedHint"
             @click="$emit('end', { level, item: existing })"
           >
             End {{ level }}
@@ -139,6 +145,42 @@ export default {
         }
       }
       return options;
+    },
+    /**
+     * Live children of the item being edited.
+     *
+     * getCompass only returns live items, so anything populated here is still active.
+     * Items opened from the Archive drawer arrive without children, which is fine: they
+     * have already ended, so there is nothing to guard against.
+     */
+    liveChildCount() {
+      if (!this.existing) {
+        return 0;
+      }
+
+      if (this.level === "role") {
+        return (this.existing.goalList || []).length;
+      }
+      if (this.level === "goal") {
+        return (this.existing.projectList || []).length;
+      }
+
+      // Projects have no children in the hierarchy; tasks are only unlinked, never ended.
+      return 0;
+    },
+    childLabel() {
+      const plural = this.liveChildCount === 1 ? "" : "s";
+      return this.level === "role" ? `goal${plural}` : `project${plural}`;
+    },
+    // The API still allows ending a parent -- this only stops it happening by accident here.
+    canEnd() {
+      return this.liveChildCount === 0;
+    },
+    endBlockedHint() {
+      return (
+        `Ending this ${this.level} would archive its ${this.liveChildCount} active ` +
+        `${this.childLabel} too. End or move ${this.liveChildCount === 1 ? "it" : "them"} first.`
+      );
     },
   },
   created() {
@@ -265,6 +307,20 @@ export default {
   font-size: 0.9rem;
   color: #b0b0b0;
   font-weight: 400;
+}
+
+.compass-blocked-hint {
+  display: block;
+  margin-top: 6px;
+  color: #d9a441;
+  font-size: 0.82rem;
+}
+
+.drawer-footer button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .drawer-footer {

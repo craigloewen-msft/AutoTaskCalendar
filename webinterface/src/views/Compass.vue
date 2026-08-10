@@ -7,11 +7,6 @@
           <p class="text-muted compass-subtitle">Roles → Goals → Projects</p>
         </div>
         <div class="compass-header-right">
-          <span class="completed-counts">
-            Finished: {{ completedCounts.roles }} roles ·
-            {{ completedCounts.goals }} goals ·
-            {{ completedCounts.projects }} projects
-          </span>
           <button class="btn btn-primary" @click="openCreate('role')">+ Role</button>
         </div>
       </div>
@@ -85,17 +80,45 @@
           </div>
         </details>
 
-        <details v-if="archivedItems.length" class="compass-drawer-section">
+        <details v-if="hasArchive" class="compass-drawer-section" @toggle="onArchiveToggle">
           <summary>Archive · {{ archiveSummary }}</summary>
-          <div v-for="entry in archivedItems" :key="entry.item._id" class="project-row">
-            <span class="project-title">{{ entry.item.title }}</span>
-            <span class="item-dates">{{ entry.level }} · {{ dateRange(entry.item) }}</span>
+
+          <div class="archive-levels">
+            <button
+              v-for="level in archiveLevels"
+              :key="level"
+              class="archive-tab"
+              :class="{ active: archive.level === level }"
+              @click="loadArchive(level)"
+            >
+              {{ level }}s ({{ completedCounts[level + 's'] }})
+            </button>
+          </div>
+
+          <p v-if="archive.loading" class="empty-note">Loading…</p>
+
+          <div v-for="item in archive.items" :key="item._id" class="project-row">
+            <span class="project-title">{{ item.title }}</span>
+            <span class="item-dates">{{ archive.level }} · {{ dateRange(item) }}</span>
             <button
               class="link-btn"
-              :aria-label="'Edit ' + entry.item.title"
-              @click="openEdit(entry.level, entry.item)"
+              :aria-label="'Edit ' + item.title"
+              @click="openEdit(archive.level, item)"
             >✎</button>
           </div>
+
+          <p v-if="!archive.loading && !archive.items.length" class="empty-note">
+            Nothing finished at this level yet.
+          </p>
+
+          <button
+            v-if="archive.hasMore"
+            class="btn btn-sm btn-outline-primary"
+            :disabled="archive.loading"
+            @click="loadArchive(archive.level, true)"
+          >
+            Load more ({{ archive.totalCount - archive.items.length }} remaining)
+          </button>
         </details>
 
         <p class="unaligned-line">Unaligned tasks: {{ unalignedTaskCount }}</p>
@@ -139,6 +162,8 @@ export default {
       unalignedTaskCount: 0,
       taskList: [],
       loading: true,
+      archiveLevels: ["role", "goal", "project"],
+      archive: { level: "role", items: [], totalCount: 0, hasMore: false, loading: false, loaded: false },
       editor: { open: false, level: "role", existing: null, parentId: null, error: "", key: 0 },
     };
   },
@@ -147,8 +172,9 @@ export default {
     roleColors() {
       return buildRoleColorMap(this.roles);
     },
+    // The API only sends live roles, so everything here is already active.
     activeRoles() {
-      return this.roles.filter((role) => !this.hasEnded(role));
+      return this.roles;
     },
     // Parked projects, carrying their ladder so the drawer reads sensibly.
     somedayProjects() {
@@ -157,7 +183,7 @@ export default {
       for (const role of this.roles) {
         for (const goal of role.goalList || []) {
           for (const project of goal.projectList || []) {
-            if (!project.startDate && !this.hasEnded(project)) {
+            if (!project.startDate) {
               parked.push({ ...project, parentLabel: `${role.title} \u2192 ${goal.title}` });
             }
           }
@@ -166,37 +192,17 @@ export default {
 
       return parked;
     },
-    archivedItems() {
-      const archived = [];
-
-      for (const role of this.roles) {
-        if (this.hasEnded(role)) {
-          archived.push({ level: "role", item: role });
-        }
-
-        for (const goal of role.goalList || []) {
-          if (this.hasEnded(goal)) {
-            archived.push({ level: "goal", item: goal });
-          }
-
-          for (const project of goal.projectList || []) {
-            if (this.hasEnded(project)) {
-              archived.push({ level: "project", item: project });
-            }
-          }
-        }
-      }
-
-      return archived;
+    hasArchive() {
+      const { roles, goals, projects } = this.completedCounts;
+      return roles + goals + projects > 0;
     },
     archiveSummary() {
-      const counts = { role: 0, goal: 0, project: 0 };
-      this.archivedItems.forEach((entry) => (counts[entry.level] += 1));
+      const { roles, goals, projects } = this.completedCounts;
 
       return [
-        `${counts.role} ended roles`,
-        `${counts.goal} ended goals`,
-        `${counts.project} ended projects`,
+        `${roles} ended roles`,
+        `${goals} ended goals`,
+        `${projects} ended projects`,
       ].join(", ");
     },
     // Active task count per project, derived from the task list the app already loads.
@@ -212,17 +218,12 @@ export default {
     },
   },
   methods: {
-    hasEnded(item) {
-      return !!item.endDate && new Date(item.endDate) <= new Date();
-    },
     activeGoals(role) {
-      return (role.goalList || []).filter((goal) => !this.hasEnded(goal));
+      return role.goalList || [];
     },
     // Parked projects live in the Someday drawer instead of under their goal.
     activeProjects(goal) {
-      return (goal.projectList || []).filter(
-        (project) => !this.hasEnded(project) && project.startDate
-      );
+      return (goal.projectList || []).filter((project) => project.startDate);
     },
     activeTaskCount(projectId) {
       return this.activeTasksByProject[projectId] || 0;
@@ -244,6 +245,41 @@ export default {
       this.roles = data.roles || [];
       this.completedCounts = data.completedCounts || { roles: 0, goals: 0, projects: 0 };
       this.unalignedTaskCount = data.unalignedTaskCount || 0;
+
+      // Ending or deleting something changes the archive, so refetch it if it's open.
+      if (this.archive.loaded) {
+        this.loadArchive(this.archive.level);
+      }
+    },
+    // Only fetch the archive when the drawer is actually opened.
+    onArchiveToggle(event) {
+      if (event.target.open && !this.archive.loaded) {
+        this.loadArchive(this.archive.level);
+      }
+    },
+    async loadArchive(level, append = false) {
+      this.archive.loading = true;
+
+      try {
+        const skip = append ? this.archive.items.length : 0;
+        const response = await this.$http.get('/api/getCompassArchive', {
+          params: { level, skip, limit: 20 },
+        });
+
+        if (response.data.success) {
+          this.archive.level = level;
+          this.archive.items = append
+            ? [...this.archive.items, ...response.data.items]
+            : response.data.items;
+          this.archive.totalCount = response.data.totalCount;
+          this.archive.hasMore = response.data.hasMore;
+          this.archive.loaded = true;
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        this.archive.loading = false;
+      }
     },
     async load() {
       this.loading = true;
@@ -395,11 +431,6 @@ export default {
   flex-wrap: wrap;
 }
 
-.completed-counts {
-  color: #9aa0a6;
-  font-size: 0.85rem;
-}
-
 .role-block {
   margin-bottom: 26px;
   padding-bottom: 8px;
@@ -485,6 +516,28 @@ export default {
 .compass-drawer-section summary {
   cursor: pointer;
   color: #b0b0b0;
+}
+
+.archive-levels {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.archive-tab {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #9aa0a6;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+
+.archive-tab.active {
+  border-color: #667eea;
+  color: #c9d1d9;
 }
 
 .unaligned-line {
