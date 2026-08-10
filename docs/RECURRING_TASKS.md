@@ -73,11 +73,36 @@ deadline ordering.
 - **`occurrenceDate`** is the occurrence's *identity* within its series: the dedup key
   `(seriesRef, occurrenceDate)` is what makes expansion idempotent.
 
-`occurrenceDate` currently always equals `startDate`, so it looks redundant — but it is not
-safe to drop. `startDate` is user-editable in the task modal, and identity keyed on a
+### `occurrenceDate` vs `scheduledDate`
+
+These sound alike but sit at opposite ends of the scheduler.
+
+| | `occurrenceDate` | `scheduledDate` |
+|---|---|---|
+| Means | *Which* occurrence this is | *Where the scheduler put it* |
+| Direction | Scheduler **input** | Scheduler **output** |
+| Written by | `expandRecurrences` | `generateTaskEvents` |
+| Lifetime | Stable for the life of the occurrence | Recomputed from scratch every run |
+| Before the first run | Already set | `null` |
+| Time part | Local midnight | The real start time, e.g. 11:45 |
+
+On the seeded dataset, **510 of 517 occurrences end up scheduled on a different day from
+their occurrence date**. The scheduler is best-effort on deadlines, so a full day pushes
+work later: a daily check-in *for* Mon 10 Aug can be *placed* Tue 11 Aug 11:00. Both facts
+are needed, because the sidebar groups by `scheduledDate` while reporting lateness against
+the due date derived from `occurrenceDate`.
+
+Collapsing them would break expansion outright, not subtly:
+
+- Before the first scheduling run every `scheduledDate` is `null`, so every occurrence in a
+  series would share one dedup key.
+- Every run rewrites `scheduledDate`, so identity would change each run and expansion would
+  recreate the whole series every time.
+
+`occurrenceDate` is kept distinct from `startDate` for a related reason. It currently always
+equals it, but `startDate` is user-editable in the task modal, and identity keyed on a
 mutable field means editing a start date silently re-identifies the occurrence, so the next
-expansion recreates it as a duplicate. Keeping identity in a field the user cannot touch is
-what prevents that.
+expansion recreates it as a duplicate.
 
 ### Invariants
 

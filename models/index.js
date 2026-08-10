@@ -49,12 +49,15 @@ const TaskDetail = new Schema({
     breakUpTaskChunkDuration: Number,
     completed: Boolean,
     completedDate: Date,
+    // Scheduler OUTPUT: where the algorithm actually placed this task. Recomputed from
+    // scratch on every scheduling run, and null until the first one.
     scheduledDate: Date,
     repeat: String,
     recurrence: { type: RecurrenceRule, default: null },
     // Set on generated occurrences, pointing at the template that owns the rule.
     seriesRef: { type: Schema.Types.ObjectId, ref: 'taskInfo', default: null },
-    // The local-midnight date this occurrence is for. Its identity within the series.
+    // Scheduler INPUT: which occurrence of the series this is, at local midnight. Stable
+    // identity, so not the same as scheduledDate, which slips when a day is already full.
     occurrenceDate: { type: Date, default: null },
     isBacklog: Boolean,
     priority: { type: Number, default: 100 },

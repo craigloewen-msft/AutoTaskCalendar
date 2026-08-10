@@ -365,6 +365,29 @@ test.describe('recurrence expansion', () => {
         expect(await TaskDetails.findById(done._id)).not.toBeNull();
     });
 
+    test('occurrenceDate is identity, scheduledDate is placement', async ({ seed, api }) => {
+        const data = await seed();
+        await schedule(api);
+
+        const occurrences = await occurrencesOf(data.named.weekdaysSeries);
+        expect(occurrences.length).toBeGreaterThan(0);
+
+        // occurrenceDate is always local midnight; scheduledDate carries a real clock time.
+        for (const occurrence of occurrences) {
+            expect(moment(occurrence.occurrenceDate).hour()).toBe(0);
+            expect(moment(occurrence.occurrenceDate).minute()).toBe(0);
+        }
+
+        // Scheduling sets placement but must never rewrite identity. Were these one field,
+        // every run would re-key the series and expansion would duplicate it.
+        const identityBefore = occurrences.map((o) => o.occurrenceDate.getTime());
+
+        await schedule(api);
+
+        const after = await occurrencesOf(data.named.weekdaysSeries);
+        expect(after.map((o) => o.occurrenceDate.getTime())).toEqual(identityBefore);
+    });
+
     test('an occurrence reports the rule its series is running on', async ({ seed, api }) => {
         const data = await seed();
         await schedule(api);
