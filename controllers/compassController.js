@@ -41,8 +41,16 @@ function fail(message) {
     throw new CompassError(message);
 }
 
-// Strict policy: a blank value is only allowed when optional, and a bad one is fatal.
-function requireDate(value, fieldName, { required }) {
+/**
+ * Compass's error policy on top of the shared parser in utils/helpers.
+ *
+ * These wrappers stay here rather than moving into utils because they throw CompassError,
+ * which only this module's callers know how to translate. `parseDate()` itself is
+ * deliberately policy-free so it can be reused by code that wants different behaviour.
+ */
+
+// Body fields: a blank value is only allowed when optional, and a bad one is fatal.
+function parseDateOrFail(value, fieldName, { required }) {
     const { provided, valid, date } = parseDate(value);
 
     if (!provided) {
@@ -59,9 +67,19 @@ function requireDate(value, fieldName, { required }) {
     return date;
 }
 
-// Lenient policy for query strings: an unparseable date is ignored rather than fatal.
-function optionalDate(value) {
+// Query strings: an unparseable date is ignored rather than fatal.
+function parseDateOrIgnore(value) {
     return parseDate(value).date;
+}
+
+// An item is finished once it has an end date that has already passed.
+function endedFilter(now = new Date()) {
+    return { endDate: { $ne: null, $lte: now } };
+}
+
+// ...and live until then, which includes anything with no end date at all.
+function liveFilter(now = new Date()) {
+    return { $or: [{ endDate: null }, { endDate: { $exists: false } }, { endDate: { $gt: now } }] };
 }
 
 /**
@@ -115,7 +133,7 @@ async function buildFields(level, body, user, existing) {
     }
 
     if (isCreate || body.startDate !== undefined) {
-        fields.startDate = requireDate(body.startDate, 'Start date', {
+        fields.startDate = parseDateOrFail(body.startDate, 'Start date', {
             required: isCreate && config.startDateRequired,
         });
 
@@ -126,7 +144,7 @@ async function buildFields(level, body, user, existing) {
     }
 
     if (isCreate || body.endDate !== undefined) {
-        fields.endDate = requireDate(body.endDate, 'End date', { required: false });
+        fields.endDate = parseDateOrFail(body.endDate, 'End date', { required: false });
     }
 
     if (body.sortOrder !== undefined) {
@@ -246,7 +264,7 @@ async function setTaskProject(taskId, projectId, user) {
     return task;
 }
 
-// Finished means an end date that has already passed.
+// Finished means an end date that has already passed, optionally inside a window.
 function completedFilter(userId, from, to) {
     const endDate = { $ne: null, $lte: new Date() };
 
@@ -261,25 +279,36 @@ function completedFilter(userId, from, to) {
 }
 
 /**
- * The whole hierarchy, nested, plus the two counts the page needs.
+ * The live hierarchy, nested, plus the counts the page needs.
  *
- * `completedFrom`/`completedTo` scope completedCounts only -- the tree is never filtered,
- * because the client decides what to show and what to tuck away.
+ * **Only live items are returned in detail.** A role, goal, or project whose end date has
+ * passed is excluded and represented solely by `completedCounts`; use getCompassArchive()
+ * to page through those. Without this the payload would grow forever as work is finished,
+ * and every mutation would pay for it too, since mutations return this same payload.
+ *
+ * Ending a role archives its whole branch: its goals and projects come back from the
+ * archive endpoint, not from here.
+ *
+ * Parked ("someday") projects have no start date but no end date either, so they are live
+ * and always included -- the client decides how to present them.
+ *
+ * `completedFrom`/`completedTo` scope completedCounts only.
  */
 async function getCompassPayload(user, { completedFrom, completedTo } = {}) {
     const sort = { sortOrder: 1, startDate: 1 };
-    const from = optionalDate(completedFrom);
-    const to = optionalDate(completedTo);
+    const from = parseDateOrIgnore(completedFrom);
+    const to = parseDateOrIgnore(completedTo);
+    const live = liveFilter();
 
-    const roles = await RoleDetails.find({ userRef: user._id })
+    const roles = await RoleDetails.find({ userRef: user._id, ...live })
         .sort(sort)
         .populate({
             path: 'goalList',
-            match: { userRef: user._id },
+            match: { userRef: user._id, ...live },
             options: { sort },
             populate: {
                 path: 'projectList',
-                match: { userRef: user._id },
+                match: { userRef: user._id, ...live },
                 options: { sort },
             },
         });
@@ -306,9 +335,48 @@ async function getCompassPayload(user, { completedFrom, completedTo } = {}) {
     };
 }
 
+/**
+ * Page through finished roles, goals, or projects.
+ *
+ * This is the other half of getCompassPayload: detail about ended items lives here, behind
+ * pagination, so the main hierarchy stays a fixed size no matter how much work is finished.
+ *
+ * Returns records as stored, newest first, with the same pagination shape as
+ * getCompletedTasks (`items`, `totalCount`, `hasMore`).
+ */
+async function getCompassArchive(user, { level, limit, skip, completedFrom, completedTo } = {}) {
+    const config = LEVELS[level];
+
+    if (!config) {
+        fail('Level must be one of role, goal, or project');
+    }
+
+    const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const parsedSkip = Math.max(parseInt(skip, 10) || 0, 0);
+
+    const filter = completedFilter(
+        user._id,
+        parseDateOrIgnore(completedFrom),
+        parseDateOrIgnore(completedTo)
+    );
+
+    const [items, totalCount] = await Promise.all([
+        config.Model.find(filter).sort({ endDate: -1 }).skip(parsedSkip).limit(parsedLimit),
+        config.Model.countDocuments(filter),
+    ]);
+
+    return {
+        level,
+        items,
+        totalCount,
+        hasMore: parsedSkip + items.length < totalCount,
+    };
+}
+
 module.exports = {
     CompassError,
     getCompassPayload,
+    getCompassArchive,
     createItem,
     editItem,
     deleteItem,

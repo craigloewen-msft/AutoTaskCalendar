@@ -100,7 +100,8 @@ with `{ success: false, log }` via `returnFailure()`.
 
 | Method | Endpoint | Notes |
 | --- | --- | --- |
-| GET | `/api/getCompass` | The nested hierarchy. The page's only read. |
+| GET | `/api/getCompass` | The **live** hierarchy. The page's main read. |
+| GET | `/api/getCompassArchive` | Paged detail about ended items. |
 | POST | `/api/createRole` · `/api/editRole` · `/api/deleteRole` | |
 | POST | `/api/createGoal` · `/api/editGoal` · `/api/deleteGoal` | |
 | POST | `/api/createProject` · `/api/editProject` · `/api/deleteProject` | |
@@ -136,24 +137,38 @@ Roles contain their goals, goals contain their projects — each record exactly 
 One query builds the tree:
 
 ```js
-RoleDetails.find({ userRef: user._id })
+RoleDetails.find({ userRef: user._id, ...liveFilter() })
     .sort({ sortOrder: 1, startDate: 1 })
     .populate({
         path: 'goalList',
+        match: { userRef: user._id, ...liveFilter() },
         options: { sort },
-        populate: { path: 'projectList', options: { sort } },
+        populate: { path: 'projectList', match: { ... }, options: { sort } },
     });
 ```
 
-Every role, goal, and project the user owns is present — **ended ones included, parked
-projects included**, each sitting under its real parent. The client decides what to show,
-hide, grey out, or tuck into a drawer.
+#### Only live items come back in detail
+
+This endpoint returns a **bounded** payload. A role, goal, or project whose `endDate` has
+passed is excluded from the tree and represented only by `completedCounts`; its detail is
+paged through via `/api/getCompassArchive`.
+
+That matters because the payload would otherwise grow forever as work is finished, and
+**every mutation returns this same payload**, so a user with years of history would pay for
+all of it on every create, edit, and delete.
+
+Two consequences worth knowing:
+
+- **Ending a role archives its whole branch.** Its goals and projects come from the archive
+  endpoint, not from here. This keeps the rule simple: the tree is reachable-and-live.
+- **Parked ("someday") projects are still live.** They have no `startDate` but no `endDate`
+  either, so they always come back, and the client decides how to present them.
 
 - **`completedCounts`** — how many roles / goals / projects are finished, where finished
   means `endDate` is set and already past.
 - **`unalignedTaskCount`** — incomplete tasks with no `projectRef`.
 
-### Query parameters
+#### Query parameters
 
 | Param | Effect |
 | --- | --- |
@@ -163,14 +178,38 @@ hide, grey out, or tuck into a drawer.
 Omit both for all-time totals. *"How many goals did I finish last quarter?"* is
 `?completedFrom=2024-01-01&completedTo=2024-03-31`.
 
-These affect **`completedCounts` only**. The `roles` tree is never filtered — the client
-always receives the whole hierarchy and slices it however the current view wants. An
-unparseable date is ignored rather than erroring.
+These affect **`completedCounts` only**. The live tree is never narrowed by them.
+An unparseable date is ignored rather than erroring.
+
+### `GET /api/getCompassArchive`
+
+Detail about finished work, behind pagination, so the live hierarchy stays a fixed size.
+
+| Param | Effect |
+| --- | --- |
+| `level` | **Required.** `role`, `goal`, or `project`. |
+| `limit` | Page size; defaults to 20, capped at 100. |
+| `skip` | Offset for paging. |
+| `completedFrom` / `completedTo` | Optional window on `endDate`. |
+
+```jsonc
+{
+  "success": true,
+  "level": "goal",
+  "items": [ /* records as stored, most recently ended first */ ],
+  "totalCount": 37,
+  "hasMore": true
+}
+```
+
+The pagination shape deliberately matches `getCompletedTasks`, so the front end pages
+through finished goals the same way it pages through finished tasks.
 
 ### What the API deliberately does not do
 
-- No `someday` bucket, no `archive` bucket, no `stalled` flag, no "is active" booleans.
-  Dates go out; meaning is assigned by the client.
+- No `someday` bucket, no `stalled` flag, no "is active" booleans. Dates go out; meaning is
+  assigned by the client. The one thing the server *does* decide is live-versus-ended, and
+  only because that is what bounds the payload.
 - **No per-project task rollups.** The client already loads `/api/getUserTasks`, which
   carries `projectRef` on every task, so per-project active counts are a `reduce` over data
   the page holds anyway. If a future phase needs *completed*-per-project counts (which
@@ -220,8 +259,7 @@ agree.
 is a single editor shared by all three levels.
 
 ```
-Compass                                     Finished: 1 roles · 1 goals · 1 projects
-                                                                        [ + Role ]
+Compass                                                                 [ + Role ]
 ▌ Engineer                          since Jan 2024   ✎        [+ Goal]
     Ship v2 by June                 Jan – Jun 2024   ✎     [+ Project]
         Migration plan              since Feb 2024   ✎        3 active
@@ -234,14 +272,37 @@ Compass                                     Finished: 1 roles · 1 goals · 1 pr
    Unaligned tasks: 30
 ```
 
+Finished counts live on the Archive drawer rather than the header, so the top of the page
+stays about what you are doing now.
+
 All of the interpretation happens in the page:
 
-| Shown as | Client-side rule |
+| Shown as | Rule |
 | --- | --- |
-| On the board | `endDate` absent or in the future |
-| **Someday** drawer | project with no `startDate` |
-| **Archive** drawer | `endDate` set and already past |
-| `N active` | count of incomplete tasks whose `projectRef` matches |
+| On the board | everything in the payload — the server already excluded ended items |
+| **Someday** drawer | project with no `startDate` (client-side) |
+| **Archive** drawer | fetched on demand from `/api/getCompassArchive`, one level at a time |
+| `N active` | count of incomplete tasks whose `projectRef` matches (client-side) |
+
+The archive drawer only calls the API when you actually open it, and pages 20 at a time, so
+a long history costs nothing until you go looking for it.
+
+### Ending a parent is blocked in the UI, not in the API
+
+The API lets you end a role that still has live goals — doing so archives the whole branch
+in one call, which is the right primitive and stays available to scripts and future
+features. But it is rarely what someone means when they click a button, and the effect is
+invisible: the goals simply disappear from the board.
+
+So the drawer disables **End role** while the role has live goals, and **End goal** while
+the goal has live projects, with a hint saying what would happen and what to do first. The
+"Still active" checkbox is disabled alongside it, since clearing it is the same action by
+another route. Projects are leaves, so ending one is always allowed.
+
+This is a client-side guard over data the page already holds — `getCompass` only returns
+live items, so anything populated under a role or goal is by definition still active. No
+extra request, and **no API change**: `POST /api/editRole` with an `endDate` still archives
+a branch for any caller that genuinely wants that.
 
 ### On the Calendar page
 
@@ -309,7 +370,8 @@ actually happens.
 - Stalled styling: an active goal whose projects have zero active tasks renders muted with a
   quiet "nothing active" note. Client-side condition, no API change. The seeded goal *"Fix my
   sleep schedule"* exists precisely to render this.
-- Collapsed **Someday** / **Archive** / **Unaligned** sections styled as real drawers.
+- Collapsed **Someday** / **Unaligned** sections styled as real drawers, and the same for
+  the **Archive** drawer (which already pages against `/api/getCompassArchive`).
 - `Calendar.vue`: tint sidebar task entries and DayPilot blocks with the owning role's colour
   (walk `projectRef → goalRef → roleRef` client-side, then `buildRoleColorMap()` from
   `utils/roleColors.js`); add a role filter control.

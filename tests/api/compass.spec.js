@@ -58,24 +58,40 @@ test.describe('compass', () => {
         expect(shipV2.stalled).toBeUndefined();
     });
 
-    test('keeps ended and parked items in the tree under their real parent', async ({ seed, api }) => {
+    test('excludes ended items from the tree but keeps parked projects', async ({ seed, api }) => {
         await seed();
         const body = await compass(api);
 
-        // An ended role is still returned, not filtered into an archive bucket.
-        const ended = findRole(body, 'Volunteer board member');
-        expect(ended).toBeTruthy();
-        expect(ended.endDate).toBeTruthy();
+        // Ended items are summarised by completedCounts, not carried in the payload, so the
+        // hierarchy stays a fixed size no matter how much work has been finished.
+        expect(findRole(body, 'Volunteer board member')).toBeFalsy();
 
         const engineer = findRole(body, 'Engineer');
-        const endedGoal = findGoal(engineer, 'Finish the v1 maintenance window');
-        expect(endedGoal).toBeTruthy();
+        expect(findGoal(engineer, 'Finish the v1 maintenance window')).toBeFalsy();
 
-        // A project with no start date stays under its goal; the client parks it.
+        // A parked project has no start date but has not ended, so it is still live.
         const shipV2 = findGoal(engineer, 'Ship v2 by June');
         const someday = shipV2.projectList.find((p) => p.title === 'Rewrite the CLI');
         expect(someday).toBeTruthy();
         expect(someday.startDate).toBeFalsy();
+    });
+
+    test('ending a role archives its whole branch', async ({ seed, api }) => {
+        const data = await seed();
+
+        const before = await compass(api);
+        expect(findRole(before, 'Health')).toBeTruthy();
+
+        const res = await api.post('/api/editRole', {
+            data: { _id: String(data.named.healthRole._id), endDate: daysFromNow(-1) },
+        });
+        const body = await res.json();
+
+        expect(body.success).toBe(true);
+        // The role and everything under it drops out of the live payload in one go.
+        expect(findRole(body, 'Health')).toBeFalsy();
+        expect(JSON.stringify(body.roles)).not.toContain('Run a half marathon');
+        expect(body.completedCounts.roles).toBe(before.completedCounts.roles + 1);
     });
 
     test('creates a role, goal, and project', async ({ seed, api }) => {
@@ -315,7 +331,7 @@ test.describe('compass', () => {
             expect(windowed.completedCounts.goals).toBe(1);
             expect(windowed.completedCounts.projects).toBe(1);
 
-            // The hierarchy itself is untouched by the window.
+            // The live hierarchy is untouched by the window.
             expect(windowed.roles.length).toBe(all.roles.length);
         });
 
@@ -438,6 +454,101 @@ test.describe('compass', () => {
 
         expect(titles).toContain(otherTask.title);
         expect(titles).not.toContain('Hijacked title');
+    });
+
+    test.describe('archive', () => {
+        test('pages through ended items at each level', async ({ seed, api }) => {
+            await seed();
+
+            for (const level of ['role', 'goal', 'project']) {
+                const res = await api.get(`/api/getCompassArchive?level=${level}`);
+                const body = await res.json();
+
+                expect(body.success).toBe(true);
+                expect(body.level).toBe(level);
+                expect(body.totalCount).toBe(1);
+                // Everything returned really has finished.
+                expect(body.items.every((i) => new Date(i.endDate) <= new Date())).toBe(true);
+            }
+
+            const roles = await api.get('/api/getCompassArchive?level=role');
+            expect((await roles.json()).items[0].title).toBe('Volunteer board member');
+        });
+
+        test('respects limit and skip', async ({ seed, api }) => {
+            const data = await seed();
+
+            // Add a second ended project so there is something to page through.
+            await api.post('/api/createProject', {
+                data: {
+                    title: 'Another finished project',
+                    goalRef: String(data.named.shipV2._id),
+                    startDate: daysFromNow(-40),
+                    endDate: daysFromNow(-5),
+                },
+            });
+
+            const first = await api.get('/api/getCompassArchive?level=project&limit=1');
+            const firstBody = await first.json();
+
+            expect(firstBody.items.length).toBe(1);
+            expect(firstBody.totalCount).toBe(2);
+            expect(firstBody.hasMore).toBe(true);
+
+            const second = await api.get('/api/getCompassArchive?level=project&limit=1&skip=1');
+            const secondBody = await second.json();
+
+            expect(secondBody.items.length).toBe(1);
+            expect(secondBody.hasMore).toBe(false);
+            expect(secondBody.items[0]._id).not.toBe(firstBody.items[0]._id);
+        });
+
+        test('scopes to a completed window', async ({ seed, api }) => {
+            await seed();
+
+            // The ended goal finished 60 days ago, so a recent window excludes it.
+            const recent = await api.get(
+                `/api/getCompassArchive?level=goal&completedFrom=${daysFromNow(-10)}`
+            );
+            expect((await recent.json()).totalCount).toBe(0);
+
+            const wider = await api.get(
+                `/api/getCompassArchive?level=goal&completedFrom=${daysFromNow(-90)}`
+            );
+            expect((await wider.json()).totalCount).toBe(1);
+        });
+
+        test('rejects an unknown level', async ({ seed, api }) => {
+            await seed();
+
+            const res = await api.get('/api/getCompassArchive?level=banana');
+            const body = await res.json();
+
+            expect(body.success).toBe(false);
+            expect(body.log).toContain('role, goal, or project');
+        });
+
+        test('never returns another user\'s archive', async ({ seed, api, loginAs }) => {
+            const data = await seed();
+
+            // Give otheruser an ended role, then make sure it stays theirs.
+            const otherApi = await loginAs('otheruser');
+            await otherApi.post('/api/editRole', {
+                data: { _id: String(data.named.otherRole._id), endDate: daysFromNow(-2) },
+            });
+
+            const res = await api.get('/api/getCompassArchive?level=role');
+            const body = await res.json();
+
+            expect(JSON.stringify(body.items)).not.toContain('OTHER USER SECRET');
+        });
+
+        test('requires authentication', async ({ seed, apiAnon }) => {
+            await seed();
+
+            const res = await apiAnon.get('/api/getCompassArchive?level=role');
+            expect(res.status()).toBe(401);
+        });
     });
 
     test('requires authentication', async ({ seed, apiAnon }) => {

@@ -5,6 +5,7 @@ const { returnFailure } = require('../utils/helpers');
 const {
     CompassError,
     getCompassPayload,
+    getCompassArchive,
     createItem,
     editItem,
     deleteItem,
@@ -45,6 +46,27 @@ function createCompassRoutes(config, authenticateToken) {
     }
 
     router.get('/getCompass', authenticateToken, handle(async () => {}));
+
+    // Ended items are excluded from getCompass, so detail about them is paged through here.
+    router.get('/getCompassArchive', authenticateToken, async (req, res) => {
+        try {
+            const user = await UserDetails.findOne({ username: req.user.id });
+
+            if (!req.user || !user) {
+                return res.send(returnFailure('Not logged in'));
+            }
+
+            const result = await getCompassArchive(user, req.query);
+            return res.json({ success: true, ...result });
+        } catch (error) {
+            if (error instanceof CompassError) {
+                return res.send(returnFailure(error.message));
+            }
+
+            console.error(error);
+            return res.json({ success: false });
+        }
+    });
 
     for (const level of ['Role', 'Goal', 'Project']) {
         const key = level.toLowerCase();
