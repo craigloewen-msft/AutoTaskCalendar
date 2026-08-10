@@ -112,7 +112,6 @@ module.exports = {
             dueDate: b.endOfDay(b.anchor, 1),
             startDate: b.at(b.anchor, { days: 0 }),
             duration: 15,
-            isSeriesTemplate: true,
             recurrence: { freq: 'weekly', interval: 1, byWeekday: [1, 2] },
         });
 
@@ -121,7 +120,6 @@ module.exports = {
             dueDate: b.endOfDay(b.anchor, 1),
             startDate: b.at(b.anchor, { days: 0 }),
             duration: 60,
-            isSeriesTemplate: true,
             recurrence: { freq: 'weekly', interval: 2, byWeekday: [4] },
         });
 
@@ -130,7 +128,6 @@ module.exports = {
             dueDate: b.endOfDay(b.anchor, 1),
             startDate: b.at(b.anchor, { days: 0 }),
             duration: 45,
-            isSeriesTemplate: true,
             recurrence: { freq: 'monthly', interval: 1, byMonthDay: [1, -1] },
         });
 

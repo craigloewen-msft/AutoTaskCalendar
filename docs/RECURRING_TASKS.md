@@ -8,9 +8,13 @@ materialises from it, and what happens when you complete, edit, or delete one.
 A repeating task is a **series**: one *template* document that owns the recurrence rule,
 plus concrete *occurrence* documents generated from it over a rolling 60-day window.
 
+A task **is** a template exactly when it has a `recurrence` rule — there is no separate
+flag. That is deliberate: a boolean duplicating "has a rule" can drift out of sync with the
+rule itself, and a stale copy is how a template gets mistaken for work.
+
 ```mermaid
 flowchart TD
-    A["Series template<br/>isSeriesTemplate: true<br/>owns the rule"] --> B["expandRecurrences()"]
+    A["Series template<br/>has a recurrence rule"] --> B["expandRecurrences()"]
     B --> C["Occurrence documents<br/>seriesRef + occurrenceDate"]
     C --> D["generateTaskEvents()"]
     D --> E["Calendar events"]
@@ -60,14 +64,29 @@ Each occurrence inherits title, notes, duration, chunking, priority and dependen
 its template, and gets `dueDate` = end of its own day, which is what drives the scheduler's
 deadline ordering.
 
+### Why the two extra fields
+
+`seriesRef` and `occurrenceDate` are the only bookkeeping an occurrence carries.
+
+- **`seriesRef`** points at the template. It is what makes "edit/delete the series" and
+  "prune this series' occurrences" possible at all.
+- **`occurrenceDate`** is the occurrence's *identity* within its series: the dedup key
+  `(seriesRef, occurrenceDate)` is what makes expansion idempotent.
+
+`occurrenceDate` currently always equals `startDate`, so it looks redundant — but it is not
+safe to drop. `startDate` is user-editable in the task modal, and identity keyed on a
+mutable field means editing a start date silently re-identifies the occurrence, so the next
+expansion recreates it as a duplicate. Keeping identity in a field the user cannot touch is
+what prevents that.
+
 ### Invariants
 
 - **Idempotent.** Keyed on `(seriesRef, occurrenceDate)`. Running the scheduler twice does
   not duplicate or churn occurrences.
 - **Completed occurrences are immutable.** Never pruned (however old), never regenerated,
   never removed by a rule edit or a series delete. They are the user's history.
-- **The template is never scheduled and never listed.** `isSeriesTemplate: {$ne: true}`
-  guards the task-list query and both scheduler queries. It is a rule holder, not work.
+- **The template is never scheduled and never listed.** `'recurrence.freq': {$exists: false}`
+  guards the task-list query and both scheduler queries. It is a rule, not work.
 
 ## Behaviour you should know about
 
@@ -118,7 +137,7 @@ would need to move the scheduler too.
 ## Legacy `repeat` strings
 
 The old `repeat: 'weekly'` string still works. There is no migration script: the first
-expansion promotes such a task in place (sets `recurrence` and `isSeriesTemplate`) and it
+expansion promotes such a task in place (writes its `recurrence`) and it
 behaves as a series from then on. Until promotion, completing one still clones it forward,
 so nothing breaks mid-migration.
 

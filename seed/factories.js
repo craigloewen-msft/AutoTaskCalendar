@@ -77,7 +77,6 @@ function makeTask(overrides = {}) {
         recurrence: null,
         seriesRef: null,
         occurrenceDate: null,
-        isSeriesTemplate: false,
         isBacklog: false,
         priority: 100,
         dependsOn: [],

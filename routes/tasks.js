@@ -117,7 +117,6 @@ function createTaskRoutes(config, authenticateToken) {
                 return res.send(returnFailure('Invalid project'));
             }
 
-            // Create the new task
             const normalisedRecurrence = normaliseRecurrence(recurrence);
             const task = new TaskDetails({
                 title: req.body.title,
@@ -130,9 +129,6 @@ function createTaskRoutes(config, authenticateToken) {
                 breakUpTaskChunkDuration: breakUpTaskChunkDuration,
                 repeat: repeatValue,
                 recurrence: normalisedRecurrence,
-                // A task holding a rule is a template; the scheduler materialises its
-                // occurrences and never schedules the template itself.
-                isSeriesTemplate: !!(normalisedRecurrence || repeatValue),
                 isBacklog: isBacklog || false,
                 dependsOn: dependsOn || [],
                 priority: priority != null ? priority : 100,
@@ -140,9 +136,9 @@ function createTaskRoutes(config, authenticateToken) {
             });
             await task.save();
 
-            // Materialise straight away, so a new series shows its occurrences without
-            // waiting for the user to press "Schedule Tasks".
-            if (task.isSeriesTemplate) {
+            // Materialise now, so a new series shows its occurrences without waiting for
+            // the user to press "Schedule Tasks".
+            if (normalisedRecurrence || repeatValue) {
                 await expandRecurrences(user, SCHEDULING_HORIZON_DAYS);
             }
 
@@ -218,12 +214,11 @@ function createTaskRoutes(config, authenticateToken) {
             delete update._id;
             delete update.seriesRecurrence;
 
-            // Per-occurrence state must never be copied onto the template: doing so would
-            // mark the template as an occurrence of itself and corrupt the series.
+            // Per-occurrence state must never land on the template: it would make the
+            // template an occurrence of itself and break expansion.
             if (isOccurrence) {
                 delete update.seriesRef;
                 delete update.occurrenceDate;
-                delete update.isSeriesTemplate;
                 delete update.completed;
                 delete update.completedDate;
                 delete update.scheduledDate;
@@ -234,10 +229,9 @@ function createTaskRoutes(config, authenticateToken) {
 
             if (task.recurrence !== undefined) {
                 update.recurrence = normaliseRecurrence(task.recurrence);
-                update.isSeriesTemplate = !!(update.recurrence || task.repeat);
 
-                // A series that stopped repeating goes back to being a plain task, so its
-                // now-orphaned incomplete occurrences are cleared out.
+                // A series that stopped repeating becomes a plain task, so its orphaned
+                // incomplete occurrences go.
                 if (!update.recurrence && !task.repeat) {
                     await TaskDetails.deleteMany({
                         userRef: user._id,
@@ -288,7 +282,8 @@ function createTaskRoutes(config, authenticateToken) {
             }
 
             // Deleting any occurrence deletes the whole series.
-            const seriesId = task.seriesRef || (task.isSeriesTemplate ? task._id : null);
+            const hasRule = !!(task.recurrence && task.recurrence.freq);
+            const seriesId = task.seriesRef || (hasRule ? task._id : null);
             if (seriesId) {
                 // Incomplete occurrences go; completed ones stay as history.
                 await TaskDetails.deleteMany({

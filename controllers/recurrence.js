@@ -3,13 +3,13 @@
 /**
  * Recurrence rules and the occurrences they generate.
  *
- * A repeating task is a *series*: one template document holding the rule, plus concrete
- * occurrence documents materialised over a rolling horizon by `expandRecurrences`.
+ * A repeating task is a series: one template holding the rule, plus occurrence documents
+ * materialised from it over a rolling horizon. A task IS a template exactly when it has a
+ * recurrence rule; there is no separate flag to keep in sync.
  *
- * TIMEZONES: everything here works in SERVER-LOCAL time, matching the scheduler
- * (`getWorkingHoursForDay`) and the seed factories. Never use UTC getters for weekday
- * logic and never advance days with `+ MS_PER_DAY` — both drift across DST and can flip
- * the date. Always go through moment's `add()`.
+ * TIMEZONES: everything here is SERVER-LOCAL, matching the scheduler and seed factories.
+ * Never use UTC getters for weekday logic, and never advance days with `+ MS_PER_DAY`:
+ * both drift across DST. Always go through moment's `add()`.
  */
 
 const moment = require('moment');
@@ -244,8 +244,8 @@ function isOnInterval(rule, anchorDay, day, interval) {
             return day.diff(anchorDay, 'days') % interval === 0;
 
         case 'weekly': {
-            // Compare whole weeks from the anchor's week start, so every day in an active
-            // week qualifies and byWeekday can then pick days out of it.
+            // Compare whole weeks from the anchor's week start, so byWeekday can pick days
+            // out of an active week.
             const anchorWeek = anchorDay.clone().startOf('week');
             const dayWeek = day.clone().startOf('week');
             return dayWeek.diff(anchorWeek, 'weeks') % interval === 0;
@@ -271,10 +271,8 @@ function isOnInterval(rule, anchorDay, day, interval) {
 /**
  * Generate occurrence dates for a rule within [from, to].
  *
- * `anchor` is the series start date. It fixes the phase for intervals, so "every 2 weeks"
+ * `anchor` is the series start date; it fixes the phase for intervals, so "every 2 weeks"
  * counts from the anchor rather than from an arbitrary window edge.
- *
- * Returns local-midnight Dates in ascending order.
  */
 function occurrenceDatesBetween(rule, from, to, anchor) {
     if (!rule || !FREQUENCIES.includes(rule.freq)) {
@@ -289,7 +287,7 @@ function occurrenceDatesBetween(rule, from, to, anchor) {
 
     const dates = [];
     // Counts every occurrence since the anchor, including ones before the window, so
-    // endsAfter means "N occurrences ever" rather than "N within this window".
+    // endsAfter means "N occurrences ever".
     let produced = 0;
 
     // Walk day by day from the anchor, bounded by the window, endsOn, endsAfter, and a
@@ -325,8 +323,7 @@ function occurrenceDatesBetween(rule, from, to, anchor) {
 // ============================================================================
 
 /**
- * Fields an occurrence inherits from its template. Everything else (completion state,
- * scheduling state, series bookkeeping) is per-occurrence.
+ * Fields an occurrence inherits from its template. Everything else is per-occurrence.
  */
 const INHERITED_FIELDS = [
     'title',
@@ -343,15 +340,14 @@ const INHERITED_FIELDS = [
  * ones that no longer belong.
  *
  * Idempotent: keyed on (seriesRef, occurrenceDate), so running it twice is a no-op.
- * Completed occurrences are never pruned and never regenerated — they are the user's
- * completion history.
+ * Completed occurrences are never pruned or regenerated — they are the user's history.
  */
 async function expandRecurrences(user, horizonDays) {
     const today = moment().startOf('day');
     const horizonEnd = today.clone().add(horizonDays, 'days');
 
-    // Any task carrying a rule is a series template. Legacy `repeat` strings are promoted
-    // on the fly so old data starts behaving without a migration.
+    // Any task carrying a rule is a template. Legacy `repeat` strings are promoted on the
+    // fly, so old data starts behaving without a migration.
     const templates = await TaskDetails.find({
         userRef: user._id,
         $or: [
@@ -364,9 +360,8 @@ async function expandRecurrences(user, horizonDays) {
         const rule = effectiveRule(template);
         if (!rule) continue;
 
-        // Promote: this task holds a rule, so it is a template, not a work item.
-        if (!template.isSeriesTemplate || !template.recurrence || !template.recurrence.freq) {
-            template.isSeriesTemplate = true;
+        // Promote a legacy string in place: writing the rule is what makes it a template.
+        if (!template.recurrence || !template.recurrence.freq) {
             template.recurrence = rule;
             template.scheduledDate = null;
             await template.save();
@@ -375,7 +370,7 @@ async function expandRecurrences(user, horizonDays) {
         await expandSeries(template, rule, today, horizonEnd);
     }
 
-    // Drop past incomplete occurrences across all series: recurring chores never pile up.
+    // Drop past incomplete occurrences across all series: chores never pile up.
     await TaskDetails.deleteMany({
         userRef: user._id,
         seriesRef: { $ne: null },
@@ -394,15 +389,14 @@ async function expandSeries(template, rule, today, horizonEnd) {
     const wanted = dates.map((d) => startOfLocalDay(d).toDate());
     const wantedTimes = new Set(wanted.map((d) => d.getTime()));
 
-    // Everything this series already has from today onwards.
     const existing = await TaskDetails.find({
         userRef: template.userRef,
         seriesRef: template._id,
         occurrenceDate: { $gte: today.toDate() },
     });
 
-    // Drop future occurrences the rule no longer produces (e.g. after an edit). Completed
-    // ones are untouched: they are history, not a projection of the current rule.
+    // Drop future occurrences the rule no longer produces, e.g. after an edit. Completed
+    // ones stay: they are history, not a projection of the current rule.
     const staleIds = existing
         .filter((t) => !t.completed && !wantedTimes.has(t.occurrenceDate.getTime()))
         .map((t) => t._id);
@@ -411,7 +405,7 @@ async function expandSeries(template, rule, today, horizonEnd) {
         await TaskDetails.deleteMany({ _id: { $in: staleIds } });
     }
 
-    // Surviving documents keep their identity, which is what makes a re-run a no-op.
+    // Survivors keep their identity, which is what makes a re-run a no-op.
     const staleSet = new Set(staleIds.map((id) => id.toString()));
     const taken = new Set(
         existing
@@ -431,14 +425,13 @@ async function expandSeries(template, rule, today, horizonEnd) {
             userRef: template.userRef,
             seriesRef: template._id,
             occurrenceDate: date,
-            // Due at the end of its own day, which is what drives scheduling priority.
+            // Due at the end of its own day, which drives scheduling priority.
             dueDate: moment(date).endOf('day').toDate(),
             startDate: date,
             completed: false,
             completedDate: null,
             scheduledDate: null,
             isBacklog: false,
-            isSeriesTemplate: false,
             recurrence: null,
             repeat: null,
         }));

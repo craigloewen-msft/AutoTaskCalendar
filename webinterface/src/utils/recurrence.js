@@ -1,10 +1,8 @@
 /**
  * Recurrence helpers for the UI.
  *
- * `describeRecurrence` is deliberately a mirror of the same function in
- * controllers/recurrence.js: the summary line the user reads must never disagree with
- * what the API stores. If you change one, change both (tests/api/recurrence.spec.js
- * pins the backend wording).
+ * `describeRecurrence` mirrors the same function in controllers/recurrence.js: the summary
+ * the user reads must match what the API stores. Change one, change both.
  */
 
 export const WEEKDAY_NAMES = [

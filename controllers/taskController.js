@@ -7,10 +7,10 @@ const { effectiveRule } = require('./recurrence');
 async function getTaskListFromUsername(inUsername) {
     let user = await UserDetails.findOne({ username: inUsername }).populate({
         path: 'taskList',
-        // Series templates hold the rule and are never work items, so they stay out of
-        // the task list; their occurrences appear instead.
+        // A task with a rule is a series template: it owns the rule but is never work, so
+        // its occurrences appear in the list instead.
         match: {
-            isSeriesTemplate: { $ne: true },
+            'recurrence.freq': { $exists: false },
             $or: [{ completed: false }, { completed: null }],
         },
         options: { sort: { dueDate: 1, priority: 1 } },
@@ -21,8 +21,7 @@ async function getTaskListFromUsername(inUsername) {
 
 /**
  * Occurrences do not carry the rule (their template owns it), so the editor would show
- * "Does not repeat" for a task the UI is simultaneously calling part of a series. Attach
- * the owning rule as `seriesRecurrence` purely for display.
+ * "Does not repeat" for a task the UI calls part of a series. Attach it for display.
  */
 async function attachSeriesRules(taskList) {
     if (!taskList || taskList.length === 0) {
@@ -57,14 +56,14 @@ const completeTask = async (task, user) => {
     task.completedDate = new Date();
     await task.save();
 
-    // An occurrence of a series completes on its own. The next occurrence already exists,
-    // so each completion stands as its own record rather than overwriting one row.
+    // An occurrence completes on its own: the next one already exists, so each completion
+    // stands as its own record rather than overwriting one row.
     if (task.seriesRef) {
         return { success: true };
     }
 
-    // Legacy path: a `repeat` string that has not yet been promoted to a series still
-    // clones itself forward, so nothing breaks mid-migration.
+    // Legacy path: a `repeat` string not yet promoted to a series still clones itself
+    // forward, so nothing breaks mid-migration.
     const rule = effectiveRule(task);
     if (rule && !task.recurrence) {
         // Create a new task based on the completed task

@@ -318,7 +318,6 @@ test.describe('recurrence expansion', () => {
         });
 
         // The old string was promoted to a rule in place, and it now drives occurrences.
-        expect(legacy.isSeriesTemplate).toBe(true);
         expect(legacy.recurrence.freq).toBe('weekly');
         expect((await occurrencesOf(legacy)).length).toBeGreaterThan(0);
     });
@@ -399,7 +398,6 @@ test.describe('recurrence expansion', () => {
                     duration: 25,
                     seriesRef: occurrence.seriesRef.toString(),
                     occurrenceDate: occurrence.occurrenceDate,
-                    isSeriesTemplate: false,
                     completed: false,
                     scheduledDate: occurrence.scheduledDate,
                 },
@@ -413,7 +411,6 @@ test.describe('recurrence expansion', () => {
         // copying them would make the template an occurrence of itself and break expansion.
         expect(template.title).toBe('Renamed through an occurrence');
         expect(template.duration).toBe(25);
-        expect(template.isSeriesTemplate).toBe(true);
         expect(template.seriesRef).toBeNull();
         expect(template.occurrenceDate).toBeNull();
         expect(template.recurrence.freq).toBe('weekly');
@@ -465,7 +462,6 @@ test.describe('recurrence validation through the API', () => {
         const created = await TaskDetails.findOne({ userRef: user._id, title: 'Repeating thing' });
         expect(created.recurrence.freq).toBe('weekly');
         expect(created.recurrence.byWeekday).toEqual([1, 2]);
-        expect(created.isSeriesTemplate).toBe(true);
     });
 
     test('createTask persists a plain repeat string', async ({ seed, api }) => {

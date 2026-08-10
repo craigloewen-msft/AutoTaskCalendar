@@ -9,9 +9,8 @@ const { expandRecurrences } = require('./recurrence');
 const MS_PER_MINUTE = 60 * 1000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
-// Bounds both the existing-events query and how far recurring series are materialised.
-// These must stay equal: the scheduling loop itself is unbounded, so a shorter event
-// window would let it book on top of real calendar events past the horizon.
+// Bounds the events query AND recurrence expansion. Keep them equal: the scheduling loop
+// is unbounded, so a shorter event window books on top of real calendar events.
 const SCHEDULING_HORIZON_DAYS = 60;
 const MAX_SCHEDULING_ITERATIONS = 10000;
 const MAX_NO_PROGRESS_ITERATIONS = 100;
@@ -289,9 +288,8 @@ async function scheduleFullTask(context, task, taskIndex) {
     pendingTasks.splice(taskIndex, 1);
     scheduledTaskIds.add(task._id.toString());
 
-    // Update task's scheduled date. Written with updateOne rather than doc.save() because
-    // a concurrent scheduling run can prune this occurrence mid-loop; save() would throw
-    // DocumentNotFoundError and fail the whole request, while this is simply a no-op.
+    // Update the scheduled date. updateOne rather than save() because a concurrent run can
+    // prune this occurrence mid-loop, and save() would throw DocumentNotFoundError.
     task.scheduledDate = currentTime;
     await TaskDetails.updateOne({ _id: task._id }, { $set: { scheduledDate: currentTime } });
 
@@ -373,8 +371,7 @@ function handleNonWorkingDay(context) {
         return false;
     }
 
-    // Move to the start of the next day. moment's add() is DST-safe; adding MS_PER_DAY
-    // drifts an hour across a DST boundary and eventually skips or repeats a date.
+    // Move to the start of the next day. moment's add() is DST-safe; += MS_PER_DAY drifts.
     context.currentTime = moment(currentTime).add(1, 'day').startOf('day').toDate();
     return true;
 }
@@ -460,11 +457,11 @@ async function buildSchedulingContext(user) {
     const currentTime = new Date();
     const schedulingHorizon = moment(currentTime).add(SCHEDULING_HORIZON_DAYS, 'days').toDate();
 
-    // Get all incomplete tasks to build dependency map. Series templates are rule holders,
-    // never work items, so they are excluded everywhere tasks are treated as schedulable.
+    // Get all incomplete tasks to build dependency map. Series templates own a rule and
+    // are never work items, so they are excluded wherever tasks are treated as schedulable.
     const allIncompleteTasks = await TaskDetails.find({
         userRef: user._id,
-        isSeriesTemplate: { $ne: true },
+        'recurrence.freq': { $exists: false },
         $or: [{ completed: false }, { completed: null }]
     });
 
@@ -476,7 +473,7 @@ async function buildSchedulingContext(user) {
     // Get regular tasks (sorted by deadline) and backlog tasks (sorted by start date)
     const regularTasks = await TaskDetails.find({
         userRef: user._id,
-        isSeriesTemplate: { $ne: true },
+        'recurrence.freq': { $exists: false },
         $and: [
             { $or: [{ completed: false }, { completed: null }] },
             { $or: [{ isBacklog: false }, { isBacklog: null }] }
@@ -485,7 +482,7 @@ async function buildSchedulingContext(user) {
 
     const backlogTasks = await TaskDetails.find({
         userRef: user._id,
-        isSeriesTemplate: { $ne: true },
+        'recurrence.freq': { $exists: false },
         $or: [{ completed: false }, { completed: null }],
         isBacklog: true,
     }).sort({ startDate: 1 });

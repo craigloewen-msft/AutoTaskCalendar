@@ -142,7 +142,7 @@
 <script>
 import { describeRecurrence, WEEKDAY_NAMES } from "../utils/recurrence";
 
-// Mirrors controllers/recurrence.js so the UI and the API never disagree about a rule.
+// Mirrors controllers/recurrence.js so the UI and the API agree about a rule.
 export default {
   name: "RepeatEditor",
   props: {
@@ -232,8 +232,8 @@ export default {
         endsAfter: (this.modelValue && this.modelValue.endsAfter) || null,
       });
     },
-    // Today, unless today is not a working day: defaulting to one would fire the
-    // non-working warning on a rule the user has not configured yet.
+    // Today, unless today is not a working day: defaulting to one would warn about a rule
+    // the user has not configured yet.
     defaultWeekday() {
       const today = new Date().getDay();
       if (this.isWorkingDay(today)) return today;

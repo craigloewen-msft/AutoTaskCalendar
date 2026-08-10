@@ -331,7 +331,6 @@ test.describe('scheduling', () => {
             startDate: moment().startOf('day').toDate(),
             dueDate: moment().endOf('day').toDate(),
             recurrence: { freq: 'weekly', interval: 1, byWeekday: [1, 2] },
-            isSeriesTemplate: true,
         });
 
         await schedule(api);
@@ -364,7 +363,6 @@ test.describe('scheduling', () => {
             startDate: moment().startOf('day').toDate(),
             dueDate: moment().endOf('day').toDate(),
             recurrence: { freq: 'daily', interval: 1 },
-            isSeriesTemplate: true,
         });
 
         await schedule(api);

@@ -300,8 +300,7 @@ import { DayPilot, DayPilotCalendar } from "@daypilot/daypilot-lite-vue";
 import { BButton, BModal, BFormCheckbox } from 'bootstrap-vue-next';
 import RepeatEditor from "../components/RepeatEditor.vue";
 
-// The sidebar shows this far ahead. The scheduler materialises 60 days of recurring
-// occurrences, which would otherwise make the list unusably long.
+// The sidebar shows this far ahead; the scheduler materialises 60 days of occurrences.
 const SIDEBAR_WINDOW_DAYS = 14;
 
 export default {
@@ -820,8 +819,7 @@ export default {
       this.input.taskBreakUpTaskChunkDuration =
         inputTask.breakUpTaskChunkDuration;
 
-      // An occurrence carries no rule of its own; the API attaches its series' rule as
-      // seriesRecurrence so the editor shows what is actually in force.
+      // An occurrence carries no rule of its own; the API attaches its series' rule.
       this.input.recurrence = inputTask.recurrence || inputTask.seriesRecurrence || null;
       this.input.taskIsBacklog = inputTask.isBacklog || false;
       this.input.dependsOn = inputTask.dependsOn || [];
@@ -894,8 +892,8 @@ export default {
       if (task.isBacklog && !task.scheduledDate) {
         return "Backlog";
       }
-      // Anything the scheduler could not place has no scheduledDate. Without this the
-      // date below formats as the literal string "Invalid Date" and becomes a header.
+      // Anything the scheduler could not place has no scheduledDate; formatting it would
+      // produce the literal string "Invalid Date" as a group header.
       if (!task.scheduledDate) {
         return "Unscheduled";
       }
@@ -979,9 +977,8 @@ export default {
     taskGroupedByDate() {
       const groupedTasks = {};
       if (this.taskList) {
-        // The scheduler materialises 60 days of recurring occurrences; showing them all
-        // would bury the list, so the sidebar keeps a shorter window. Backlog and
-        // unscheduled tasks are always kept, since they have no date to fall outside it.
+        // 60 days of occurrences would bury the list, so the sidebar keeps a shorter
+        // window. Backlog and unscheduled tasks have no date, so they are always kept.
         const windowEnd = new Date();
         windowEnd.setDate(windowEnd.getDate() + SIDEBAR_WINDOW_DAYS);
         windowEnd.setHours(23, 59, 59, 999);
@@ -1015,8 +1012,7 @@ export default {
     tasksDatesArray() {
       if (this.taskGroupedByDate) {
         let taskDateArray = Object.keys(this.taskGroupedByDate);
-        // "Backlog" and "Unscheduled" are labels, not dates, so they sort to the end
-        // rather than becoming NaN comparisons.
+        // "Backlog" and "Unscheduled" are labels, not dates, so they sort to the end.
         const labels = ["Backlog", "Unscheduled"];
         taskDateArray.sort(function (a, b) {
           const aIsLabel = labels.includes(a);
