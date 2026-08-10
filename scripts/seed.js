@@ -21,6 +21,9 @@ async function main() {
     console.log(`  Users:    ${result.users.length}`);
     console.log(`  Tasks:    ${result.tasks.length}`);
     console.log(`  Events:   ${result.events.length}`);
+    console.log(`  Roles:    ${result.roles.length}`);
+    console.log(`  Goals:    ${result.goals.length}`);
+    console.log(`  Projects: ${result.projects.length}`);
     console.log('-------------------------------------------------');
     console.log('Test credentials:');
     for (const u of result.users) {

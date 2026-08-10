@@ -52,6 +52,7 @@ dataset.
 - `tests/` — Playwright specs (`api/`, `ui/`) and shared `fixtures/`.
 - `scripts/` — `dev.js` (dev stack), `dev-db.sh` (database), `test.js` (test stack).
 - `docs/` — one file per broad concept, each a standalone instruction manual.
+  `docs/COMPASS.md` covers roles/goals/projects and what is planned next for them.
 
 ## Documenting your work
 

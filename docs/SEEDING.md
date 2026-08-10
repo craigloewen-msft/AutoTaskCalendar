@@ -13,8 +13,8 @@ the dataset — a single thing to understand and a single thing to keep correct.
 npm run seed
 ```
 
-Seeding **wipes** the users, tasks, and events in your instance's database first, so each
-run gives you a clean, known state.
+Seeding **wipes** the users, tasks, events, roles, goals, and projects in your instance's
+database first, so each run gives you a clean, known state.
 
 Log in with:
 
@@ -42,7 +42,16 @@ All of it belongs to `testuser` unless noted:
   unschedulable dependency, and a task that starts next week.
 - **19 calendar events** — a week of standups and lunches, two that overlap each other,
   two sitting exactly on the working-hours boundaries, and a day-long block.
-- **A second user** with 5 tasks and 1 event, all titled `OTHER USER SECRET ...`.
+- **A Compass hierarchy** (roles → goals → projects; see `docs/COMPASS.md`):
+  - 3 active roles (Engineer, Father, Health) and 1 ended one (Volunteer board member).
+  - 6 goals, including one ended and one — *Fix my sleep schedule* — deliberately left with
+    no active tasks beneath it, so "stalled" states have something to render.
+  - 8 projects, including one parked with no start date (*Rewrite the CLI*) and one ended.
+  - End dates are spread across quarters so `completedFrom`/`completedTo` has something to
+    slice.
+  - Roughly half the named tasks are linked to projects; the rest stay unaligned on purpose.
+- **A second user** with 5 tasks, 1 event, and a role/goal/project, all titled
+  `OTHER USER SECRET ...`.
 
 ## Empty states
 
@@ -63,9 +72,9 @@ flowchart LR
   F --> M["models/index.js"]
 ```
 
-- **`seed/factories.js`** — `makeUser`, `makeTask`, `makeEvent`. Sensible defaults, every
-  field overridable, powered by `@faker-js/faker` with a fixed seed so runs are
-  reproducible.
+- **`seed/factories.js`** — `makeUser`, `makeTask`, `makeEvent`, `makeRole`, `makeGoal`,
+  `makeProject`. Sensible defaults, every field overridable, powered by `@faker-js/faker`
+  with a fixed seed so runs are reproducible.
 - **`seed/dataset.js`** — the dataset itself, as one readable `build(b)` function.
 - **`seed/index.js`** — `runSeed()`: connects, wipes, builds, and returns the created data.
 - **`scripts/seed.js`** — the CLI wrapper.
@@ -95,9 +104,11 @@ const data = await seed();
 data.primary.user       // the testuser mongoose document
 data.other.user         // the second user
 data.named.research     // named tasks, by key
+data.named.engineerRole // Compass roles, goals, and projects are named too
 data.counts.completed   // 70 — prefer these over hard-coded numbers
 data.tasks              // every task created
 data.events             // every event created
+data.roles              // every role created (likewise goals, projects)
 data.anchor             // the moment all dates were derived from
 ```
 
@@ -125,7 +136,8 @@ await b.createTask(user, {
 ```
 
 Builder methods: `createUser`, `createTask`, `createTasks(user, count, fn)`, `createEvent`,
-plus every factory helper (`at`, `endOfDay`, `makeTask`, ...).
+`createRole`, `createGoal(user, role, ...)`, `createProject(user, goal, ...)`,
+`alignTasks(tasks, project)`, plus every factory helper (`at`, `endOfDay`, `makeTask`, ...).
 
 Expose anything tests should reach under `named`, and any size tests care about under
 `counts`.

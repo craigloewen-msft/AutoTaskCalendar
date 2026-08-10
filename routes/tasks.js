@@ -1,8 +1,24 @@
 const express = require('express');
 const router = express.Router();
-const { UserDetails, TaskDetails } = require('../models');
+const { UserDetails, TaskDetails, ProjectDetails } = require('../models');
 const { returnFailure } = require('../utils/helpers');
 const { getTaskListFromUsername, getCompletedTasksFromUsername, completeTask, generateTaskEvents } = require('../controllers/taskController');
+
+// Resolve an optional Compass project, making sure it belongs to the caller.
+async function resolveProjectRef(projectRef, userId) {
+    if (!projectRef) {
+        return null;
+    }
+
+    let project = null;
+    try {
+        project = await ProjectDetails.findOne({ _id: projectRef, userRef: userId });
+    } catch (error) {
+        return undefined;
+    }
+
+    return project ? project._id : undefined;
+}
 
 // Helper function to check for circular dependencies
 async function hasCircularDependency(taskId, dependsOn, userId) {
@@ -47,7 +63,7 @@ function createTaskRoutes(config, authenticateToken) {
             return res.send(returnFailure('Not logged in'));
         }
 
-        let { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration, taskRepeat, isBacklog, dependsOn, priority } = req.body;
+        let { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration, taskRepeat, isBacklog, dependsOn, priority, projectRef } = req.body;
 
         if (!title || !duration || !startDate) {
             return res.send(returnFailure('Title, duration, and start date are required'));
@@ -82,6 +98,11 @@ function createTaskRoutes(config, authenticateToken) {
             // Make the due date at the end of the specified day:
             let taskDate = dueDate ? new Date(req.body.dueDate) : null;
 
+            const resolvedProject = await resolveProjectRef(projectRef, user._id);
+            if (resolvedProject === undefined) {
+                return res.send(returnFailure('Invalid project'));
+            }
+
             // Create the new task
             const task = new TaskDetails({
                 title: req.body.title,
@@ -96,6 +117,7 @@ function createTaskRoutes(config, authenticateToken) {
                 isBacklog: isBacklog || false,
                 dependsOn: dependsOn || [],
                 priority: priority != null ? priority : 100,
+                projectRef: resolvedProject,
             });
             await task.save();
             // Return the updated task list
@@ -139,8 +161,25 @@ function createTaskRoutes(config, authenticateToken) {
                     return res.send(returnFailure('Circular dependency detected'));
                 }
             }
-            
-            let actualTask = await TaskDetails.findByIdAndUpdate(task._id, task);
+
+            if (task.projectRef !== undefined) {
+                const resolvedProject = await resolveProjectRef(task.projectRef, user._id);
+                if (resolvedProject === undefined) {
+                    return res.send(returnFailure('Invalid project'));
+                }
+                task.projectRef = resolvedProject;
+            }
+
+            // Scope the update to the owner so a task id alone cannot edit someone else's task.
+            let actualTask = await TaskDetails.findOneAndUpdate(
+                { _id: task._id, userRef: user._id },
+                task
+            );
+
+            if (!actualTask) {
+                return res.send(returnFailure('Task not found'));
+            }
+
             return res.json({ success: true });
         } catch (error) {
             console.error(error);

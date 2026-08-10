@@ -98,6 +98,55 @@ function makeEvent(overrides = {}) {
     };
 }
 
+/**
+ * Compass role attributes. No `endDate` means the role is still active.
+ */
+function makeRole(overrides = {}) {
+    const { anchor = defaultAnchor(), ...rest } = overrides;
+
+    return {
+        title: faker.person.jobTitle(),
+        description: faker.lorem.sentence(),
+        color: '#667eea',
+        startDate: at(anchor, { days: -365 }),
+        endDate: null,
+        sortOrder: 0,
+        ...rest,
+    };
+}
+
+/**
+ * Compass goal attributes. Requires a `roleRef` from the caller.
+ */
+function makeGoal(overrides = {}) {
+    const { anchor = defaultAnchor(), ...rest } = overrides;
+
+    return {
+        title: faker.company.catchPhrase(),
+        description: faker.lorem.sentence(),
+        startDate: at(anchor, { days: -180 }),
+        endDate: null,
+        sortOrder: 0,
+        ...rest,
+    };
+}
+
+/**
+ * Compass project attributes. No `startDate` means a parked "someday" item.
+ */
+function makeProject(overrides = {}) {
+    const { anchor = defaultAnchor(), ...rest } = overrides;
+
+    return {
+        title: `${faker.hacker.verb()} the ${faker.hacker.noun()}`,
+        description: faker.lorem.sentence(),
+        startDate: at(anchor, { days: -90 }),
+        endDate: null,
+        sortOrder: 0,
+        ...rest,
+    };
+}
+
 module.exports = {
     FAKER_SEED,
     DEFAULT_WORKING_DAYS,
@@ -109,4 +158,7 @@ module.exports = {
     makeUser,
     makeTask,
     makeEvent,
+    makeRole,
+    makeGoal,
+    makeProject,
 };

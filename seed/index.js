@@ -9,7 +9,7 @@
 
 const mongoose = require('mongoose');
 
-const { UserDetails, TaskDetails, EventDetails } = require('../models');
+const { UserDetails, TaskDetails, EventDetails, RoleDetails, GoalDetails, ProjectDetails } = require('../models');
 const instance = require('../instance');
 const factories = require('./factories');
 const dataset = require('./dataset');
@@ -35,6 +35,9 @@ async function wipe() {
         UserDetails.deleteMany({}),
         TaskDetails.deleteMany({}),
         EventDetails.deleteMany({}),
+        RoleDetails.deleteMany({}),
+        GoalDetails.deleteMany({}),
+        ProjectDetails.deleteMany({}),
     ]);
 }
 
@@ -43,7 +46,7 @@ async function wipe() {
  * reference real ObjectIds (task dependencies, event taskRefs) without extra plumbing.
  */
 function makeBuilder(anchor) {
-    const created = { users: [], tasks: [], events: [] };
+    const created = { users: [], tasks: [], events: [], roles: [], goals: [], projects: [] };
 
     const builder = {
         anchor,
@@ -78,6 +81,34 @@ function makeBuilder(anchor) {
             created.events.push(event);
             return event;
         },
+
+        async createRole(user, overrides = {}) {
+            const doc = factories.makeRole({ anchor, ...overrides });
+            const role = await RoleDetails.create({ ...doc, userRef: user._id });
+            created.roles.push(role);
+            return role;
+        },
+
+        async createGoal(user, role, overrides = {}) {
+            const doc = factories.makeGoal({ anchor, ...overrides });
+            const goal = await GoalDetails.create({ ...doc, roleRef: role._id, userRef: user._id });
+            created.goals.push(goal);
+            return goal;
+        },
+
+        async createProject(user, goal, overrides = {}) {
+            const doc = factories.makeProject({ anchor, ...overrides });
+            const project = await ProjectDetails.create({ ...doc, goalRef: goal._id, userRef: user._id });
+            created.projects.push(project);
+            return project;
+        },
+
+        // Point already-created tasks at a project, the way the UI does.
+        async alignTasks(tasks, project) {
+            const ids = tasks.map((t) => t._id);
+            await TaskDetails.updateMany({ _id: { $in: ids } }, { $set: { projectRef: project._id } });
+            return ids.length;
+        },
     };
 
     return { builder, created };
@@ -86,8 +117,8 @@ function makeBuilder(anchor) {
 /**
  * Seed the database.
  *
- * Returns `{ anchor, users, tasks, events, primary, other, named, counts }` — everything
- * the dataset created, so tests can assert without re-querying.
+ * Returns `{ anchor, users, tasks, events, roles, goals, projects, primary, other, named,
+ * counts }` — everything the dataset created, so tests can assert without re-querying.
  */
 async function runSeed({ mongoUrl, anchor, disconnect = false } = {}) {
     const url = resolveMongoUrl(mongoUrl);

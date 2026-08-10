@@ -74,10 +74,12 @@ passport.deserializeUser(UserDetails.deserializeUser());
 const authRoutes = require('./routes/auth')(config, authenticateToken(config));
 const taskRoutes = require('./routes/tasks')(config, authenticateToken(config));
 const eventRoutes = require('./routes/events')(config, authenticateToken(config));
+const compassRoutes = require('./routes/compass')(config, authenticateToken(config));
 
 app.use('/api', authRoutes);
 app.use('/api', taskRoutes);
 app.use('/api', eventRoutes);
+app.use('/api', compassRoutes);
 
 // Listen only once routes and auth are registered, so no request can hit a half-built app.
 app.listen(hostPort, '0.0.0.0', () => {

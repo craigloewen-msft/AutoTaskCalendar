@@ -189,6 +189,32 @@
                     />
                   </div>
                   <div class="form-group">
+                    <label for="task-project">Project (optional)</label>
+                    <select
+                      v-model="input.projectRef"
+                      class="form-control"
+                      id="task-project"
+                    >
+                      <option :value="null">— none —</option>
+                      <optgroup
+                        v-for="group in projectOptionGroups"
+                        :key="group.label"
+                        :label="group.label"
+                      >
+                        <option
+                          v-for="project in group.projects"
+                          :key="project._id"
+                          :value="project._id"
+                        >
+                          {{ project.title }}
+                        </option>
+                      </optgroup>
+                    </select>
+                    <small class="form-text text-muted">
+                      Links this task to a Compass project. See the Compass page.
+                    </small>
+                  </div>
+                  <div class="form-group">
                     <label for="task-dependencies">Dependencies (must complete these first)</label>
                     <select
                       v-model="input.dependsOn"
@@ -401,6 +427,7 @@ export default {
         taskIsBacklog: false,
         dependsOn: [],
         taskPriority: 100,
+        projectRef: null,
       },
       showAdvancedOptions: false,
       showModal: false,
@@ -408,6 +435,8 @@ export default {
       selectedTask: null,
       selectedEvent: null,
       taskModalShow: false,
+      // Compass roles, nested with their goals and projects.
+      compassRoles: [],
     };
   },
   methods: {
@@ -421,6 +450,15 @@ export default {
       this.taskList = taskDataResponse.data.taskList;
       if (!taskDataResponse.data.success) {
         console.error("Task retrieval error");
+      }
+    },
+    async loadCompass() {
+      try {
+        const response = await this.$http.get("/api/getCompass");
+        this.compassRoles = response.data.success ? response.data.roles : [];
+      } catch (error) {
+        // Compass is optional context for the task modal; never block the calendar.
+        console.error(error);
       }
     },
     async loadCalendarEvents() {
@@ -492,6 +530,7 @@ export default {
     async loadData() {
       this.loadTasks();
       this.loadCalendarEvents();
+      this.loadCompass();
     },
     async syncCalendar() {
       const taskDataResponse = await this.$http.get("/api/synccalendar/");
@@ -550,6 +589,7 @@ export default {
           isBacklog: this.input.taskIsBacklog,
           dependsOn: this.input.dependsOn || [],
           priority: this.input.taskPriority != null ? this.input.taskPriority : 100,
+          projectRef: this.input.projectRef || null,
         });
         this.taskList = response.data.taskList;
 
@@ -621,6 +661,7 @@ export default {
       this.selectedTask.isBacklog = this.input.taskIsBacklog;
       this.selectedTask.dependsOn = this.input.dependsOn || [];
       this.selectedTask.priority = this.input.taskPriority != null ? this.input.taskPriority : 100;
+      this.selectedTask.projectRef = this.input.projectRef || null;
 
       try {
         const response = await this.$http.post("/api/editTask/", {
@@ -741,6 +782,7 @@ export default {
       this.input.taskIsBacklog = false;
       this.input.taskBreakUpTask = false;
       this.input.dependsOn = [];
+      this.input.projectRef = null;
       this.showAdvancedOptions = false;
       this.$refs.addtaskmodal.show();
     },
@@ -781,6 +823,7 @@ export default {
       this.input.taskIsBacklog = inputTask.isBacklog || false;
       this.input.dependsOn = inputTask.dependsOn || [];
       this.input.taskPriority = inputTask.priority != null ? inputTask.priority : 100;
+      this.input.projectRef = inputTask.projectRef || null;
 
       // Always show advanced options when editing an existing task
       this.showAdvancedOptions = true;
@@ -889,6 +932,21 @@ export default {
   computed: {
     calendar() {
       return this.$refs.calendar.control;
+    },
+    // Flatten the Compass tree into "Role -> Goal" groups for the project picker.
+    projectOptionGroups() {
+      const groups = [];
+
+      for (const role of this.compassRoles || []) {
+        for (const goal of role.goalList || []) {
+          const projects = goal.projectList || [];
+          if (projects.length) {
+            groups.push({ label: `${role.title} \u2192 ${goal.title}`, projects });
+          }
+        }
+      }
+
+      return groups;
     },
     availableTasksForDependencies() {
       if (!this.taskList) return [];

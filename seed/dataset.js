@@ -245,6 +245,124 @@ module.exports = {
         });
         events.push(meeting, clientCall);
 
+        // --- Compass: roles > goals > projects --------------------------------------------
+        // 3 active roles plus 1 ended one. End dates are spread across quarters so the
+        // completedFrom/completedTo query has something to slice.
+        const engineerRole = await b.createRole(user, {
+            title: 'Engineer',
+            description: 'Build and ship good software',
+            color: '#667eea',
+            startDate: b.at(b.anchor, { days: -400 }),
+            sortOrder: 0,
+        });
+        const fatherRole = await b.createRole(user, {
+            title: 'Father',
+            description: 'Be present for my family',
+            color: '#10b981',
+            startDate: b.at(b.anchor, { days: -900 }),
+            sortOrder: 1,
+        });
+        const healthRole = await b.createRole(user, {
+            title: 'Health',
+            description: 'Stay strong enough to enjoy the rest',
+            color: '#f59e0b',
+            startDate: b.at(b.anchor, { days: -200 }),
+            sortOrder: 2,
+        });
+        const endedRole = await b.createRole(user, {
+            title: 'Volunteer board member',
+            description: 'A role I have since stepped away from',
+            color: '#94a3b8',
+            startDate: b.at(b.anchor, { days: -700 }),
+            endDate: b.at(b.anchor, { days: -120 }),
+            sortOrder: 3,
+        });
+
+        // Two goals per role, one of them ended, so archive and active both have content.
+        const shipV2 = await b.createGoal(user, engineerRole, {
+            title: 'Ship v2 by June',
+            description: 'The rewrite lands and customers are migrated',
+            startDate: b.at(b.anchor, { days: -150 }),
+            sortOrder: 0,
+        });
+        const growTeam = await b.createGoal(user, engineerRole, {
+            title: 'Grow the team',
+            description: 'Hire two engineers and get them productive',
+            startDate: b.at(b.anchor, { days: -90 }),
+            sortOrder: 1,
+        });
+        const endedGoal = await b.createGoal(user, engineerRole, {
+            title: 'Finish the v1 maintenance window',
+            description: 'Wrapped up last quarter',
+            startDate: b.at(b.anchor, { days: -300 }),
+            endDate: b.at(b.anchor, { days: -60 }),
+            sortOrder: 2,
+        });
+        const bePresent = await b.createGoal(user, fatherRole, {
+            title: 'Be present on weekends',
+            description: 'No laptop between Friday night and Monday morning',
+            startDate: b.at(b.anchor, { days: -120 }),
+        });
+        const stayStrong = await b.createGoal(user, healthRole, {
+            title: 'Run a half marathon',
+            startDate: b.at(b.anchor, { days: -60 }),
+        });
+        // Deliberately has no active tasks under it, so "stalled" styling has a subject.
+        const stalledGoal = await b.createGoal(user, healthRole, {
+            title: 'Fix my sleep schedule',
+            description: 'Nothing active underneath this one',
+            startDate: b.at(b.anchor, { days: -45 }),
+            sortOrder: 1,
+        });
+
+        const migrationProject = await b.createProject(user, shipV2, {
+            title: 'Migration plan',
+            description: 'Plan and execute the data migration',
+            startDate: b.at(b.anchor, { days: -100 }),
+        });
+        const perfProject = await b.createProject(user, shipV2, {
+            title: 'Perf pass',
+            startDate: b.at(b.anchor, { days: -30 }),
+            sortOrder: 1,
+        });
+        const hiringProject = await b.createProject(user, growTeam, {
+            title: 'Hiring loop',
+            startDate: b.at(b.anchor, { days: -80 }),
+        });
+        const weekendProject = await b.createProject(user, bePresent, {
+            title: 'Weekend adventures',
+            startDate: b.at(b.anchor, { days: -110 }),
+        });
+        const trainingProject = await b.createProject(user, stayStrong, {
+            title: 'Training block',
+            startDate: b.at(b.anchor, { days: -50 }),
+        });
+        // No start date: a parked "someday" item.
+        const somedayProject = await b.createProject(user, shipV2, {
+            title: 'Rewrite the CLI',
+            description: 'Parked until v2 ships',
+            startDate: null,
+            sortOrder: 2,
+        });
+        const endedProject = await b.createProject(user, endedGoal, {
+            title: 'v1 security patches',
+            startDate: b.at(b.anchor, { days: -280 }),
+            endDate: b.at(b.anchor, { days: -75 }),
+        });
+        // Under the stalled goal, and intentionally left with no tasks at all.
+        const emptyProject = await b.createProject(user, stalledGoal, {
+            title: 'Sleep hygiene experiments',
+            startDate: b.at(b.anchor, { days: -40 }),
+        });
+
+        // Align some of the named tasks; the rest stay unaligned on purpose.
+        await b.alignTasks([research, draft, publish], migrationProject);
+        await b.alignTasks([proposal], perfProject);
+        await b.alignTasks([codeReview, documentation], hiringProject);
+        await b.alignTasks([backlogIdea], weekendProject);
+        await b.alignTasks(active.slice(0, 6), trainingProject);
+        await b.alignTasks(completed.slice(0, 12), migrationProject);
+
         // --- Second user: data that must never appear in the primary user's responses -----
         const other = await b.createUser({
             username: 'otheruser',
@@ -255,6 +373,11 @@ module.exports = {
             dueDate: b.endOfDay(b.anchor, i + 1),
         }));
         await b.createEvent(other.user, { title: 'OTHER USER SECRET EVENT' });
+        const otherRole = await b.createRole(other.user, { title: 'OTHER USER SECRET ROLE' });
+        const otherGoal = await b.createGoal(other.user, otherRole, { title: 'OTHER USER SECRET GOAL' });
+        const otherProject = await b.createProject(other.user, otherGoal, {
+            title: 'OTHER USER SECRET PROJECT',
+        });
 
         return {
             primary,
@@ -279,6 +402,28 @@ module.exports = {
                 boundaryEnd,
                 meeting,
                 clientCall,
+                // Compass
+                engineerRole,
+                fatherRole,
+                healthRole,
+                endedRole,
+                shipV2,
+                growTeam,
+                endedGoal,
+                bePresent,
+                stayStrong,
+                stalledGoal,
+                migrationProject,
+                perfProject,
+                hiringProject,
+                weekendProject,
+                trainingProject,
+                somedayProject,
+                endedProject,
+                emptyProject,
+                otherRole,
+                otherGoal,
+                otherProject,
             },
             counts: {
                 active: active.length,

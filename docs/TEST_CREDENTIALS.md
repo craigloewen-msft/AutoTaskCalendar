@@ -40,6 +40,9 @@ The dataset creates:
    - Lunch Break (tomorrow, 12 PM - 1 PM)
    - Client Call (in 2 days, 2 PM - 3 PM)
 
+4. **A Compass hierarchy** — roles, goals, and projects, with about half the tasks linked
+   to a project. See `docs/COMPASS.md`.
+
 ## Using the Test Credentials
 
 1. Start the development server:
@@ -57,6 +60,7 @@ The dataset creates:
 
 5. From there you can:
    - View the Calendar page to see scheduled tasks and events
+   - View the Compass page to manage roles, goals, and projects
    - View the User profile page to modify settings
    - Add, edit, or complete tasks
    - Schedule tasks automatically
@@ -64,8 +68,8 @@ The dataset creates:
 
 ## Re-seeding the Database
 
-Seeding wipes all users, tasks, and events in your instance's database before rebuilding
-the dataset, so you always start from a clean, known state.
+Seeding wipes all users, tasks, events, roles, goals, and projects in your instance's
+database before rebuilding the dataset, so you always start from a clean, known state.
 
 ## Important Notes
 

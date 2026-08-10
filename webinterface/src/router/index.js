@@ -57,6 +57,14 @@ const routes = [
     }
   },
   {
+    path: '/compass',
+    name: 'Compass',
+    component: () => import(/* webpackChunkName: "about" */ '../views/Compass.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
     path: '/completed',
     name: 'CompletedTasks',
     component: () => import(/* webpackChunkName: "about" */ '../views/CompletedTasks.vue'),
