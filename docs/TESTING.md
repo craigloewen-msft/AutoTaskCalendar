@@ -33,6 +33,18 @@ npx playwright install chromium
 genuinely ready, builds the web bundle if `dist/` is missing, then starts the app and runs
 the suite.
 
+By default, that database is the test instance's isolated `wslc` container. CI or another
+environment with its own MongoDB can supply the database instead:
+
+```bash
+AUTOTASKCALENDAR_TEST_MONGO_URL=mongodb://127.0.0.1:27017/autotaskcalendar_ci_test npm test
+```
+
+When this variable is set, the launcher skips `wslc` startup but still waits for MongoDB to
+answer before running any specs. **Use a dedicated, disposable database:** the test seed
+repeatedly wipes all collections at that URL. Do not point it at development or production
+data.
+
 After changing front-end code, force a rebuild so the browser tests see your changes:
 
 ```bash
@@ -119,6 +131,11 @@ flowchart LR
 
 So you can leave `npm run dev` running while the suite executes, and several agents can
 test at once without colliding. Run `npm run db:status` to see your dev ports.
+
+`AUTOTASKCALENDAR_TEST_MONGO_URL` is the explicit exception for CI and other externally
+managed, disposable databases. Ordinary `AUTOTASKCALENDAR_MONGO_URL` values from a dev shell
+are intentionally ignored while resolving the test instance, so they cannot accidentally
+redirect a local test run into the development database.
 
 The suite runs the **built** bundle served by Express (one server on the API port), which
 is closer to production and faster than the webpack dev server.
@@ -312,7 +329,9 @@ one after the other, not in parallel.
 **`browserType.launch: Executable doesn't exist`.** Run `npx playwright install chromium`.
 
 **The suite cannot reach MongoDB.** `npm test` starts the container itself, but you can
-check it with `AUTOTASKCALENDAR_INSTANCE=<branch>-test npm run db:status`.
+check it with `AUTOTASKCALENDAR_INSTANCE=<branch>-test npm run db:status`. If you set
+`AUTOTASKCALENDAR_TEST_MONGO_URL`, the database is externally managed instead; verify that
+URL is reachable and points to a disposable database.
 
 **A test passes alone but fails in the suite.** It is depending on data another test left
 behind. Call `seed(...)` at the top of the test so it owns its state.

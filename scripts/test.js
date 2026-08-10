@@ -58,6 +58,7 @@ function resolveTestInstance() {
 }
 
 const instance = resolveTestInstance();
+const externalMongoUrl = process.env.AUTOTASKCALENDAR_TEST_MONGO_URL;
 
 const childEnv = {
     ...process.env,
@@ -66,7 +67,7 @@ const childEnv = {
     AUTOTASKCALENDAR_WEB_PORT: String(instance.webPort),
     AUTOTASKCALENDAR_MONGO_PORT: String(instance.mongoPort),
     AUTOTASKCALENDAR_INSPECT_PORT: String(instance.inspectPort),
-    AUTOTASKCALENDAR_MONGO_URL: instance.mongoUrl,
+    AUTOTASKCALENDAR_MONGO_URL: externalMongoUrl || instance.mongoUrl,
     // The suite drives the API and the built SPA from one Express server.
     AUTOTASKCALENDAR_BASE_URL: `http://127.0.0.1:${instance.apiPort}`,
 };
@@ -95,11 +96,11 @@ function run(command, args, options = {}) {
 console.log(
     `\nAutoTaskCalendar test instance "${instance.name}"\n` +
     `  app        http://127.0.0.1:${instance.apiPort}\n` +
-    `  database   ${instance.dbName}\n`
+    `  database   ${externalMongoUrl ? 'externally managed' : instance.dbName}\n`
 );
 
-// 1. The test database container, isolated from the dev one.
-if (run('scripts/dev-db.sh', ['up']) !== 0) {
+// 1. Start an isolated local container unless the caller supplied the test database.
+if (!externalMongoUrl && run('scripts/dev-db.sh', ['up']) !== 0) {
     process.exit(1);
 }
 
