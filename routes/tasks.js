@@ -285,18 +285,6 @@ function createTaskRoutes(config, authenticateToken) {
                 return res.send(returnFailure('Task not found'));
             }
 
-            // Existing pending occurrences keep the series' current project assignment.
-            if (task.projectRef !== undefined) {
-                await TaskDetails.updateMany(
-                    {
-                        userRef: user._id,
-                        seriesRef: targetId,
-                        $or: [{ completed: false }, { completed: null }],
-                    },
-                    { $set: { projectRef: update.projectRef } }
-                );
-            }
-
             // Reflect a changed rule immediately, as on create.
             if (task.recurrence !== undefined) {
                 await expandRecurrences(user, SCHEDULING_HORIZON_DAYS);

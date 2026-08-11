@@ -445,16 +445,6 @@ async function expandSeries(template, rule, today, horizonEnd) {
     const wanted = dates.map((d) => civilDay(d).toDate());
     const wantedTimes = new Set(wanted.map((d) => d.getTime()));
 
-    // Backfill pending occurrences created before project inheritance was introduced.
-    await TaskDetails.updateMany(
-        {
-            userRef: template.userRef,
-            seriesRef: template._id,
-            $or: [{ completed: false }, { completed: null }],
-        },
-        { $set: { projectRef: template.projectRef || null } }
-    );
-
     const existing = await TaskDetails.find({
         userRef: template.userRef,
         seriesRef: template._id,
