@@ -7,6 +7,7 @@
  * find a bug in the wild, add its shape to this file so it is covered forever after.
  *
  * A second user exists solely to prove their data never leaks into the first user's views.
+ * A third (`recurruser`) holds a minimal recurring-task scenario.
  */
 
 module.exports = {
@@ -404,9 +405,36 @@ module.exports = {
             title: 'OTHER USER SECRET PROJECT',
         });
 
+        // --- Third user: a minimal recurring-task scenario --------------------------------
+        // `testuser` carries hundreds of occurrences, so one duplicate is invisible. This
+        // account is small enough to audit by eye. See docs/SEEDING.md.
+        const recurring = await b.createUser({
+            username: 'recurruser',
+            email: 'recurruser@example.com',
+        });
+        const recurringUser = recurring.user;
+
+        const recurringGenerics = await b.createTasks(recurringUser, 3, (i) => ({
+            title: `Everyday task ${i + 1}`,
+            dueDate: b.endOfDay(b.anchor, i + 1),
+            startDate: b.civilDate(b.anchor, 0),
+            duration: [30, 45, 60][i],
+        }));
+
+        // Monday only, so every generated occurrence must land on a Monday.
+        const mondaySeries = await b.createTask(recurringUser, {
+            title: 'Weekly Monday standup',
+            notes: 'Repeats weekly on Mondays',
+            dueDate: b.endOfDay(b.anchor, 1),
+            startDate: b.civilDate(b.anchor, 0),
+            duration: 45,
+            recurrence: { freq: 'weekly', interval: 1, byWeekday: [1] },
+        });
+
         return {
             primary,
             other,
+            recurring,
             named: {
                 proposal,
                 codeReview,
@@ -452,6 +480,8 @@ module.exports = {
                 otherRole,
                 otherGoal,
                 otherProject,
+                // Recurring-scenario user
+                mondaySeries,
             },
             counts: {
                 active: active.length,
@@ -460,6 +490,7 @@ module.exports = {
                 series: 3,
                 completed: completed.length,
                 events: events.length,
+                recurringGenerics: recurringGenerics.length,
             },
         };
     },

@@ -82,7 +82,7 @@ app.use('/api', eventRoutes);
 app.use('/api', compassRoutes);
 
 // Listen only once routes and auth are registered, so no request can hit a half-built app.
-app.listen(hostPort, '0.0.0.0', () => {
+const server = app.listen(hostPort, '0.0.0.0', () => {
     if (process.env.NODE_ENV == 'production') {
         console.log(`App listening on port ${hostPort} on all interfaces`);
     } else {
@@ -90,4 +90,19 @@ app.listen(hostPort, '0.0.0.0', () => {
             `App listening on port ${hostPort} (instance "${instance.name}", db "${instance.dbName}")`
         );
     }
+});
+
+// EADDRINUSE alone does not say which instance owns the port, which is the useful part.
+server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+        console.error(
+            `\nPort ${hostPort} is already in use, so instance "${instance.name}" cannot start.\n` +
+            'Another instance almost certainly owns it. Start the stack with `npm run dev`, ' +
+            'which probes for free ports at startup, or pin one with ' +
+            'AUTOTASKCALENDAR_API_PORT.\n'
+        );
+    } else {
+        console.error(`Server failed to start: ${error.message}`);
+    }
+    process.exit(1);
 });

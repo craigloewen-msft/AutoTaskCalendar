@@ -220,14 +220,19 @@ function hasMonthlyDayFilter(rule) {
     return Array.isArray(rule.byMonthDay) && rule.byMonthDay.length > 0;
 }
 
+/** Weekdays a weekly rule fires on. Empty means the day the series starts on, not every day. */
+function weeklyDays(rule, anchorDay) {
+    const chosen = Array.isArray(rule.byWeekday) ? rule.byWeekday : [];
+    return chosen.length > 0 ? chosen : [anchorDay.day()];
+}
+
 /**
  * Does a date satisfy the day-of-period part of the rule?
  * The interval is handled separately by `isOnInterval`.
  */
-function matchesDayFilter(rule, day) {
-    if (rule.freq === 'weekly' && Array.isArray(rule.byWeekday) && rule.byWeekday.length > 0) {
-        // moment().day() is local, matching the scheduler's local weekday logic.
-        return rule.byWeekday.includes(day.day());
+function matchesDayFilter(rule, day, anchorDay) {
+    if (rule.freq === 'weekly') {
+        return weeklyDays(rule, anchorDay).includes(day.day());
     }
 
     if (rule.freq === 'monthly' && hasMonthlyDayFilter(rule)) {
@@ -319,7 +324,7 @@ function occurrenceDatesBetween(rule, from, to, anchor) {
         if (hardEnd && cursor.isAfter(hardEnd, 'day')) break;
         if (rule.endsAfter && produced >= rule.endsAfter) break;
 
-        if (isOnInterval(rule, anchorDay, cursor, interval) && matchesDayFilter(rule, cursor)) {
+        if (isOnInterval(rule, anchorDay, cursor, interval) && matchesDayFilter(rule, cursor, anchorDay)) {
             produced++;
 
             if (cursor.isSameOrAfter(windowStart, 'day')) {
@@ -364,12 +369,18 @@ async function expandRecurrences(user, horizonDays) {
     const horizonEnd = civilDay(addDateOnlyDays(todayValue, horizonDays));
 
     // Any task carrying a rule is a template. Legacy `repeat` strings are promoted on the
-    // fly, so old data starts behaving without a migration.
+    // fly, so old data starts behaving without a migration. Completed tasks are excluded:
+    // a finished task is history, not a live rule.
     const templates = await TaskDetails.find({
         userRef: user._id,
-        $or: [
-            { 'recurrence.freq': { $in: FREQUENCIES } },
-            { repeat: { $in: FREQUENCIES } },
+        $and: [
+            {
+                $or: [
+                    { 'recurrence.freq': { $in: FREQUENCIES } },
+                    { repeat: { $in: FREQUENCIES } },
+                ],
+            },
+            { $or: [{ completed: false }, { completed: null }] },
         ],
     });
 
@@ -392,6 +403,33 @@ async function expandRecurrences(user, horizonDays) {
         userRef: user._id,
         seriesRef: { $ne: null },
         occurrenceDate: { $lt: today.toDate() },
+        $or: [{ completed: false }, { completed: null }],
+    });
+
+    await pruneOccurrencesOfCompletedSeries(user);
+}
+
+/**
+ * Remove pending occurrences whose template has since been completed. Completed
+ * occurrences stay: they are the user's history.
+ */
+async function pruneOccurrencesOfCompletedSeries(user) {
+    const completedTemplates = await TaskDetails.find({
+        userRef: user._id,
+        completed: true,
+        $or: [
+            { 'recurrence.freq': { $in: FREQUENCIES } },
+            { repeat: { $in: FREQUENCIES } },
+        ],
+    }, '_id');
+
+    if (completedTemplates.length === 0) {
+        return;
+    }
+
+    await TaskDetails.deleteMany({
+        userRef: user._id,
+        seriesRef: { $in: completedTemplates.map((t) => t._id) },
         $or: [{ completed: false }, { completed: null }],
     });
 }

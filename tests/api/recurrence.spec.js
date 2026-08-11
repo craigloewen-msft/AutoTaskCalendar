@@ -159,6 +159,25 @@ test.describe('recurrence rules', () => {
         expect(days(dates)).toEqual(['2026-01-01', '2026-01-02', '2026-01-03']);
     });
 
+    test('a weekly rule with no chosen weekday repeats weekly, not daily', () => {
+        // A legacy `repeat: 'weekly'` string carries no byWeekday, and "no days" must not
+        // mean "every day".
+        const rule = { freq: 'weekly', interval: 1, byWeekday: [] };
+        const dates = occurrenceDatesBetween(rule, MONDAY, moment(MONDAY).add(20, 'days').toDate(), MONDAY);
+
+        expect(days(dates)).toEqual(['2024-01-01', '2024-01-08', '2024-01-15']);
+    });
+
+    test('a weekly rule with no chosen weekday follows its own start day', () => {
+        // Anchored on a Wednesday, so the fallback cannot accidentally be "Monday".
+        const wednesday = moment('2024-01-03').toDate();
+        const rule = { freq: 'weekly', interval: 1, byWeekday: [] };
+        const dates = occurrenceDatesBetween(rule, wednesday, moment(wednesday).add(20, 'days').toDate(), wednesday);
+
+        expect(days(dates)).toEqual(['2024-01-03', '2024-01-10', '2024-01-17']);
+        expect(dates.every((d) => moment(d).day() === 3)).toBe(true);
+    });
+
     test('describes a rule in plain English', () => {
         expect(describeRecurrence({ freq: 'weekly', interval: 1, byWeekday: [1, 2] }))
             .toBe('Every week on Monday and Tuesday');
@@ -479,6 +498,105 @@ test.describe('recurrence expansion', () => {
         expect((await occurrencesOf(data.named.weekdaysSeries)).length).toBeGreaterThan(0);
     });
 
+    test('a completed repeating task keeps repeating weekly instead of daily', async ({ seed, api }) => {
+        await seed();
+
+        // The legacy shape: a repeating task that IS the template, then ticked off.
+        // Completing it clones the series forward, which is intended; expanding to every
+        // day is not.
+        const created = await (await api.post('/api/createTask', {
+            data: {
+                title: 'Weekly report',
+                duration: 30,
+                startDate: dateOnly(),
+                dueDate: dateOnly(1),
+                repeat: 'weekly',
+            },
+        })).json();
+        const task = created.taskList.find((t) => t.title === 'Weekly report');
+        const startedOn = moment.utc(task.startDate, 'YYYY-MM-DD').day();
+
+        await api.post('/api/completeTask', { data: { taskId: task._id } });
+        await schedule(api);
+
+        const list = await (await api.get('/api/getUserTasks')).json();
+        const remaining = list.taskList.filter((t) => t.title === 'Weekly report');
+
+        // One per week over the 60 day horizon, not one per day.
+        expect(remaining.length).toBeLessThanOrEqual(10);
+        expect(remaining.every((t) => moment.utc(t.occurrenceDate, 'YYYY-MM-DD').day() === startedOn)).toBe(true);
+    });
+
+    test('a completed task with a rule generates nothing itself', async ({ seed, api }) => {
+        await seed();
+
+        const created = await (await api.post('/api/createTask', {
+            data: {
+                title: 'Retired series',
+                duration: 30,
+                startDate: dateOnly(),
+                dueDate: dateOnly(1),
+                recurrence: { freq: 'weekly', interval: 1, byWeekday: [1] },
+            },
+        })).json();
+        const template = created.taskList.find((t) => t.title === 'Retired series');
+        const seriesId = template.seriesRef;
+
+        // Complete the template itself: it is history now, not a live rule.
+        await withDb(() => TaskDetails.updateOne(
+            { _id: seriesId },
+            { $set: { completed: true, completedDate: new Date() } }
+        ));
+        await schedule(api);
+
+        const pending = await withDb(() => TaskDetails.find({
+            seriesRef: seriesId,
+            $or: [{ completed: false }, { completed: null }],
+        }));
+        expect(pending).toHaveLength(0);
+    });
+
+    test('pending occurrences of a completed series are cleaned up', async ({ seed, api }) => {
+        const data = await seed();
+        await schedule(api);
+
+        const template = data.named.weekdaysSeries;
+        expect((await occurrencesOf(template)).length).toBeGreaterThan(0);
+
+        // Complete the template directly, the state older data can already be in.
+        await withDb(() => TaskDetails.updateOne(
+            { _id: template._id },
+            { $set: { completed: true, completedDate: new Date() } }
+        ));
+        await schedule(api);
+
+        const pending = await withDb(() => TaskDetails.find({
+            seriesRef: template._id,
+            $or: [{ completed: false }, { completed: null }],
+        }));
+        expect(pending).toHaveLength(0);
+    });
+
+    test('completed occurrences survive their series being completed', async ({ seed, api }) => {
+        const data = await seed();
+        await schedule(api);
+
+        const template = data.named.weekdaysSeries;
+        const [first] = await occurrencesOf(template);
+        await api.post('/api/completeTask', { data: { taskId: first._id.toString() } });
+
+        await withDb(() => TaskDetails.updateOne(
+            { _id: template._id },
+            { $set: { completed: true, completedDate: new Date() } }
+        ));
+        await schedule(api);
+
+        // Cleanup must never eat completion history.
+        const kept = await withDb(() => TaskDetails.findById(first._id));
+        expect(kept).not.toBeNull();
+        expect(kept.completed).toBe(true);
+    });
+
     test('a new series shows its occurrences without scheduling first', async ({ seed, api }) => {
         await seed();
 
@@ -579,5 +697,40 @@ test.describe('recurrence validation through the API', () => {
 
         expect(body.success).toBe(false);
         expect(body.log).toContain('backlog task cannot repeat');
+    });
+});
+
+test.describe('scheduling a recurring series', () => {
+    test('a weekly Monday series is scheduled once per Monday', async ({ seed, api }) => {
+        const data = await seed();
+
+        // recurruser holds one weekly-Monday series and three one-off tasks, so a
+        // duplicate shows up as an arithmetic difference.
+        const res = await api.post('/api/login', {
+            data: { username: 'recurruser', password: 'testpassword', timeZone: 'UTC' },
+        });
+        const token = (await res.json()).token;
+        const asRecurruser = { headers: { Authorization: token } };
+
+        const scheduled = await api.get('/api/scheduletasks', asRecurruser);
+        expect((await scheduled.json()).success).toBe(true);
+
+        const user = await loadUser('recurruser');
+        const { EventDetails } = require('../../models');
+        const events = await withDb(() => EventDetails.find({
+            userRef: user._id,
+            title: data.named.mondaySeries.title,
+        }));
+
+        expect(events.length).toBeGreaterThan(0);
+
+        // Every block lands on a Monday, and no day carries two of them.
+        const perDay = new Map();
+        for (const event of events) {
+            const day = moment.utc(event.startDate).format('YYYY-MM-DD');
+            expect(moment.utc(day, 'YYYY-MM-DD').day()).toBe(1);
+            perDay.set(day, (perDay.get(day) || 0) + 1);
+        }
+        expect([...perDay.values()].every((count) => count === 1)).toBe(true);
     });
 });
