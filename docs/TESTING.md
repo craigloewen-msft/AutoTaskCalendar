@@ -10,94 +10,22 @@ would have caught it. If you add a feature, add the test that proves it works.
 ## Running the tests
 
 ```bash
-npm test                      # the whole suite, headless (~3 min)
-npm run test:api              # API tests only (fast, ~1 min)
-npm run test:ui               # browser tests only
-npm run verify                # build + full suite: what must pass before you ship
+npm test                                     # the whole suite (~3 min)
+npm test -- tests/api                        # API tests only (~1 min)
 npm test -- tests/api/tasks.spec.js          # one file
-npm test -- -g "completes a task"            # one test by name
-npm run test:watch            # Playwright UI mode: watch, step, time-travel
-npm run test:report           # open the HTML report from the last run
+npm test -- -g "completes a task"            # one test by name, seconds
+npm test -- --ui                             # watch, step, time-travel
 ```
 
-**Iterating on one thing? Do not run the whole suite.** `npm test -- -g "<name>"` is
-seconds rather than minutes, and the full run is the last step before you commit.
+Everything after `--` goes straight to Playwright.
 
-First run on a new machine needs the browser binaries once:
+**Iterating on one thing? Do not run the whole suite.** `npm test -- -g "<name>"` takes
+seconds; save the full run for just before you commit.
 
-```bash
-npx playwright install chromium
-```
-
-`npm test` does everything else for you: starts the test database, waits for it to be
-genuinely ready, builds the web bundle if `dist/` is missing, then starts the app and runs
-the suite.
-
-After changing front-end code, force a rebuild so the browser tests see your changes:
-
-```bash
-AUTOTASKCALENDAR_TEST_BUILD=1 npm test
-```
-
-Forgetting this is the most common way to get a confusing UI failure: the specs run against
-the previously built bundle, so your change simply is not there. `npm run verify` always
-rebuilds.
-
-## When a test fails for reasons that are not your code
-
-MongoDB runs in **one shared** `wslc` container reached through a host port-forward. That
-forward can drop connections when the host is busy, and it can die outright while the
-container still reports "running". Either way you get `MongoPoolClearedError`,
-`MongoNetworkError`, or `read ECONNRESET` in whichever test happened to be running.
-
-Start here:
-
-```bash
-npm run db:doctor      # the shared container, and whether its port really answers
-```
-
-```
-shared container     autotaskcalendar-mongo
-state                running
-connectivity         UNREACHABLE on 27017 (run: scripts/dev-db.sh up)
-```
-
-`UNREACHABLE` next to a running container means the forward died. `npm run db:up` detects
-that and restarts the container for you; it also recreates the container after repeated
-failures. Data lives in the shared volume and survives all of that.
-
-**Leftovers from the old one-container-per-instance scheme are the other cause.** Each one
-held its own forward, and past about three they start resetting each other's connections.
-`db:doctor` lists them; remove them once:
-
-```bash
-npm run db:migrate     # deletes every legacy per-instance container and volume
-```
-
-With the shared container there is only ever one forward, so this class of failure should
-not recur. See `docs/DEV_DATABASE.md`.
-
-Four things absorb the rest, so you should rarely see a spurious failure:
-
-1. **`db:up` verifies the port**, not just the container state, and restarts a container
-   whose forward has died.
-2. **Global setup** (`tests/global-setup.js`) blocks until the database answers two clean
-   round trips. A fresh container accepts TCP slightly before it can serve queries.
-3. **`withDb`** (`tests/fixtures/db.js`) retries transient failures. Every direct database
-   call in a spec should go through it.
-4. **One Playwright retry** as a backstop. Anything that passes on retry is reported as
-   flaky rather than green.
-
-**Reading the database in a spec? Wrap it.**
-
-```js
-const { test, expect, withDb } = require('../fixtures');
-
-const user = await withDb(() => UserDetails.findOne({ username: 'testuser' }));
-```
-
-An unwrapped model call fails the test outright when the pool blips, and the failure looks
-exactly like a real regression.
+`npm test` handles the setup itself: it starts the database, downloads the Chromium
+browser the first time, rebuilds the web bundle whenever `webinterface/src` is newer than
+`dist/`, then starts the app and runs the suite. There is nothing to install or export
+beforehand.
 
 ## How isolation works
 
@@ -113,7 +41,7 @@ flowchart LR
 ```
 
 So you can leave `npm run dev` running while the suite executes, and several agents can
-test at once without colliding. Run `npm run db:status` to see your dev ports.
+test at once without colliding. `npm test` prints the ports and database it chose.
 
 The suite runs the **built** bundle served by Express (one server on the API port), which
 is closer to production and faster than the webpack dev server.
@@ -128,7 +56,7 @@ Everything lives in `tests/`:
 ```
 tests/
   fixtures/index.js     shared fixtures (seed, api, loggedInPage, withDb, ...)
-  fixtures/db.js        connection handling and transient-failure retries
+  fixtures/db.js        database connection handling
   api/*.spec.js         HTTP-level tests
   ui/*.spec.js          browser tests
 ```
@@ -146,7 +74,7 @@ directly — that is what gives you seeding and authentication.
 | `apiAnon` | Request context with no credentials, for auth-failure tests. |
 | `loginAs(user, pass)` | Authenticated request context for any seeded user. |
 | `loggedInPage` | A browser page already logged in as `testuser`. |
-| `withDb(fn)` | Run a database query, retrying transient connection failures. |
+| `withDb(fn)` | Run a query against the test database, connecting if needed. |
 
 ### API test template
 
@@ -214,18 +142,9 @@ result depends on the current time:
 When you change the scheduler, add an invariant rather than pinning a timestamp. Pinned
 timestamps break every time the clock moves, and everyone learns to ignore them.
 
-## Where the output goes
+## Debugging a failure
 
-Two directories, both gitignored, both overwritten by each run:
-
-| Path | What it is |
-| --- | --- |
-| `playwright-report/index.html` | The HTML report for the whole run: every test, pass or fail, with timings. |
-| `test-results/<test-name>/` | Per-failure artifacts. **Only written when a test fails.** |
-
-A passing run leaves `test-results/` empty. That is deliberate — artifacts are captured
-`on-failure` only, so green runs stay fast and cheap.
-
+Artifacts are captured **on failure only**, so a green run leaves `test-results/` empty.
 A failed test leaves four things behind:
 
 ```
@@ -236,51 +155,20 @@ test-results/calendar-calendar-page-renders-tasks-ui/
   error-context.md      the page's accessibility tree as text
 ```
 
-### Looking at them
+The trace is a step-by-step recording where you can scrub through the test and inspect the
+DOM at each step:
 
 ```bash
-npm run test:report          # open the HTML report in your browser
+npx playwright show-trace test-results/<the-failing-test>/trace.zip
+npx playwright show-report        # the HTML report for the whole run
 ```
-
-The report is the best starting point: click any failed test and the screenshot, video,
-and trace are all attached inline. It serves at `http://localhost:9323`.
-
-For the trace specifically — a step-by-step recording where you can scrub through the
-test and inspect the DOM at each step:
-
-```bash
-npx playwright show-trace test-results/<test-name>/trace.zip
-```
-
-You can also just open the files directly: `test-failed-1.png` and `video.webm` are an
-ordinary PNG and WebM.
 
 `error-context.md` is worth knowing about if you are an agent rather than a human — it is
 plain text, so you can `cat` it without a browser. It contains the expected vs. received
 values and a text rendering of the page, which is usually enough to diagnose a failure
 without opening anything.
 
-### Watching tests run live
-
-```bash
-npm run test:watch     # interactive: pick tests, watch, step, time-travel
-npm test -- --headed   # run headless suite but show the browser window
-```
-
-UI mode is the nicest way to explore what the suite covers.
-
-## Debugging a failure
-
-On failure Playwright saves a trace, a screenshot, and a video under `test-results/`
-(see "Where the output goes" above). The trace is the useful one — it is a full
-time-travel recording of the run:
-
-```bash
-npx playwright show-trace test-results/<the-failing-test>/trace.zip
-npm run test:report      # or browse the HTML report
-```
-
-Other useful flags:
+Useful flags:
 
 ```bash
 npm test -- --headed             # watch the browser as it runs
@@ -288,28 +176,15 @@ npm test -- --debug              # step through with the inspector
 npm test -- --repeat-each=5      # hunt for flakiness
 ```
 
-To inspect the state a test left behind, point at the test database:
-
-```bash
-AUTOTASKCALENDAR_INSTANCE=$(git rev-parse --abbrev-ref HEAD)-test npm run db:status
-```
-
 ## Troubleshooting
-
-**Browser tests fail right after a front-end change.** The bundle is stale. Rerun with
-`AUTOTASKCALENDAR_TEST_BUILD=1 npm test`.
-
-**Lots of UI tests fail at once, seemingly at random.** Check whether a build is running
-at the same time. `npm run build` does `rm -rf ./dist` before moving the new bundle into
-place, which pulls the SPA out from under the running test server. Run builds and tests
-one after the other, not in parallel.
-
-**`browserType.launch: Executable doesn't exist`.** Run `npx playwright install chromium`.
-
-**The suite cannot reach MongoDB.** `npm test` starts the container itself, but you can
-check it with `AUTOTASKCALENDAR_INSTANCE=<branch>-test npm run db:status`. If you set
-`AUTOTASKCALENDAR_TEST_MONGO_URL`, the database is externally managed instead; verify that
-URL is reachable and points to a disposable database.
 
 **A test passes alone but fails in the suite.** It is depending on data another test left
 behind. Call `seed(...)` at the top of the test so it owns its state.
+
+**The suite cannot reach MongoDB.** `npm test` starts the container itself; check it with
+`docker logs autotaskcalendar-mongo`, or recreate it with
+`docker rm -f autotaskcalendar-mongo`.
+
+**Browser tests fail right after a front-end change.** `npm test` rebuilds when
+`webinterface/src` is newer than `dist/`, but a file restored from git can carry an old
+timestamp. Force it with `npm run build`.

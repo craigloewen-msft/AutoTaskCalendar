@@ -201,4 +201,4 @@ Run a focused UI check while iterating:
 npm test -- --project=ui tests/ui/weeklyPlan.spec.js
 ```
 
-Run `npm run verify` before shipping.
+Run `npm test` before shipping.

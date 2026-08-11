@@ -1,21 +1,19 @@
 const { test, expect } = require('../fixtures');
-const { execFileSync } = require('child_process');
+const { execFileSync, spawn } = require('child_process');
 const path = require('path');
 const mongoose = require('mongoose');
 
 const { resolveInstance } = require('../../instance');
+const { CONTAINER_NAME } = require('../../scripts/db');
 
 const repoRoot = path.join(__dirname, '..', '..');
-const devDb = path.join(repoRoot, 'scripts', 'dev-db.sh');
 
 // Resolve an instance descriptor for an arbitrary name, without ambient overrides leaking in.
 function resolveNamed(name, extraEnv = {}) {
     const overridden = {
         AUTOTASKCALENDAR_INSTANCE: name,
-        AUTOTASKCALENDAR_PORT_OFFSET: undefined,
         AUTOTASKCALENDAR_API_PORT: undefined,
         AUTOTASKCALENDAR_WEB_PORT: undefined,
-        AUTOTASKCALENDAR_MONGO_PORT: undefined,
         AUTOTASKCALENDAR_INSPECT_PORT: undefined,
         AUTOTASKCALENDAR_MONGO_URL: undefined,
         ...extraEnv,
@@ -38,87 +36,48 @@ function resolveNamed(name, extraEnv = {}) {
     }
 }
 
-function wslcAvailable() {
-    try {
-        execFileSync('bash', ['-c', 'command -v wslc'], { stdio: 'ignore' });
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-// Count the shared mongo containers wslc knows about.
-function sharedContainerCount() {
-    const raw = execFileSync('bash', ['-c', 'wslc list --all --format json 2>/dev/null || true'], {
+function runningContainerCount() {
+    const raw = execFileSync('docker', ['ps', '-a', '--format', '{{.Names}}'], {
         encoding: 'utf8',
     });
 
-    let parsed = [];
-    try {
-        parsed = JSON.parse(raw.replace(/\r/g, ''));
-    } catch {
-        return 0;
-    }
-
-    return (Array.isArray(parsed) ? parsed : [])
-        .filter(entry => entry?.Name === 'autotaskcalendar-mongo').length;
-}
-
-// Write one document into a scratch database on the shared server.
-async function writeMarker(mongoUrl) {
-    const connection = await mongoose.createConnection(mongoUrl, {
-        serverSelectionTimeoutMS: 10_000,
-    }).asPromise();
-    await connection.collection('markers').insertOne({ marker: true });
-    await connection.close();
+    return raw.split('\n').filter((name) => name.trim() === CONTAINER_NAME).length;
 }
 
 async function countMarkers(mongoUrl) {
-    const connection = await mongoose.createConnection(mongoUrl, {
-        serverSelectionTimeoutMS: 10_000,
-    }).asPromise();
+    const connection = await mongoose.createConnection(mongoUrl).asPromise();
     const count = await connection.collection('markers').countDocuments();
     await connection.close();
     return count;
 }
 
+async function writeMarker(mongoUrl) {
+    const connection = await mongoose.createConnection(mongoUrl).asPromise();
+    await connection.collection('markers').insertOne({ marker: true });
+    await connection.close();
+}
+
 async function dropDatabase(mongoUrl) {
-    const connection = await mongoose.createConnection(mongoUrl, {
-        serverSelectionTimeoutMS: 10_000,
-    }).asPromise();
+    const connection = await mongoose.createConnection(mongoUrl).asPromise();
     await connection.dropDatabase();
     await connection.close();
 }
 
-test.describe('shared dev database', () => {
-    test('gives every instance the same container, volume and mongo port', () => {
-        const a = resolveNamed('shared-db-spec-a');
-        const b = resolveNamed('shared-db-spec-b');
+test.describe('dev environment', () => {
+    test('isolates instances by database name', () => {
+        const a = resolveNamed('dev-env-spec-a');
+        const b = resolveNamed('dev-env-spec-b');
 
-        expect(a.containerName).toBe('autotaskcalendar-mongo');
-        expect(a.volumeName).toBe('autotaskcalendar-mongo-data');
-        expect(b.containerName).toBe(a.containerName);
-        expect(b.volumeName).toBe(a.volumeName);
+        expect(a.dbName).toBe('autotaskcalendar_dev_env_spec_a');
+        expect(b.dbName).not.toBe(a.dbName);
+    });
+
+    test('gives every instance the same mongo port', () => {
+        const a = resolveNamed('dev-env-spec-a');
+        const b = resolveNamed('dev-env-spec-b');
+
+        // One container serves the whole host; isolation comes from the database name.
         expect(b.mongoPort).toBe(a.mongoPort);
-    });
-
-    test('still isolates instances by database name and app ports', () => {
-        const a = resolveNamed('shared-db-spec-a');
-        const b = resolveNamed('shared-db-spec-b');
-
-        expect(a.dbName).not.toBe(b.dbName);
-        expect(a.apiPort).not.toBe(b.apiPort);
-        expect(a.webPort).not.toBe(b.webPort);
-        expect(a.inspectPort).not.toBe(b.inspectPort);
-    });
-
-    test('honours an explicit shared mongo port override', () => {
-        const overridden = resolveNamed('shared-db-spec-a', {
-            AUTOTASKCALENDAR_MONGO_PORT: '31234',
-        });
-
-        expect(overridden.mongoPort).toBe(31234);
-        expect(overridden.mongoUrl).toContain('127.0.0.1:31234');
     });
 
     test('keeps long branch names inside MongoDB 63-byte database names', () => {
@@ -131,44 +90,107 @@ test.describe('shared dev database', () => {
         expect(a.dbName).not.toBe(b.dbName);
     });
 
-    test('up is idempotent and leaves exactly one container', async () => {
-        test.skip(!wslcAvailable(), 'wslc is not available on this host');
-        test.slow();
-
-        execFileSync(devDb, ['up'], { cwd: repoRoot, stdio: 'ignore' });
-        execFileSync(devDb, ['up'], { cwd: repoRoot, stdio: 'ignore' });
-
-        expect(sharedContainerCount()).toBe(1);
+    test('derives a stable database name from the same instance name', () => {
+        expect(resolveNamed('dev-env-spec-a').dbName)
+            .toBe(resolveNamed('dev-env-spec-a').dbName);
     });
 
-    test('down drops only the calling instance database', async () => {
-        test.skip(!wslcAvailable(), 'wslc is not available on this host');
+    test('honours pinned ports from the environment', () => {
+        const pinned = resolveNamed('dev-env-spec-a', {
+            AUTOTASKCALENDAR_API_PORT: '4567',
+            AUTOTASKCALENDAR_WEB_PORT: '4568',
+        });
+
+        expect(pinned.apiPort).toBe(4567);
+        expect(pinned.webPort).toBe(4568);
+    });
+
+    test('rejects a nonsense port override', () => {
+        expect(() => resolveNamed('dev-env-spec-a', { AUTOTASKCALENDAR_API_PORT: 'abc' }))
+            .toThrow(/must be an integer/);
+    });
+
+    test('resolves the same ports every time within one process', () => {
+        // The API and the web proxy resolve separately; if they disagreed, the proxy
+        // would forward to a port nothing is listening on.
+        const first = resolveNamed('dev-env-spec-stable');
+        const second = resolveNamed('dev-env-spec-stable');
+
+        expect(second.apiPort).toBe(first.apiPort);
+        expect(second.webPort).toBe(first.webPort);
+        expect(second.inspectPort).toBe(first.inspectPort);
+    });
+
+    test('never hands two concurrent instances the same port', async () => {
         test.slow();
 
-        const victim = resolveNamed('shared-db-spec-victim');
-        const bystander = resolveNamed('shared-db-spec-bystander');
+        // Two real processes, because that is the case that matters: two agents starting
+        // stacks at the same time must not both be told port 3000 is free.
+        const script = `
+            const { resolveInstance } = require(${JSON.stringify(path.join(repoRoot, 'instance.js'))});
+            const i = resolveInstance();
+            process.stdout.write(JSON.stringify([i.apiPort, i.webPort, i.inspectPort]) + '\\n');
+            setTimeout(() => {}, 5000);
+        `;
 
-        // Start from a clean slate so a retry does not inherit the previous attempt's data.
-        await dropDatabase(victim.mongoUrl);
-        await dropDatabase(bystander.mongoUrl);
+        // The test runner pins its own ports through the environment; a child inheriting
+        // them would skip port probing entirely, which is the thing under test.
+        const env = { ...process.env };
+        delete env.AUTOTASKCALENDAR_API_PORT;
+        delete env.AUTOTASKCALENDAR_WEB_PORT;
+        delete env.AUTOTASKCALENDAR_INSPECT_PORT;
 
-        await writeMarker(victim.mongoUrl);
-        await writeMarker(bystander.mongoUrl);
-        expect(await countMarkers(victim.mongoUrl)).toBe(1);
+        const resolveInChild = () => new Promise((resolve, reject) => {
+            const child = spawn(process.execPath, ['-e', script], { cwd: repoRoot, env });
+            let out = '';
 
-        // The test harness exports a pinned MONGO_URL; drop it so the subprocess resolves
-        // the victim instance's own database.
-        const env = { ...process.env, AUTOTASKCALENDAR_INSTANCE: 'shared-db-spec-victim' };
-        delete env.AUTOTASKCALENDAR_MONGO_URL;
-        delete env.AUTOTASKCALENDAR_PORT_OFFSET;
+            child.stdout.on('data', (chunk) => {
+                out += chunk;
+                if (out.includes('\n')) resolve({ ports: JSON.parse(out.trim()), child });
+            });
+            child.on('error', reject);
+            child.on('exit', () => reject(new Error(`child exited early: ${out}`)));
+        });
 
-        execFileSync(devDb, ['down'], { cwd: repoRoot, stdio: 'ignore', env });
+        const first = await resolveInChild();
 
-        expect(await countMarkers(victim.mongoUrl)).toBe(0);
-        // The shared server, and every other instance's data, is untouched.
-        expect(await countMarkers(bystander.mongoUrl)).toBe(1);
-        expect(sharedContainerCount()).toBe(1);
+        try {
+            const second = await resolveInChild();
 
-        await dropDatabase(bystander.mongoUrl);
+            try {
+                for (const port of second.ports) {
+                    expect(first.ports).not.toContain(port);
+                }
+            } finally {
+                second.child.kill();
+            }
+        } finally {
+            first.child.kill();
+        }
+    });
+
+    test('ensureDatabase is idempotent and leaves exactly one container', () => {
+        test.slow();
+
+        const db = path.join(repoRoot, 'scripts', 'db.js');
+        execFileSync(process.execPath, [db], { cwd: repoRoot, stdio: 'ignore' });
+        execFileSync(process.execPath, [db], { cwd: repoRoot, stdio: 'ignore' });
+
+        expect(runningContainerCount()).toBe(1);
+    });
+
+    test('one instance database does not leak into another', async () => {
+        const a = resolveNamed('dev-env-spec-marker-a');
+        const b = resolveNamed('dev-env-spec-marker-b');
+
+        await dropDatabase(a.mongoUrl);
+        await dropDatabase(b.mongoUrl);
+
+        await writeMarker(a.mongoUrl);
+
+        expect(await countMarkers(a.mongoUrl)).toBe(1);
+        expect(await countMarkers(b.mongoUrl)).toBe(0);
+
+        await dropDatabase(a.mongoUrl);
     });
 });

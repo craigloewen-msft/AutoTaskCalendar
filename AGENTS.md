@@ -5,19 +5,19 @@ Express + Mongoose (MongoDB) backend, Vue 3 (vue-cli) frontend in `webinterface/
 
 ## Start here
 
+Requires `node` and `docker`; the scripts start MongoDB themselves.
+
 ```bash
-npm install && (cd webinterface && npm install)
-npx playwright install chromium   # once, for the test suite
+npm install         # this project and webinterface/
 npm run seed        # optional: testuser / testpassword
-npm run dev         # starts mongo, API, and web UI
+npm run dev         # database, API, and web UI
 ```
 
-Nothing needs to be exported. Each git branch automatically gets its own ports, MongoDB
-database, container, and session cookie, so several agents can run at once without
-colliding. `main` uses the standard 8080/3000/27017.
-
-Run `npm run db:status` to print the ports and database name for your branch. Override the
-name with `AUTOTASKCALENDAR_INSTANCE` if you need two stacks on one branch.
+Nothing needs to be exported and there are no database commands — `dev`, `test`, and
+`seed` each start the container themselves. Ports are probed at startup and each git
+branch gets its own database, so several agents can run at once without colliding.
+`npm run dev` prints the ports and database name it chose. Set `AUTOTASKCALENDAR_INSTANCE`
+to run two stacks on one branch.
 
 Only when you're done your changes and are doing finalization should you run the test suite as it takes a long time.
 
@@ -25,23 +25,21 @@ Only when you're done your changes and are doing finalization should you run the
 
 Keep all comments short and concise, usually just 1 or 2 sentences max.
 
-## Containers: `wslc`, not docker
+## The database
 
-MongoDB runs in **one shared** `wslc` container for the whole host; instances are isolated
-by database name, not by container (`scripts/dev-db.sh` replaces compose):
-`npm run db:up | db:down | db:reset | db:status | db:logs`.
-`db:down` drops *your* database and leaves the shared server up for everyone else.
-`npm run db:doctor` checks the one container and flags leftovers from the old
-one-container-per-instance scheme; `npm run db:migrate` removes those. See
-`docs/DEV_DATABASE.md`.
+One shared `autotaskcalendar-mongo` Docker container serves the whole host; instances are
+isolated by database name. `scripts/db.js` owns it — it starts the daemon if needed,
+creates the container if missing, and publishes on the first free port. To inspect or
+reset it, use Docker directly (`docker logs autotaskcalendar-mongo`,
+`docker rm -f autotaskcalendar-mongo`).
 
 ## Verify
 
-`npm run verify` (build + full suite) must pass. The suite is Playwright, covering the API
-and the UI, and it runs against its own isolated database so it never disturbs your dev
-stack. **Any behaviour change ships with a spec.**
+`npm test` must pass — it builds the frontend if `dist/` is stale, installs the Playwright
+browser if missing, and runs the whole suite against its own isolated database, so it
+never disturbs your dev stack. **Any behaviour change ships with a spec.**
 
-While iterating, stay narrow: `npm run test:api` (~1 min) or `npm test -- -g "<name>"`
+While iterating, stay narrow: `npm test -- tests/api` (~1 min) or `npm test -- -g "<name>"`
 (seconds). Save the full run for just before you commit.
 
 See `docs/TESTING.md` to run/write/debug tests and `docs/SEEDING.md` for the seeded
@@ -60,7 +58,7 @@ dataset.
 - `webinterface/src/` — Vue app (`views/`, `components/`, `store.js`).
 - `seed/` — the fake-data factories and dataset; `scripts/seed.js` is the CLI.
 - `tests/` — Playwright specs (`api/`, `ui/`) and shared `fixtures/`.
-- `scripts/` — `dev.js` (dev stack), `dev-db.sh` (database), `test.js` (test stack).
+- `scripts/` — `dev.js` (dev stack), `db.js` (MongoDB container), `test.js` (test stack).
 - `docs/` — one file per broad concept, each a standalone instruction manual.
   `docs/COMPASS.md` covers roles/goals/projects; `docs/WEEKLY_PLAN.md` covers the weekly
   review and task-creation workflow.

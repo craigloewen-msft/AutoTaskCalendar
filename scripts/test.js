@@ -1,65 +1,59 @@
 #!/usr/bin/env node
 /**
- * Run the Playwright suite against a dedicated test instance.
+ * Run the Playwright suite.
  *
- * Tests get their own instance name ("<branch>-test"), which instance.js turns into its
- * own ports and database. That means `npm test` never disturbs the database you are
- * developing against, and parallel agents still cannot collide. MongoDB itself is one
- * shared container; see docs/DEV_DATABASE.md.
+ * The suite gets its own instance name ("<branch>-test"), and therefore its own database
+ * and ports, so it never disturbs the stack you are developing against.
  *
- * Usage: npm test [-- <playwright args>]   /   npm run test:ui
+ * Usage: npm test [-- <playwright args>]
+ *   npm test -- --project=api      just the API specs (fast)
+ *   npm test -- -g "scheduling"    one group
+ *   npm test -- --ui               interactive mode
  */
 
 'use strict';
 
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 const { spawnSync } = require('child_process');
+const { ensureDatabase } = require('./db');
 
-const repoRoot = path.join(__dirname, '..');
-
-// Derive the test instance from the current one, unless the caller pinned it explicitly.
-const baseInstance = require('../instance');
-const testInstanceName = process.env.AUTOTASKCALENDAR_TEST_INSTANCE || `${baseInstance.name}-test`;
+// Must run before the instance is resolved: it exports the Mongo port everything uses.
+ensureDatabase();
 
 const { resolveInstance } = require('../instance');
 
-function resolveTestInstance() {
-    const previous = process.env.AUTOTASKCALENDAR_INSTANCE;
-    process.env.AUTOTASKCALENDAR_INSTANCE = testInstanceName;
+const repoRoot = path.join(__dirname, '..');
 
-    // Port overrides from the ambient dev shell would pin the test stack onto the dev
-    // ports, so clear them for this resolution.
-    const portVars = [
-        'AUTOTASKCALENDAR_PORT_OFFSET',
-        'AUTOTASKCALENDAR_API_PORT',
-        'AUTOTASKCALENDAR_WEB_PORT',
-        'AUTOTASKCALENDAR_MONGO_PORT',
-        'AUTOTASKCALENDAR_INSPECT_PORT',
-        'AUTOTASKCALENDAR_MONGO_URL',
-    ];
-    const savedPorts = {};
-    for (const key of portVars) {
-        savedPorts[key] = process.env[key];
-        delete process.env[key];
+// Resolve the test instance without the dev shell's pinned ports leaking in.
+function resolveTestInstance() {
+    const saved = {};
+    const overrides = {
+        AUTOTASKCALENDAR_INSTANCE: process.env.AUTOTASKCALENDAR_TEST_INSTANCE
+            || `${resolveInstance().name}-test`,
+        AUTOTASKCALENDAR_API_PORT: undefined,
+        AUTOTASKCALENDAR_WEB_PORT: undefined,
+        AUTOTASKCALENDAR_INSPECT_PORT: undefined,
+        AUTOTASKCALENDAR_MONGO_URL: undefined,
+    };
+
+    for (const [key, value] of Object.entries(overrides)) {
+        saved[key] = process.env[key];
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
     }
 
-    const resolved = resolveInstance();
-
-    for (const key of portVars) {
-        if (savedPorts[key] !== undefined) {
-            process.env[key] = savedPorts[key];
+    try {
+        return resolveInstance();
+    } finally {
+        for (const [key, value] of Object.entries(saved)) {
+            if (value === undefined) delete process.env[key];
+            else process.env[key] = value;
         }
     }
-    if (previous !== undefined) {
-        process.env.AUTOTASKCALENDAR_INSTANCE = previous;
-    }
-
-    return resolved;
 }
 
 const instance = resolveTestInstance();
-const externalMongoUrl = process.env.AUTOTASKCALENDAR_TEST_MONGO_URL;
 
 const childEnv = {
     ...process.env,
@@ -69,7 +63,7 @@ const childEnv = {
     AUTOTASKCALENDAR_WEB_PORT: String(instance.webPort),
     AUTOTASKCALENDAR_MONGO_PORT: String(instance.mongoPort),
     AUTOTASKCALENDAR_INSPECT_PORT: String(instance.inspectPort),
-    AUTOTASKCALENDAR_MONGO_URL: externalMongoUrl || instance.mongoUrl,
+    AUTOTASKCALENDAR_MONGO_URL: instance.mongoUrl,
     // The suite drives the API and the built SPA from one Express server.
     AUTOTASKCALENDAR_BASE_URL: `http://127.0.0.1:${instance.apiPort}`,
 };
@@ -77,14 +71,12 @@ const childEnv = {
 // NOTE: deliberately NOT setting NODE_ENV=test. @vue/babel-preset-app switches to
 // CommonJS output when NODE_ENV is "test", and vue-gtag's package exports declare no
 // "require" condition, so the web build fails with "Package path . is not exported".
-// Nothing in this app needs NODE_ENV=test; app.js only ever checks for "production".
 
-function run(command, args, options = {}) {
+function run(command, args) {
     const result = spawnSync(command, args, {
         cwd: repoRoot,
         env: childEnv,
         stdio: 'inherit',
-        ...options,
     });
 
     if (result.error) {
@@ -95,27 +87,64 @@ function run(command, args, options = {}) {
     return result.status === null ? 1 : result.status;
 }
 
-console.log(
-    `\nAutoTaskCalendar test instance "${instance.name}"\n` +
-    `  app        http://127.0.0.1:${instance.apiPort}\n` +
-    `  database   ${externalMongoUrl ? 'externally managed' : instance.dbName}\n`
-);
+/** The newest mtime anywhere under `dir`. */
+function newestMtime(dir) {
+    let newest = 0;
 
-// 1. The shared mongo container. The test instance gets its own database inside it.
-if (run('scripts/dev-db.sh', ['up']) !== 0) {
-    process.exit(1);
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        const mtime = entry.isDirectory()
+            ? newestMtime(full)
+            : fs.statSync(full).mtimeMs;
+
+        if (mtime > newest) newest = mtime;
+    }
+
+    return newest;
 }
 
-// 2. The SPA bundle Express serves from dist/. Rebuild when it is missing, or when
-//    AUTOTASKCALENDAR_TEST_BUILD=1 forces it after front-end changes.
-const distIndex = path.join(repoRoot, 'dist', 'index.html');
-if (process.env.AUTOTASKCALENDAR_TEST_BUILD === '1' || !fs.existsSync(distIndex)) {
-    console.log('Building the web interface (dist/ is missing or a rebuild was requested)...');
+/**
+ * Express serves the SPA from dist/, so the bundle has to match the source. Rebuilding
+ * when it is stale is what makes `npm test` a trustworthy gate on its own.
+ */
+function buildIfStale() {
+    const distIndex = path.join(repoRoot, 'dist', 'index.html');
+
+    if (fs.existsSync(distIndex)) {
+        const built = fs.statSync(distIndex).mtimeMs;
+        const sources = Math.max(
+            newestMtime(path.join(repoRoot, 'webinterface', 'src')),
+            fs.statSync(path.join(repoRoot, 'webinterface', 'package.json')).mtimeMs
+        );
+
+        if (built >= sources) return;
+        console.log('Rebuilding the web interface (sources changed since the last build)...');
+    } else {
+        console.log('Building the web interface...');
+    }
+
     if (run('npm', ['run', 'build']) !== 0) {
         process.exit(1);
     }
 }
 
-// 3. Playwright. Everything after `--` is forwarded, e.g. `npm test -- tests/api`.
-const playwrightArgs = ['playwright', 'test', ...process.argv.slice(2)];
-process.exit(run('npx', playwrightArgs));
+/** Playwright needs its own browser download; do it for the caller rather than document it. */
+function ensureBrowser() {
+    const cache = process.env.PLAYWRIGHT_BROWSERS_PATH
+        || path.join(process.env.HOME || '', '.cache', 'ms-playwright');
+
+    const installed = fs.existsSync(cache)
+        && fs.readdirSync(cache).some((entry) => entry.startsWith('chromium'));
+
+    if (!installed) {
+        console.log('Installing the Playwright Chromium browser (one time)...');
+        run('npx', ['playwright', 'install', '--with-deps', 'chromium']);
+    }
+}
+
+console.log(`\n  app       http://127.0.0.1:${instance.apiPort}\n  database  ${instance.dbName}\n`);
+
+buildIfStale();
+ensureBrowser();
+
+process.exit(run('npx', ['playwright', 'test', ...process.argv.slice(2)]));

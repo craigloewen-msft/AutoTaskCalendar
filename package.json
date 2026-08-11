@@ -20,22 +20,11 @@
     "passport-local-mongoose": "^8.0.0"
   },
   "scripts": {
-    "build": "cd webinterface && npm install && npm run build && cd .. && rm -rf ./dist && mv ./webinterface/dist .",
-    "dev": "npm run db:up && node scripts/dev.js",
-    "seed": "npm run db:up && node scripts/seed.js",
-    "verify": "npm run build && npm test",
+    "postinstall": "cd webinterface && npm install",
+    "dev": "node scripts/dev.js",
     "test": "node scripts/test.js",
-    "test:api": "node scripts/test.js --project=api",
-    "test:ui": "node scripts/test.js --project=ui",
-    "test:watch": "node scripts/test.js --ui",
-    "test:report": "npx playwright show-report",
-    "db:up": "scripts/dev-db.sh up",
-    "db:down": "scripts/dev-db.sh down",
-    "db:reset": "scripts/dev-db.sh reset",
-    "db:status": "scripts/dev-db.sh status",
-    "db:doctor": "scripts/dev-db.sh doctor",
-    "db:migrate": "scripts/dev-db.sh migrate",
-    "db:logs": "scripts/dev-db.sh logs"
+    "seed": "node scripts/seed.js",
+    "build": "cd webinterface && npm run build"
   },
   "devDependencies": {
     "@faker-js/faker": "^9.9.0",

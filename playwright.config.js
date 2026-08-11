@@ -16,11 +16,7 @@ module.exports = defineConfig({
     fullyParallel: false,
     workers: 1,
     forbidOnly: isCI,
-    // The MongoDB container is reached through a wslc port-forward that can drop a pooled
-    // connection when the host is busy. Direct database access should go through `withDb`
-    // (tests/fixtures/db.js), which retries; this is the backstop for everything else. A
-    // test that fails twice is a real failure; the report marks retried passes as flaky.
-    retries: isCI ? 2 : 1,
+    retries: isCI ? 2 : 0,
     timeout: 30_000,
     expect: { timeout: 10_000 },
     reporter: isCI ? [['github'], ['html', { open: 'never' }]] : [['list'], ['html', { open: 'never' }]],

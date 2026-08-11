@@ -2,38 +2,38 @@
  * Per-instance environment resolution.
  *
  * Several AutoTaskCalendar instances can run on one host at once (one per agent, or per
- * git worktree). Ports, the database, and the session cookie are all derived from one
- * instance name, so instances never collide.
+ * git worktree). The instance name comes from the git branch, so nothing needs to be
+ * exported by hand; set AUTOTASKCALENDAR_INSTANCE to override it.
  *
- * MongoDB is the exception: every instance shares one container on one port, and isolation
- * comes from the per-instance database name. See docs/DEV_DATABASE.md.
- *
- * The name is detected automatically from the git branch, so nothing needs to be exported
- * by hand. Set AUTOTASKCALENDAR_INSTANCE to override it.
+ * Isolation has two halves:
+ *   - data:  each instance gets its own database inside one shared MongoDB container.
+ *   - ports: each stack claims the first free ports, so instances never collide.
  */
 
 'use strict';
 
 const { execFileSync } = require('child_process');
+const { createHash } = require('crypto');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const BASE_PORTS = {
     apiPort: 3000,
     webPort: 8080,
-    mongoPort: 27017,
     inspectPort: 9229,
 };
 
-// Ports are allocated in blocks of 10, so offset N uses 3000+N*10, 8080+N*10, etc.
-const PORT_STRIDE = 10;
-const MAX_OFFSET = 49;
+const MONGO_PORT = 27017;
 
 // Trunk branches map to the "default" instance, which keeps the historical ports.
 const DEFAULT_BRANCHES = new Set(['main', 'master', 'trunk']);
 
-/**
- * Reduce an arbitrary name to a filesystem/DNS/Mongo-safe token.
- */
+const DB_NAME_PREFIX = 'autotaskcalendar_';
+// MongoDB rejects database names longer than 63 bytes.
+const MAX_DB_NAME_LENGTH = 63;
+
+/** Reduce an arbitrary name to a filesystem/DNS/Mongo-safe token. */
 function slugify(rawName) {
     const slug = String(rawName)
         .toLowerCase()
@@ -48,10 +48,8 @@ function slugify(rawName) {
  * name when git is unavailable (tarball checkout, detached HEAD, no git installed).
  */
 function detectName() {
-    const explicit = process.env.AUTOTASKCALENDAR_INSTANCE;
-
-    if (explicit) {
-        return slugify(explicit);
+    if (process.env.AUTOTASKCALENDAR_INSTANCE) {
+        return slugify(process.env.AUTOTASKCALENDAR_INSTANCE);
     }
 
     let branch = '';
@@ -70,116 +68,276 @@ function detectName() {
         branch = path.basename(__dirname);
     }
 
-    if (DEFAULT_BRANCHES.has(branch)) {
-        return 'default';
-    }
-
-    return slugify(branch);
+    return DEFAULT_BRANCHES.has(branch) ? 'default' : slugify(branch);
 }
-
-/**
- * FNV-1a. Short, dependency-free, and stable across Node versions, so a given name always
- * maps to the same ports.
- */
-function hashToOffset(name) {
-    let hash = 0x811c9dc5;
-
-    for (let i = 0; i < name.length; i++) {
-        hash ^= name.charCodeAt(i);
-        hash = Math.imul(hash, 0x01000193) >>> 0;
-    }
-
-    // Offset 0 is reserved for the "default" instance.
-    return (hash % MAX_OFFSET) + 1;
-}
-
-function resolvePort(envVarName, basePort, offset) {
-    const override = process.env[envVarName];
-
-    if (override === undefined || override === '') {
-        return basePort + offset * PORT_STRIDE;
-    }
-
-    const parsed = Number.parseInt(override, 10);
-
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
-        throw new Error(
-            `${envVarName} must be an integer between 1 and 65535, got "${override}"`
-        );
-    }
-
-    return parsed;
-}
-
-function resolveOffset(name) {
-    const override = process.env.AUTOTASKCALENDAR_PORT_OFFSET;
-
-    if (override !== undefined && override !== '') {
-        const parsed = Number.parseInt(override, 10);
-
-        if (!Number.isInteger(parsed) || parsed < 0 || parsed > MAX_OFFSET) {
-            throw new Error(
-                `AUTOTASKCALENDAR_PORT_OFFSET must be an integer between 0 and ${MAX_OFFSET}, ` +
-                `got "${override}"`
-            );
-        }
-
-        return parsed;
-    }
-
-    return name === 'default' ? 0 : hashToOffset(name);
-}
-
-// All instances share a single MongoDB container; each gets its own database inside it.
-const SHARED_CONTAINER_NAME = 'autotaskcalendar-mongo';
-const SHARED_VOLUME_NAME = 'autotaskcalendar-mongo-data';
-const SHARED_CONTAINER_LABEL = 'autotaskcalendar.shared=mongo';
-
-const DB_NAME_PREFIX = 'autotaskcalendar_';
-// MongoDB rejects database names longer than 63 bytes.
-const MAX_DB_NAME_LENGTH = 63;
 
 /**
  * Build a Mongo-safe database name that always fits in 63 characters.
  *
- * Long branch names are truncated, with the port offset appended so two branches that
- * share a prefix still get separate databases.
+ * Long names are truncated with a hash of the full name appended, so two branches sharing
+ * a prefix still get separate databases.
  */
-function buildDbName(name, offset) {
-    const normalized = name.replace(/-/g, '_');
-    const full = `${DB_NAME_PREFIX}${normalized}`;
+function buildDbName(name) {
+    const full = `${DB_NAME_PREFIX}${name.replace(/-/g, '_')}`;
 
     if (full.length <= MAX_DB_NAME_LENGTH) {
         return full;
     }
 
-    const suffix = `_${offset}`;
-    const room = MAX_DB_NAME_LENGTH - DB_NAME_PREFIX.length - suffix.length;
+    const suffix = `_${createHash('sha1').update(name).digest('hex').slice(0, 8)}`;
 
-    return `${DB_NAME_PREFIX}${normalized.slice(0, room)}${suffix}`;
+    return full.slice(0, MAX_DB_NAME_LENGTH - suffix.length) + suffix;
 }
 
+// Binds every port before reporting any, so one call cannot hand back a duplicate.
+const PORT_PROBE = `
+const net = require('net');
+const { bases, skip } = JSON.parse(process.argv[1]);
+const taken = new Set(skip);
+const held = [];
+const chosen = [];
+
+function bind(port) {
+    return new Promise((resolve) => {
+        const server = net.createServer();
+        server.once('error', () => resolve(null));
+        server.once('listening', () => resolve(server));
+        server.listen(port, '0.0.0.0');
+    });
+}
+
+(async () => {
+    for (const base of bases) {
+        let found = false;
+        for (let port = base; port < base + 500; port++) {
+            if (taken.has(port)) continue;
+            const server = await bind(port);
+            if (server) {
+                held.push(server);
+                chosen.push(port);
+                taken.add(port);
+                found = true;
+                break;
+            }
+        }
+        if (!found) process.exit(1);
+    }
+    for (const server of held) server.close();
+    process.stdout.write(chosen.join(','));
+})();
+`;
+
+// Ports are handed to child processes, so a probe alone cannot reserve them: between
+// choosing a port and the child binding it, another instance would probe the same free
+// port and win. Claims are therefore recorded here and honoured by later probes.
+const CLAIM_FILE = path.join(os.tmpdir(), 'autotaskcalendar-ports.json');
+const CLAIM_LOCK = path.join(os.tmpdir(), 'autotaskcalendar-ports.lock');
+const CLAIM_LOCK_STALE_MS = 30_000;
+
+function sleepSync(ms) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** Serialize claims across processes, so two instances cannot claim the same port. */
+function withClaimLock(fn) {
+    for (let attempt = 0; attempt < 100; attempt++) {
+        try {
+            fs.mkdirSync(CLAIM_LOCK);
+
+            try {
+                return fn();
+            } finally {
+                fs.rmSync(CLAIM_LOCK, { recursive: true, force: true });
+            }
+        } catch (error) {
+            if (error.code !== 'EEXIST') throw error;
+
+            const age = Date.now() - fs.statSync(CLAIM_LOCK).mtimeMs;
+
+            if (age > CLAIM_LOCK_STALE_MS) {
+                fs.rmSync(CLAIM_LOCK, { recursive: true, force: true });
+            } else {
+                sleepSync(50);
+            }
+        }
+    }
+
+    // Never block start-up on the bookkeeping; a bare probe is still usually correct.
+    return fn();
+}
+
+function processIsAlive(pid) {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (error) {
+        return error.code === 'EPERM';
+    }
+}
+
+/** Ports claimed by instances that are still running. Dead claims are forgotten. */
+function readClaims() {
+    let claims = {};
+
+    try {
+        claims = JSON.parse(fs.readFileSync(CLAIM_FILE, 'utf8'));
+    } catch {
+        return {};
+    }
+
+    const live = {};
+
+    for (const [port, pid] of Object.entries(claims)) {
+        if (processIsAlive(pid)) live[port] = pid;
+    }
+
+    return live;
+}
+
+/**
+ * Claim a free port at or after each base.
+ *
+ * One child process handles them all: instance.js is required at module load by app.js
+ * and the scripts, none of which can await, and binding a socket has no synchronous API.
+ */
+function findFreePorts(bases) {
+    if (bases.length === 0) {
+        return [];
+    }
+
+    return withClaimLock(() => {
+        const claims = readClaims();
+        const request = JSON.stringify({ bases, skip: Object.keys(claims).map(Number) });
+        let output = '';
+
+        try {
+            output = execFileSync(process.execPath, ['-e', PORT_PROBE, request], {
+                encoding: 'utf8',
+            }).trim();
+        } catch {
+            throw new Error(`No free ports available at or after ${bases.join(', ')}.`);
+        }
+
+        const ports = output.split(',').map((port) => Number.parseInt(port, 10));
+
+        for (const port of ports) claims[port] = process.pid;
+        try {
+            fs.writeFileSync(CLAIM_FILE, JSON.stringify(claims));
+        } catch {
+            // Bookkeeping only: a failed write costs isolation, not correctness.
+        }
+
+        return ports;
+    });
+}
+
+function parsePort(envVarName, value) {
+    const parsed = Number.parseInt(value, 10);
+
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+        throw new Error(`${envVarName} must be an integer between 1 and 65535, got "${value}"`);
+    }
+
+    return parsed;
+}
+
+/**
+ * Resolve app ports, preferring pinned values from the environment.
+ *
+ * dev.js and test.js resolve once and export the result, so every child process in a
+ * stack agrees on the same numbers.
+ */
+function resolveAppPorts() {
+    const wanted = [
+        ['apiPort', 'AUTOTASKCALENDAR_API_PORT', BASE_PORTS.apiPort],
+        ['webPort', 'AUTOTASKCALENDAR_WEB_PORT', BASE_PORTS.webPort],
+        ['inspectPort', 'AUTOTASKCALENDAR_INSPECT_PORT', BASE_PORTS.inspectPort],
+    ];
+
+    const ports = {};
+    const toProbe = wanted.filter(([key, envVarName, base]) => {
+        const override = process.env[envVarName];
+
+        if (override === undefined || override === '') {
+            return true;
+        }
+
+        ports[key] = parsePort(envVarName, override);
+        return false;
+    });
+
+    const probed = findFreePorts(toProbe.map(([, , base]) => base));
+
+    toProbe.forEach(([key], index) => {
+        ports[key] = probed[index];
+    });
+
+    return ports;
+}
+
+/**
+ * The port the shared MongoDB container is published on.
+ *
+ * `scripts/db.js` records it when it starts the container, because the default can be
+ * unavailable and it then publishes on the next free port instead.
+ */
+function resolveMongoPort() {
+    if (process.env.AUTOTASKCALENDAR_MONGO_PORT) {
+        return parsePort('AUTOTASKCALENDAR_MONGO_PORT', process.env.AUTOTASKCALENDAR_MONGO_PORT);
+    }
+
+    const recorded = Number.parseInt(
+        fs.readFileSync(path.join(os.tmpdir(), 'autotaskcalendar-mongo.port'), 'utf8').trim(),
+        10
+    );
+
+    return Number.isInteger(recorded) ? recorded : MONGO_PORT;
+}
+
+const cache = new Map();
+
+/**
+ * Resolve the current instance.
+ *
+ * Memoized per process: probing twice would claim a second set of ports and the two
+ * halves of a stack would then disagree about where the app is.
+ */
 function resolveInstance() {
+    const key = [
+        detectName(),
+        process.env.AUTOTASKCALENDAR_API_PORT,
+        process.env.AUTOTASKCALENDAR_WEB_PORT,
+        process.env.AUTOTASKCALENDAR_INSPECT_PORT,
+        process.env.AUTOTASKCALENDAR_MONGO_PORT,
+        process.env.AUTOTASKCALENDAR_MONGO_URL,
+    ].join('|');
+
+    if (!cache.has(key)) {
+        cache.set(key, buildInstance());
+    }
+
+    return cache.get(key);
+}
+
+function buildInstance() {
     const name = detectName();
-    const offset = resolveOffset(name);
+    const { apiPort, webPort, inspectPort } = resolveAppPorts();
 
-    const apiPort = resolvePort('AUTOTASKCALENDAR_API_PORT', BASE_PORTS.apiPort, offset);
-    const webPort = resolvePort('AUTOTASKCALENDAR_WEB_PORT', BASE_PORTS.webPort, offset);
-    // Every instance shares one MongoDB container, so the Mongo port is NOT offset by
-    // instance: isolation comes from the per-instance database name instead.
-    const mongoPort = resolvePort('AUTOTASKCALENDAR_MONGO_PORT', BASE_PORTS.mongoPort, 0);
-    const inspectPort = resolvePort('AUTOTASKCALENDAR_INSPECT_PORT', BASE_PORTS.inspectPort, offset);
+    // Every instance talks to the same container; isolation comes from the database name.
+    let mongoPort = MONGO_PORT;
 
-    // MongoDB caps database names at 63 bytes, and branch names can be long. Truncate the
-    // name portion and keep the port offset as a suffix so distinct instances stay distinct.
-    const dbName = buildDbName(name, offset);
+    try {
+        mongoPort = resolveMongoPort();
+    } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+    }
+
+    const dbName = buildDbName(name);
     const mongoUrl =
-        process.env.AUTOTASKCALENDAR_MONGO_URL ||
-        `mongodb://127.0.0.1:${mongoPort}/${dbName}`;
+        process.env.AUTOTASKCALENDAR_MONGO_URL || `mongodb://127.0.0.1:${mongoPort}/${dbName}`;
 
     return {
         name,
-        offset,
         apiPort,
         webPort,
         mongoPort,
@@ -188,12 +346,25 @@ function resolveInstance() {
         mongoUrl,
         // Cookies are scoped by host and ignore the port, so each instance needs its own.
         sessionCookieName: `autotaskcalendar.sid.${name}`,
-        // One shared container/volume for the whole host; see docs/DEV_DATABASE.md.
-        containerName: SHARED_CONTAINER_NAME,
-        volumeName: SHARED_VOLUME_NAME,
-        containerLabel: SHARED_CONTAINER_LABEL,
     };
 }
 
-module.exports = resolveInstance();
-module.exports.resolveInstance = resolveInstance;
+// Resolved on first property access rather than on require, so merely importing this
+// module never claims ports.
+module.exports = { resolveInstance };
+
+for (const field of [
+    'name',
+    'apiPort',
+    'webPort',
+    'mongoPort',
+    'inspectPort',
+    'dbName',
+    'mongoUrl',
+    'sessionCookieName',
+]) {
+    Object.defineProperty(module.exports, field, {
+        enumerable: true,
+        get: () => resolveInstance()[field],
+    });
+}

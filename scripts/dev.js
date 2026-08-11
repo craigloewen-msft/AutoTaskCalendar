@@ -1,19 +1,25 @@
 #!/usr/bin/env node
 /**
- * Start the dev stack: the Express API under nodemon, plus the Vue dev server, both on
- * this instance's ports.
+ * Start the dev stack: MongoDB, the Express API under nodemon, and the Vue dev server.
  *
- * Usage: node scripts/dev.js   (normally via `npm run dev`)
+ * Usage: npm run dev
  */
 
 'use strict';
 
 const path = require('path');
 const { spawn } = require('child_process');
-const instance = require('../instance');
+const { ensureDatabase } = require('./db');
 
+// Must run before the instance is resolved: it exports the Mongo port everything uses.
+ensureDatabase();
+
+const { resolveInstance } = require('../instance');
+
+const instance = resolveInstance();
 const repoRoot = path.join(__dirname, '..');
 
+// Pin every port so the API, the Vue proxy, and nodemon all agree.
 const childEnv = {
     ...process.env,
     AUTOTASKCALENDAR_INSTANCE: instance.name,
@@ -25,23 +31,21 @@ const childEnv = {
 };
 
 console.log(
-    `\nAutoTaskCalendar instance "${instance.name}"\n` +
-    `  web        http://localhost:${instance.webPort}\n` +
-    `  api        http://localhost:${instance.apiPort}\n` +
-    `  debugger   ${instance.inspectPort}\n` +
-    `  database   ${instance.dbName}\n`
+    `\n  web       http://localhost:${instance.webPort}\n` +
+    `  api       http://localhost:${instance.apiPort}\n` +
+    `  database  ${instance.dbName}\n`
 );
 
 const targets = [
     {
         label: 'api',
-        command: process.platform === 'win32' ? 'npx.cmd' : 'npx',
+        command: 'npx',
         args: ['nodemon', `--inspect=0.0.0.0:${instance.inspectPort}`, 'app.js'],
         cwd: repoRoot,
     },
     {
         label: 'web',
-        command: process.platform === 'win32' ? 'npm.cmd' : 'npm',
+        command: 'npm',
         args: ['run', 'serve'],
         cwd: path.join(repoRoot, 'webinterface'),
     },
@@ -72,16 +76,14 @@ for (const target of targets) {
     });
 
     child.on('error', (error) => {
-        console.error(`[${target.label}] failed to start:`, error.message);
-        shutdown('SIGTERM');
+        console.error(`[${target.label}] failed to start: ${error.message}`);
         process.exitCode = 1;
+        shutdown('SIGTERM');
     });
 
     child.on('exit', (code, signal) => {
         if (!shuttingDown) {
-            console.error(
-                `[${target.label}] exited (${signal || `code ${code}`}); stopping dev stack.`
-            );
+            console.error(`[${target.label}] exited (${signal || `code ${code}`}); stopping.`);
             process.exitCode = code === 0 ? 0 : 1;
         }
         shutdown('SIGTERM');

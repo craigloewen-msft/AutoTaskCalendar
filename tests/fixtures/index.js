@@ -20,8 +20,8 @@
  *   loggedInPage    a browser page already logged in as the primary user
  *   nonUtcPage      logged-in page in America/Los_Angeles
  *
- * Reading the database directly? Wrap it in `withDb` (re-exported here) so a dropped
- * connection retries instead of failing the test.
+ * Reading the database directly? Wrap it in `withDb` (re-exported here) so the connection
+ * is established first.
  */
 
 const base = require('@playwright/test');

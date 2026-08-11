@@ -2,39 +2,40 @@
 /**
  * Seed this instance's database with the test dataset.
  *
- * Usage: node scripts/seed.js   (normally via `npm run seed`)
+ * Usage: npm run seed
  */
 
 'use strict';
 
+const { ensureDatabase } = require('./db');
+
+// Must run before the instance is resolved: it exports the Mongo port everything uses.
+ensureDatabase();
+
 const { runSeed } = require('../seed');
-const instance = require('../instance');
+const { resolveInstance } = require('../instance');
+
+const instance = resolveInstance();
 
 async function main() {
-    console.log(`Seeding ${instance.dbName}...`);
+    const result = await runSeed({ mongoUrl: instance.mongoUrl, disconnect: true });
 
-    const result = await runSeed({ disconnect: true });
+    console.log(
+        `\nSeeded ${instance.dbName}: ` +
+        `${result.users.length} users, ${result.tasks.length} tasks, ` +
+        `${result.events.length} events, ${result.roles.length} roles, ` +
+        `${result.goals.length} goals, ${result.projects.length} projects.\n`
+    );
 
-    console.log('\n=================================================');
-    console.log('Database seeded successfully');
-    console.log('=================================================');
-    console.log(`  Users:    ${result.users.length}`);
-    console.log(`  Tasks:    ${result.tasks.length}`);
-    console.log(`  Events:   ${result.events.length}`);
-    console.log(`  Roles:    ${result.roles.length}`);
-    console.log(`  Goals:    ${result.goals.length}`);
-    console.log(`  Projects: ${result.projects.length}`);
-    console.log('-------------------------------------------------');
-    console.log('Test credentials:');
-    for (const u of result.users) {
-        console.log(`  Username: ${u.username}   Password: ${u.password}`);
+    for (const user of result.users) {
+        console.log(`  login  ${user.username} / ${user.password}`);
     }
-    console.log('=================================================\n');
+    console.log('');
 }
 
 main()
     .then(() => process.exit(0))
     .catch((error) => {
-        console.error('Error seeding database:', error);
+        console.error(`Error seeding database: ${error.message}`);
         process.exit(1);
     });

@@ -38,16 +38,8 @@ if (process.env.NODE_ENV == 'production') {
     config.appUrl = `http://localhost:${instance.webPort}`;
 }
 
-// Set up Mongoose connection. maxIdleTimeMS retires pooled sockets before an idle one can
-// be dropped underneath us, which is what caused MongoPoolClearedError on the first request
-// after a quiet spell.
-mongoose.connect(mongooseConnectionString, {
-    maxIdleTimeMS: 10_000,
-    serverSelectionTimeoutMS: 10_000,
-    heartbeatFrequencyMS: 5_000,
-    retryReads: true,
-    retryWrites: true,
-});
+// Set up Mongoose connection.
+mongoose.connect(mongooseConnectionString);
 
 // App set up
 app.use(express.json());
