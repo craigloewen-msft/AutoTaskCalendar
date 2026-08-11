@@ -10,7 +10,6 @@ npm install && (cd webinterface && npm install)
 npx playwright install chromium   # once, for the test suite
 npm run seed        # optional: testuser / testpassword
 npm run dev         # starts mongo, API, and web UI
-npm test            # the regression suite
 ```
 
 Nothing needs to be exported. Each git branch automatically gets its own ports, MongoDB
@@ -19,6 +18,8 @@ colliding. `main` uses the standard 8080/3000/27017.
 
 Run `npm run db:status` to print the ports and database name for your branch. Override the
 name with `AUTOTASKCALENDAR_INSTANCE` if you need two stacks on one branch.
+
+Only when you're done your changes and are doing finalization should you run the test suite as it takes a long time.
 
 ## Coding style
 
