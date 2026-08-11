@@ -1,8 +1,8 @@
 const { TaskDetails, EventDetails } = require('../models');
 const {
-    DEFAULT_UNAVAILABLE_BEHAVIOR,
+    DEFAULT_WHEN_UNSCHEDULABLE_BEHAVIOR,
     expandRecurrences,
-    recurrenceUnavailableBehavior,
+    recurrenceWhenUnschedulableBehavior,
 } = require('./recurrence');
 const {
     dateOnlyInZone,
@@ -161,14 +161,14 @@ function getChunkDuration(task) {
 // Task Selection
 // ============================================================================
 
-function unavailableBehaviorForTask(task, context) {
+function whenUnschedulableBehaviorForTask(task, context) {
     if (!task.seriesRef) return null;
-    return context.seriesBehaviorById.get(task.seriesRef.toString())
-        || DEFAULT_UNAVAILABLE_BEHAVIOR;
+    return context.seriesWhenUnschedulableBehaviorById.get(task.seriesRef.toString())
+        || DEFAULT_WHEN_UNSCHEDULABLE_BEHAVIOR;
 }
 
 function occurrenceExpiresAt(task, context) {
-    if (unavailableBehaviorForTask(task, context) !== 'skip' || !task.occurrenceDate) {
+    if (whenUnschedulableBehaviorForTask(task, context) !== 'skip' || !task.occurrenceDate) {
         return null;
     }
     return nextDateStartInZone(task.occurrenceDate, context.timeZone);
@@ -532,9 +532,9 @@ async function buildSchedulingContext(user) {
             userRef: user._id,
         }, 'recurrence repeat')
         : [];
-    const seriesBehaviorById = new Map(seriesTemplates.map((template) => [
+    const seriesWhenUnschedulableBehaviorById = new Map(seriesTemplates.map((template) => [
         template._id.toString(),
-        recurrenceUnavailableBehavior(template.recurrence),
+        recurrenceWhenUnschedulableBehavior(template.recurrence),
     ]));
 
     // Get regular tasks (sorted by deadline) and backlog tasks (sorted by start date)
@@ -578,7 +578,7 @@ async function buildSchedulingContext(user) {
         incompleteTaskMap,
         scheduledTaskIds: new Set(),
         chunkInfo: {},
-        seriesBehaviorById,
+        seriesWhenUnschedulableBehaviorById,
 
         // Events
         events,

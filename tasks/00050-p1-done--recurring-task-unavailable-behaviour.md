@@ -29,7 +29,7 @@ This work will replace that mixed behavior with an explicit, deterministic per-s
 Add an enum to the template's existing recurrence rule:
 
 ```js
-recurrence.unavailableBehavior // 'skip' | 'next-available'
+recurrence.whenUnschedulableBehavior // 'skip' | 'next-available'
 ```
 
 - Missing or omitted values resolve to `'skip'`.

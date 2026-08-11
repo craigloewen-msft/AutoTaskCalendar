@@ -37,7 +37,7 @@ Stored in `recurrence` on the template (`models/index.js`):
 | `byMonthDay` | Days of the month, `1`-`31`, or `-1` for the last day (monthly) | `[1,-1]` |
 | `endsOn` | Stop after this date. `null` = never | |
 | `endsAfter` | Stop after N occurrences ever. `null` = never | |
-| `unavailableBehavior` | `'skip'` \| `'next-available'`; what to do when the occurrence day has no slot | `'skip'` |
+| `whenUnschedulableBehavior` | `'skip'` \| `'next-available'`; what to do when the occurrence day has no slot | `'skip'` |
 
 The shape deliberately mirrors iCalendar RRULE, so a future `.ics` import/export or Google
 Calendar recurring-event mapping is mechanical. There is no RRULE dependency.
@@ -54,7 +54,7 @@ at all.
 **`endsAfter` counts from the series start**, not from the current window, so it means
 "N occurrences ever".
 
-**Missing `unavailableBehavior` means `skip`.** This is the default for new rules, older rule
+**Missing `whenUnschedulableBehavior` means `skip`.** This is the default for new rules, older rule
 documents, and promoted legacy `repeat` strings, so no data migration is required.
 
 ## The lifecycle
@@ -98,7 +98,7 @@ These sound alike but sit at opposite ends of the scheduler.
 | Before the first run | Already set | `null` |
 | Time part | Local midnight | The real start time, e.g. 11:45 |
 
-With `unavailableBehavior: 'next-available'`, the scheduler is best-effort on the occurrence
+With `whenUnschedulableBehavior: 'next-available'`, the scheduler is best-effort on the occurrence
 day: a daily check-in *for* Mon 10 Aug can be *placed* Tue 11 Aug 11:00. With the default
 `'skip'` policy it is only eligible during Monday and remains unscheduled if no Monday slot
 exists. In both cases `occurrenceDate` remains Monday; only `scheduledDate` can move.
@@ -141,7 +141,7 @@ expansion recreates it as a duplicate.
 | The day is already full | Skip leaves it unscheduled; next-available carries it forward, but never earlier than its occurrence date |
 | A breakable skip occurrence partly fits | Valid chunks stay on the occurrence day; remaining work does not spill overnight |
 
-`byWeekday` controls which civil date the task belongs to. `unavailableBehavior` controls
+`byWeekday` controls which civil date the task belongs to. `whenUnschedulableBehavior` controls
 whether placement may continue after that date.
 
 ## Horizon
@@ -180,7 +180,7 @@ so nothing breaks mid-migration.
 A promoted legacy string has an **empty `byWeekday`**, which is why the "empty means the
 start day" rule above matters: without it, every legacy weekly task silently became a daily
 one the first time the scheduler ran.
-It also receives the default `unavailableBehavior: 'skip'`.
+It also receives the default `whenUnschedulableBehavior: 'skip'`.
 
 ## Adding a new frequency
 

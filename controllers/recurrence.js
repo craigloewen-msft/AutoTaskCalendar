@@ -22,7 +22,7 @@ const {
 
 const FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'];
 const WHEN_UNSCHEDULABLE_BEHAVIORS = ['skip', 'next-available'];
-const DEFAULT_UNAVAILABLE_BEHAVIOR = 'skip';
+const DEFAULT_WHEN_UNSCHEDULABLE_BEHAVIOR = 'skip';
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // Ceiling on occurrences generated per series per run, so a runaway rule cannot exhaust
@@ -51,11 +51,11 @@ function validateRecurrence(rule) {
     }
 
     if (
-        rule.unavailableBehavior !== undefined
-        && rule.unavailableBehavior !== null
-        && !WHEN_UNSCHEDULABLE_BEHAVIORS.includes(rule.unavailableBehavior)
+        rule.whenUnschedulableBehavior !== undefined
+        && rule.whenUnschedulableBehavior !== null
+        && !WHEN_UNSCHEDULABLE_BEHAVIORS.includes(rule.whenUnschedulableBehavior)
     ) {
-        return `Recurrence unavailableBehavior must be one of: ${WHEN_UNSCHEDULABLE_BEHAVIORS.join(', ')}`;
+        return `Recurrence whenUnschedulableBehavior must be one of: ${WHEN_UNSCHEDULABLE_BEHAVIORS.join(', ')}`;
     }
 
     if (rule.interval !== undefined && rule.interval !== null) {
@@ -123,7 +123,7 @@ function normaliseRecurrence(rule) {
         byMonthDay: [],
         endsOn: rule.endsOn ? parseDateOnly(rule.endsOn).date : null,
         endsAfter: rule.endsAfter ? Number(rule.endsAfter) : null,
-        unavailableBehavior: recurrenceUnavailableBehavior(rule),
+        whenUnschedulableBehavior: recurrenceWhenUnschedulableBehavior(rule),
     };
 
     // Sorted and de-duplicated, so two equivalent rules always compare equal.
@@ -154,14 +154,14 @@ function normaliseLegacyRepeat(task) {
         byMonthDay: [],
         endsOn: null,
         endsAfter: null,
-        unavailableBehavior: DEFAULT_UNAVAILABLE_BEHAVIOR,
+        whenUnschedulableBehavior: DEFAULT_WHEN_UNSCHEDULABLE_BEHAVIOR,
     };
 }
 
-function recurrenceUnavailableBehavior(rule) {
-    return WHEN_UNSCHEDULABLE_BEHAVIORS.includes(rule?.unavailableBehavior)
-        ? rule.unavailableBehavior
-        : DEFAULT_UNAVAILABLE_BEHAVIOR;
+function recurrenceWhenUnschedulableBehavior(rule) {
+    return WHEN_UNSCHEDULABLE_BEHAVIORS.includes(rule?.whenUnschedulableBehavior)
+        ? rule.whenUnschedulableBehavior
+        : DEFAULT_WHEN_UNSCHEDULABLE_BEHAVIOR;
 }
 
 /** The effective rule for a task: the modern field, else a translated legacy string. */
@@ -172,7 +172,7 @@ function effectiveRule(task) {
             : { ...task.recurrence };
         return {
             ...rule,
-            unavailableBehavior: recurrenceUnavailableBehavior(rule),
+            whenUnschedulableBehavior: recurrenceWhenUnschedulableBehavior(rule),
         };
     }
     return normaliseLegacyRepeat(task);
@@ -414,7 +414,7 @@ async function expandRecurrences(user, horizonDays) {
         const rule = effectiveRule(template);
         if (!rule) continue;
 
-        if (recurrenceUnavailableBehavior(rule) === 'next-available') {
+        if (recurrenceWhenUnschedulableBehavior(rule) === 'next-available') {
             deferredSeriesIds.push(template._id);
         }
 
@@ -528,14 +528,14 @@ async function expandSeries(template, rule, today, horizonEnd) {
 module.exports = {
     FREQUENCIES,
     WHEN_UNSCHEDULABLE_BEHAVIORS,
-    DEFAULT_UNAVAILABLE_BEHAVIOR,
+    DEFAULT_WHEN_UNSCHEDULABLE_BEHAVIOR,
     WEEKDAY_NAMES,
     MAX_OCCURRENCES_PER_SERIES,
     validateRecurrence,
     normaliseRecurrence,
     normaliseLegacyRepeat,
     effectiveRule,
-    recurrenceUnavailableBehavior,
+    recurrenceWhenUnschedulableBehavior,
     describeRecurrence,
     occurrenceDatesBetween,
     expandRecurrences,

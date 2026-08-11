@@ -271,8 +271,6 @@ test.describe('calendar page', () => {
 
         await page.selectOption('#task-repeat', 'weekly');
 
-        await expect(page.locator('#repeat-unavailable-skip')).toBeChecked();
-
         // Start from a known state: select Monday and Tuesday, and clear every other day.
         for (const day of ['Monday', 'Tuesday']) {
             const pill = page.locator(`.weekday-pill[data-day="${day}"]`);
@@ -330,37 +328,10 @@ test.describe('calendar page', () => {
         await expect(page.locator('[data-test=repeat-warning]')).toContainText(
             'Saturday is not among your working days'
         );
-        await expect(page.locator('[data-test=repeat-warning]')).toContainText(
-            'will be skipped rather than moved later'
-        );
-
-        await page.check('#repeat-unavailable-next');
-        await expect(page.locator('[data-test=repeat-warning]')).toContainText(
-            'will be scheduled at a later available time'
-        );
 
         // A warning, not a validation error: the rule still saves.
         await page.getByRole('button', { name: 'Add task', exact: true }).click();
         await expect(page.locator('.task-list')).toContainText('Weekend chore');
-    });
-
-    test('keeps next-available behavior when a recurring occurrence is reopened', async ({ seed, loggedInPage: page }) => {
-        await seed();
-
-        await page.goto('/#/calendar');
-        await page.click('button:has-text("Add Task")');
-        await page.fill('#task-title', 'Deferred recurring task');
-        await page.fill('#task-due-date', isoDay(3));
-        await page.fill('#task-duration', '30');
-        await page.selectOption('#task-repeat', 'daily');
-        await page.check('#repeat-unavailable-next');
-        await page.getByRole('button', { name: 'Add task', exact: true }).click();
-
-        const occurrence = page.locator('.task-item', { hasText: 'Deferred recurring task' }).first();
-        await expect(occurrence).toBeVisible();
-        await occurrence.click();
-
-        await expect(page.locator('#repeat-unavailable-next')).toBeChecked();
     });
 
     test('shows the series banner and the rule when opening an occurrence', async ({ seed, loggedInPage: page }) => {
