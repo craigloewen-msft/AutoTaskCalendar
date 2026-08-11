@@ -3,8 +3,9 @@
  * Run the Playwright suite against a dedicated test instance.
  *
  * Tests get their own instance name ("<branch>-test"), which instance.js turns into its
- * own ports, database, and container. That means `npm test` never disturbs the database
- * you are developing against, and parallel agents still cannot collide.
+ * own ports and database. That means `npm test` never disturbs the database you are
+ * developing against, and parallel agents still cannot collide. MongoDB itself is one
+ * shared container; see docs/DEV_DATABASE.md.
  *
  * Usage: npm test [-- <playwright args>]   /   npm run test:ui
  */
@@ -100,11 +101,7 @@ console.log(
     `  database   ${externalMongoUrl ? 'externally managed' : instance.dbName}\n`
 );
 
-// Stale forwards multiply connection resets and make every retry expensive. Stop only this
-// branch's unused dev partner; other branches remain isolated and untouched.
-run('scripts/dev-db.sh', ['gc']);
-
-// 1. The test database container, isolated from the dev one.
+// 1. The shared mongo container. The test instance gets its own database inside it.
 if (run('scripts/dev-db.sh', ['up']) !== 0) {
     process.exit(1);
 }
