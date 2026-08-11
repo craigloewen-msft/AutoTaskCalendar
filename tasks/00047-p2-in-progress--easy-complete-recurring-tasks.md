@@ -47,7 +47,7 @@ Add coverage proving that:
 
 Add coverage proving that full task completion removes generated events linked to that task while leaving unrelated events untouched.
 
-Run the focused calendar UI/API specs while iterating, then run `npm run verify` once during finalization.
+Run the focused calendar UI/API specs while iterating, then run `npm test` once during finalization.
 
 ## Acceptance criteria
 

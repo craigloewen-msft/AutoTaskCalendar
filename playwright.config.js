@@ -40,7 +40,8 @@ module.exports = defineConfig({
         url: baseURL,
         reuseExistingServer: !isCI,
         timeout: 60_000,
-        stdout: 'pipe',
+        // Only errors, so a run's output is the test results and nothing else.
+        stdout: 'ignore',
         stderr: 'pipe',
     },
 });

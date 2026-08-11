@@ -176,6 +176,9 @@ npm test -- --debug              # step through with the inspector
 npm test -- --repeat-each=5      # hunt for flakiness
 ```
 
+The server's own stdout is hidden so a run shows only test results; anything it writes to
+stderr still comes through.
+
 ## Troubleshooting
 
 **A test passes alone but fails in the suite.** It is depending on data another test left
