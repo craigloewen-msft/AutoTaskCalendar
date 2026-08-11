@@ -36,10 +36,25 @@ Each card walks through the live Compass hierarchy:
 3. Review each started project.
 4. Check the tasks already due this week.
 5. Open **Other active tasks** to avoid duplicating work that is due outside the week.
-6. Add the concrete tasks that should be due this week.
+6. Click any task to edit or manage it without leaving Weekly Plan.
+7. Add the concrete tasks that should be due this week.
 
 Compass continues to own hierarchy changes. Empty branches link there rather than embedding
 role, goal, or project editing in the planning page.
+
+### Edit and manage tasks
+
+Every task row is a keyboard-accessible button. Selecting one opens the task editor over the
+Weekly Plan page, with title, dates, duration, priority, project, notes, backlog, chunking,
+recurrence, and dependency controls. The same view can complete or delete the task.
+
+Saving reloads the incomplete task list and closes the editor. Because Weekly Plan is derived
+from normal task fields, a changed due date or project immediately moves the task to its new
+weekly, other-active, unaligned, Someday, or outside-Compass section. Completion and deletion
+remove it from the plan immediately.
+
+A materialised recurring occurrence shows a warning that edits and deletion apply to its
+whole series, matching Calendar behavior. Its generated occurrence dates are not editable.
 
 ### Someday projects
 
@@ -78,8 +93,9 @@ endpoint's refreshed `taskList` updates the project list and page totals immedia
 If validation or the request fails, the message stays beside that form and its title,
 duration, and due date remain available to correct and retry.
 
-Use Calendar for recurrence, dependencies, notes, chunking, custom priority, backlog tasks,
-or dates outside the current week. Weekly Plan does not duplicate the full task editor.
+Quick creation stays intentionally compact. Click the created task afterward to manage
+recurrence, dependencies, notes, chunking, priority, backlog state, project, or dates outside
+the current week in the full in-page editor.
 
 ---
 
@@ -160,7 +176,8 @@ availability. Future Compass scheduling influence remains a separate, higher-ris
 
 ## Work on Weekly Plan
 
-The page is `webinterface/src/views/WeeklyPlan.vue`; its route and navigation live in
+The page is `webinterface/src/views/WeeklyPlan.vue`; the in-page editor is
+`webinterface/src/components/WeeklyTaskEditor.vue`. Its route and navigation live in
 `webinterface/src/router/index.js` and `webinterface/src/App.vue`. Authentication remains in
 the normal router guard, and page state stays local rather than expanding the auth-focused
 Vuex store.

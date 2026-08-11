@@ -323,6 +323,8 @@ events, and a failure there is logged but never blocks the calendar.
 `/weekly-plan` is the Monday–Sunday creation lens over Compass. It renders the same live
 Role → Goal → Project hierarchy with descriptions, groups existing incomplete tasks by
 `projectRef` and `dueDate`, and puts a compact normal-task form under every started project.
+Clicking any task opens the full task editor in place, so its details can be changed, completed,
+or deleted without leaving the review.
 
 Weekly Plan does not add a planning model or selection field. Creating a task is the planning
 action, and the task's existing dates are the record of which week it was intended for. See

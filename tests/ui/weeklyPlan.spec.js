@@ -72,6 +72,69 @@ test.describe('weekly plan page', () => {
         await expect(laterTask).toBeVisible();
     });
 
+    test('opens and edits a task without leaving Weekly Plan', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        const week = currentWeek();
+        const task = await createTask(data, {
+            title: 'Edit this weekly task',
+            duration: 40,
+            startDate: week.startDate,
+            dueDate: week.endDate,
+            projectRef: data.named.emptyProject._id,
+        });
+
+        await openPlan(page);
+        const project = page.locator(`[data-project-id="${data.named.emptyProject._id}"]`);
+        await project.getByRole('button', { name: /Edit this weekly task/ }).click();
+
+        const editor = page.locator('[data-test=weekly-task-editor]');
+        await expect(editor).toBeVisible();
+        await expect(editor.locator('#weekly-edit-title')).toHaveValue('Edit this weekly task');
+        await expect(editor.locator('#weekly-edit-duration')).toHaveValue('40');
+
+        await editor.locator('#weekly-edit-title').fill('Edited from Weekly Plan');
+        await editor.locator('#weekly-edit-duration').fill('55');
+        await editor.locator('#weekly-edit-due').fill(week.nextStartDate);
+        await editor.getByRole('button', { name: 'Save changes' }).click();
+
+        await expect(editor).toHaveCount(0);
+        await expect(project.locator('[data-test^="week-tasks-"]')).toHaveCount(0);
+        await project.locator('.other-tasks summary').click();
+        await expect(project.getByRole('button', { name: /Edited from Weekly Plan/ })).toBeVisible();
+
+        const saved = await withDb(() => TaskDetails.findById(task._id));
+        expect(saved.title).toBe('Edited from Weekly Plan');
+        expect(saved.duration).toBe(55);
+        expect(saved.dueDate.toISOString().slice(0, 10)).toBe(week.nextStartDate);
+    });
+
+    test('completes a task from its Weekly Plan editor', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        const week = currentWeek();
+        const task = await createTask(data, {
+            title: 'Complete from Weekly Plan',
+            startDate: week.startDate,
+            dueDate: week.endDate,
+            projectRef: data.named.emptyProject._id,
+        });
+
+        await openPlan(page);
+        await page.getByRole('button', { name: /Complete from Weekly Plan/ }).click();
+        const editor = page.locator('[data-test=weekly-task-editor]');
+        await editor.getByRole('button', { name: 'Complete', exact: true }).click();
+
+        await expect(editor).toHaveCount(0);
+        await expect(page.getByRole('button', { name: /Complete from Weekly Plan/ })).toHaveCount(0);
+        const saved = await withDb(() => TaskDetails.findById(task._id));
+        expect(saved.completed).toBe(true);
+    });
+
     test('quick-adds an ordinary project task due this week', async ({
         seed,
         loggedInPage: page,

@@ -99,16 +99,23 @@
                 class="task-list"
                 :data-test="`week-tasks-${project._id}`"
               >
-                <li v-for="task in tasksForProject(project._id, true)" :key="task._id" class="task-row">
-                  <div>
-                    <span v-if="task.seriesRef" class="task-marker" title="Repeating task" aria-label="Repeating task">↻</span>
-                    <strong>{{ task.title }}</strong>
-                    <span v-if="task.isBacklog" class="task-badge">Backlog</span>
-                  </div>
-                  <div class="task-meta">
-                    <span>{{ dueLabel(task) }}</span>
-                    <span>{{ formatDuration(Number(task.duration) || 0) }}</span>
-                  </div>
+                <li v-for="task in tasksForProject(project._id, true)" :key="task._id">
+                  <button
+                    class="task-row task-button"
+                    type="button"
+                    :data-test="`edit-weekly-task-${task._id}`"
+                    @click="openTask(task, $event)"
+                  >
+                    <span>
+                      <span v-if="task.seriesRef" class="task-marker" title="Repeating task" aria-label="Repeating task">↻</span>
+                      <strong>{{ task.title }}</strong>
+                      <span v-if="task.isBacklog" class="task-badge">Backlog</span>
+                    </span>
+                    <span class="task-meta">
+                      <span>{{ dueLabel(task) }}</span>
+                      <span>{{ formatDuration(Number(task.duration) || 0) }}</span>
+                    </span>
+                  </button>
                 </li>
               </ul>
               <p v-else class="nothing-planned">Nothing planned for this week yet.</p>
@@ -118,16 +125,18 @@
                   Other active tasks · {{ tasksForProject(project._id, false).length }}
                 </summary>
                 <ul class="task-list compact">
-                  <li v-for="task in tasksForProject(project._id, false)" :key="task._id" class="task-row">
-                    <div>
-                      <span v-if="task.seriesRef" class="task-marker" title="Repeating task" aria-label="Repeating task">↻</span>
-                      <strong>{{ task.title }}</strong>
-                      <span v-if="task.isBacklog" class="task-badge">Backlog</span>
-                    </div>
-                    <div class="task-meta">
-                      <span>{{ dueLabel(task) }}</span>
-                      <span>{{ formatDuration(Number(task.duration) || 0) }}</span>
-                    </div>
+                  <li v-for="task in tasksForProject(project._id, false)" :key="task._id">
+                    <button class="task-row task-button" type="button" @click="openTask(task, $event)">
+                      <span>
+                        <span v-if="task.seriesRef" class="task-marker" title="Repeating task" aria-label="Repeating task">↻</span>
+                        <strong>{{ task.title }}</strong>
+                        <span v-if="task.isBacklog" class="task-badge">Backlog</span>
+                      </span>
+                      <span class="task-meta">
+                        <span>{{ dueLabel(task) }}</span>
+                        <span>{{ formatDuration(Number(task.duration) || 0) }}</span>
+                      </span>
+                    </button>
                   </li>
                 </ul>
               </details>
@@ -211,9 +220,11 @@
             <span>{{ project.parentLabel }}</span>
             <p v-if="project.description">{{ project.description }}</p>
             <ul v-if="tasksForProject(project._id, true).length" class="parked-task-list">
-              <li v-for="task in tasksForProject(project._id, true)" :key="task._id" class="task-row">
-                <strong>{{ task.title }}</strong>
-                <span>{{ dueLabel(task) }} · {{ formatDuration(Number(task.duration) || 0) }}</span>
+              <li v-for="task in tasksForProject(project._id, true)" :key="task._id">
+                <button class="task-row task-button" type="button" @click="openTask(task, $event)">
+                  <strong>{{ task.title }}</strong>
+                  <span>{{ dueLabel(task) }} · {{ formatDuration(Number(task.duration) || 0) }}</span>
+                </button>
               </li>
             </ul>
           </li>
@@ -232,9 +243,11 @@
         </summary>
         <p>These tasks belong to a project that is no longer in the active Compass hierarchy.</p>
         <ul class="task-list">
-          <li v-for="task in outsideCompassWeeklyTasks" :key="task._id" class="task-row">
-            <strong>{{ task.title }}</strong>
-            <span class="task-meta">{{ dueLabel(task) }} · {{ formatDuration(Number(task.duration) || 0) }}</span>
+          <li v-for="task in outsideCompassWeeklyTasks" :key="task._id">
+            <button class="task-row task-button" type="button" @click="openTask(task, $event)">
+              <strong>{{ task.title }}</strong>
+              <span class="task-meta">{{ dueLabel(task) }} · {{ formatDuration(Number(task.duration) || 0) }}</span>
+            </button>
           </li>
         </ul>
       </details>
@@ -248,10 +261,10 @@
         <p>Alignment is optional. Assign a task when its project is clear.</p>
         <ul class="unaligned-list">
           <li v-for="task in unalignedWeeklyTasks" :key="task._id" class="unaligned-row">
-            <div>
+            <button class="unaligned-task-button" type="button" @click="openTask(task, $event)">
               <strong>{{ task.title }}</strong>
               <span>{{ dueLabel(task) }} · {{ formatDuration(Number(task.duration) || 0) }}</span>
-            </div>
+            </button>
             <div class="align-controls">
               <label :for="`align-${task._id}`" class="visually-hidden">Project for {{ task.title }}</label>
               <select :id="`align-${task._id}`" v-model="alignmentSelections[task._id]" class="form-control">
@@ -278,11 +291,23 @@
         </ul>
       </details>
     </BContainer>
+
+    <WeeklyTaskEditor
+      v-if="selectedTask"
+      :key="selectedTask._id"
+      :task="selectedTask"
+      :tasks="taskList"
+      :project-groups="editorProjectOptionGroups"
+      :working-days="$store.state.user?.workingDays || []"
+      @close="closeTaskEditor"
+      @changed="applyTaskChanges"
+    />
   </div>
 </template>
 
 <script>
 import { BContainer } from "bootstrap-vue-next";
+import WeeklyTaskEditor from "../components/WeeklyTaskEditor.vue";
 import { buildRoleColorMap } from "../utils/roleColors";
 import {
   apiDateOnly,
@@ -293,13 +318,15 @@ import {
 
 export default {
   name: "WeeklyPlan",
-  components: { BContainer },
+  components: { BContainer, WeeklyTaskEditor },
   data() {
     const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
 
     return {
       roles: [],
       taskList: [],
+      selectedTask: null,
+      lastTaskTrigger: null,
       forms: {},
       alignmentSelections: {},
       alignmentMessages: {},
@@ -368,6 +395,16 @@ export default {
       for (const role of this.roles) {
         for (const goal of role.goalList || []) {
           const projects = this.startedProjects(goal);
+          if (projects.length) groups.push({ label: `${role.title} → ${goal.title}`, projects });
+        }
+      }
+      return groups;
+    },
+    editorProjectOptionGroups() {
+      const groups = [];
+      for (const role of this.roles) {
+        for (const goal of role.goalList || []) {
+          const projects = goal.projectList || [];
           if (projects.length) groups.push({ label: `${role.title} → ${goal.title}`, projects });
         }
       }
@@ -496,6 +533,18 @@ export default {
       if (!start) return `until ${end}`;
       if (!end) return `since ${start}`;
       return `${start} – ${end}`;
+    },
+    openTask(task, event) {
+      this.lastTaskTrigger = event?.currentTarget || null;
+      this.selectedTask = task;
+    },
+    closeTaskEditor() {
+      this.selectedTask = null;
+      this.$nextTick(() => this.lastTaskTrigger?.focus());
+    },
+    applyTaskChanges(taskList) {
+      this.taskList = taskList;
+      this.closeTaskEditor();
     },
     async createTask(project) {
       this.refreshTemporal();
@@ -791,6 +840,39 @@ export default {
   font-size: 0.85rem;
 }
 
+.task-button {
+  width: 100%;
+  border: 1px solid transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.task-button:hover,
+.task-button:focus-visible {
+  border-color: rgba(141, 162, 251, 0.5);
+  outline: none;
+  background: rgba(102, 126, 234, 0.12);
+}
+
+.unaligned-task-button {
+  display: grid;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.unaligned-task-button:hover,
+.unaligned-task-button:focus-visible {
+  border-color: rgba(141, 162, 251, 0.5);
+  outline: none;
+  background: rgba(102, 126, 234, 0.12);
+}
+
 .task-marker {
   margin-right: 5px;
   color: #9aa9ed;
@@ -942,7 +1024,8 @@ export default {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.unaligned-row > div:first-child {
+.unaligned-row > div:first-child,
+.unaligned-task-button {
   display: grid;
 }
 
