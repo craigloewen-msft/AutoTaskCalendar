@@ -43,8 +43,8 @@ test.describe('tasks', () => {
         expect(taskTitles.some((title) => title.includes('OTHER USER SECRET'))).toBe(false);
     });
 
-    test('creates, edits, and deletes a task without shifting its civil dates', async ({ seed, api }) => {
-        await seed();
+    test('creates, edits, and deletes owned tasks without shifting civil dates', async ({ seed, api }) => {
+        const data = await seed();
 
         const createdBody = await (await api.post('/api/createTask', {
             data: {
@@ -76,6 +76,13 @@ test.describe('tasks', () => {
         })).json();
         expect(afterDelete.success).toBe(true);
         expect(titles(afterDelete.taskList)).not.toContain(editedTitle);
+
+        const foreign = data.tasks.find((task) => task.title.includes('OTHER USER SECRET'));
+        const foreignDelete = await (await api.post('/api/deleteTask', {
+            data: { taskId: foreign._id.toString() },
+        })).json();
+        expect(foreignDelete.success).toBe(false);
+        expect(await withDb(() => TaskDetails.findById(foreign._id))).not.toBeNull();
     });
 
     test('requires a due date for active tasks but allows backlog tasks without one', async ({ seed, api }) => {
@@ -199,9 +206,10 @@ test.describe('tasks', () => {
         expect(final.taskList.find((item) => item._id === task._id.toString())).toBeUndefined();
     });
 
-    test('returns owned project completions from the requested local completion window', async ({
+    test('returns authenticated, owned project completions from the local completion window', async ({
         seed,
         api,
+        apiAnon,
     }) => {
         const data = await seed();
         await withDb(async () => {
@@ -243,9 +251,10 @@ test.describe('tasks', () => {
             ]);
         });
 
-        const body = await (await api.get(
-            '/api/getProjectCompletions?completedFrom=2024-03-04&completedTo=2024-03-10'
-        )).json();
+        const query = '?completedFrom=2024-03-04&completedTo=2024-03-10';
+        expect((await apiAnon.get(`/api/getProjectCompletions${query}`)).status()).toBe(401);
+
+        const body = await (await api.get(`/api/getProjectCompletions${query}`)).json();
 
         expect(body.success).toBe(true);
         expect(body.completedFrom).toBe('2024-03-04');

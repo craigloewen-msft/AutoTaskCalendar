@@ -1,44 +1,29 @@
-const { test, expect } = require('../fixtures');
+const { test, expect, baseURL } = require('../fixtures');
 
 test.describe('auth', () => {
-    test('logs in with the seeded credentials', async ({ seed, apiAnon }) => {
+    test('login and registration handle success and duplicate credentials', async ({ seed, apiAnon }) => {
         await seed();
 
-        const res = await apiAnon.post('/api/login', {
+        const login = await apiAnon.post('/api/login', {
             data: { username: 'testuser', password: 'testpassword' },
         });
-        const body = await res.json();
+        const loginBody = await login.json();
 
-        expect(body.success).toBe(true);
-        expect(body.token).toBeTruthy();
-        expect(body.user.username).toBe('testuser');
-    });
+        expect(loginBody.success).toBe(true);
+        expect(loginBody.token).toBeTruthy();
+        expect(loginBody.user.username).toBe('testuser');
 
-    test('rejects a wrong password', async ({ seed, apiAnon }) => {
-        await seed();
-
-        const res = await apiAnon.post('/api/login', {
+        const wrongPassword = await apiAnon.post('/api/login', {
             data: { username: 'testuser', password: 'wrong' },
         });
+        expect((await wrongPassword.json()).success).toBe(false);
 
-        // API errors come back as HTTP 200 with success: false.
-        expect((await res.json()).success).toBe(false);
-    });
-
-    test('rejects an unknown user', async ({ seed, apiAnon }) => {
-        await seed();
-
-        const res = await apiAnon.post('/api/login', {
+        const unknownUser = await apiAnon.post('/api/login', {
             data: { username: 'nobody', password: 'testpassword' },
         });
+        expect((await unknownUser.json()).success).toBe(false);
 
-        expect((await res.json()).success).toBe(false);
-    });
-
-    test('registers a new user and returns a usable token', async ({ seed, apiAnon }) => {
-        await seed();
-
-        const res = await apiAnon.post('/api/register', {
+        const register = await apiAnon.post('/api/register', {
             data: {
                 username: 'brandnew',
                 email: 'brandnew@example.com',
@@ -46,21 +31,17 @@ test.describe('auth', () => {
                 timeZone: 'Asia/Kathmandu',
             },
         });
-        const body = await res.json();
+        const registerBody = await register.json();
 
-        expect(body.success).toBe(true);
-        expect(body.user.username).toBe('brandnew');
+        expect(registerBody.success).toBe(true);
+        expect(registerBody.user.username).toBe('brandnew');
 
-        const login = await apiAnon.post('/api/login', {
+        const brandnewLogin = await apiAnon.post('/api/login', {
             data: { username: 'brandnew', password: 'hunter2hunter2' },
         });
-        expect((await login.json()).success).toBe(true);
-    });
+        expect((await brandnewLogin.json()).success).toBe(true);
 
-    test('refuses to register a duplicate username', async ({ seed, apiAnon }) => {
-        await seed();
-
-        const res = await apiAnon.post('/api/register', {
+        const duplicate = await apiAnon.post('/api/register', {
             data: {
                 username: 'testuser',
                 email: 'dupe@example.com',
@@ -68,33 +49,29 @@ test.describe('auth', () => {
                 timeZone: 'UTC',
             },
         });
-        const body = await res.json();
+        const duplicateBody = await duplicate.json();
 
-        expect(body.success).toBe(false);
-        expect(body.log).toContain('already exists');
+        expect(duplicateBody.success).toBe(false);
+        expect(duplicateBody.log).toContain('already exists');
     });
 
-    test('protected endpoints reject requests with no token', async ({ seed, apiAnon }) => {
+    test('protected endpoints reject missing and invalid tokens', async ({ seed, apiAnon, playwright }) => {
         await seed();
 
-        const res = await apiAnon.get('/api/getUserTasks');
-        expect(res.status()).toBe(401);
-    });
-
-    test('protected endpoints reject a garbage token', async ({ seed, playwright }) => {
-        await seed();
+        const anonymous = await apiAnon.get('/api/getUserTasks');
+        expect(anonymous.status()).toBe(401);
 
         const context = await playwright.request.newContext({
-            baseURL: require('../fixtures').baseURL,
+            baseURL,
             extraHTTPHeaders: { Authorization: 'not-a-real-token' },
         });
-        const res = await context.get('/api/getUserTasks');
+        const garbage = await context.get('/api/getUserTasks');
         await context.dispose();
 
-        expect(res.status()).toBe(401);
+        expect(garbage.status()).toBe(401);
     });
 
-    test('rejects invalid timezone and overnight working hours', async ({ seed, api }) => {
+    test('updateuserinfo validates and persists working hours and timezone', async ({ seed, api }) => {
         await seed();
 
         const badZone = await api.post('/api/updateuserinfo', {
@@ -118,12 +95,8 @@ test.describe('auth', () => {
             },
         });
         expect((await overnight.json()).log).toContain('after start');
-    });
 
-    test('updates working hours and days', async ({ seed, api }) => {
-        await seed();
-
-        const res = await api.post('/api/updateuserinfo', {
+        const update = await api.post('/api/updateuserinfo', {
             data: {
                 workingStartTime: '09:30',
                 workingEndTime: '17:30',
@@ -132,14 +105,14 @@ test.describe('auth', () => {
                 selectedCalendars: [],
             },
         });
-        const body = await res.json();
+        const updateBody = await update.json();
 
-        expect(body.success).toBe(true);
-        expect(body.user.workingStartTime).toBe('09:30');
-        expect(body.user.workingEndTime).toBe('17:30');
-        expect(body.user.workingStartMinutes).toBe(570);
-        expect(body.user.workingEndMinutes).toBe(1050);
-        expect(body.user.timeZone).toBe('Asia/Kathmandu');
-        expect(body.user.workingDays).toEqual(['Monday', 'Wednesday', 'Friday']);
+        expect(updateBody.success).toBe(true);
+        expect(updateBody.user.workingStartTime).toBe('09:30');
+        expect(updateBody.user.workingEndTime).toBe('17:30');
+        expect(updateBody.user.workingStartMinutes).toBe(570);
+        expect(updateBody.user.workingEndMinutes).toBe(1050);
+        expect(updateBody.user.timeZone).toBe('Asia/Kathmandu');
+        expect(updateBody.user.workingDays).toEqual(['Monday', 'Wednesday', 'Friday']);
     });
 });

@@ -1,39 +1,16 @@
 const { test, expect } = require('../fixtures');
+const { transformGoogleEventData } = require('../../controllers/eventController');
+const { EventDetails } = require('../../models');
 
 test.describe('events', () => {
-    test('creates an event', async ({ seed, api }) => {
+    test('createEvent validates inputs and persists a calendar event', async ({ seed, api }) => {
         await seed();
 
-        const start = new Date(Date.now() + 86400000);
-        const end = new Date(start.getTime() + 3600000);
+        const missingFields = await api.post('/api/createEvent', { data: { title: 'Only a title' } });
+        const missingFieldsBody = await missingFields.json();
+        expect(missingFieldsBody.success).toBe(false);
+        expect(missingFieldsBody.log).toContain('required');
 
-        const res = await api.post('/api/createEvent', {
-            data: {
-                title: 'Planning session',
-                startDate: start.toISOString(),
-                endDate: end.toISOString(),
-                notes: 'Quarterly planning',
-            },
-        });
-        const body = await res.json();
-
-        expect(body.success).toBe(true);
-        expect(body.event.title).toBe('Planning session');
-        expect(body.event.type).toBe('calendar');
-    });
-
-    test('requires a title and both dates', async ({ seed, api }) => {
-        await seed();
-
-        const res = await api.post('/api/createEvent', { data: { title: 'Only a title' } });
-        const body = await res.json();
-
-        expect(body.success).toBe(false);
-        expect(body.log).toContain('required');
-    });
-
-    test('rejects invalid or inverted event timestamps', async ({ seed, api }) => {
-        await seed();
         const invalid = await api.post('/api/createEvent', {
             data: { title: 'Bad', startDate: '2024-01-01', endDate: 'not-a-date' },
         });
@@ -47,37 +24,26 @@ test.describe('events', () => {
             },
         });
         expect((await inverted.json()).log).toContain('after start');
-    });
 
-    test('updates an event', async ({ seed, api }) => {
-        const data = await seed();
-        const event = data.named.meeting;
-
-        const res = await api.post('/api/updateEvent', {
-            data: { eventId: event._id.toString(), title: 'Renamed meeting' },
+        const start = new Date(Date.now() + 86400000);
+        const end = new Date(start.getTime() + 3600000);
+        const created = await api.post('/api/createEvent', {
+            data: {
+                title: 'Planning session',
+                startDate: start.toISOString(),
+                endDate: end.toISOString(),
+                notes: 'Quarterly planning',
+            },
         });
-        const body = await res.json();
+        const createdBody = await created.json();
 
-        expect(body.success).toBe(true);
-        expect(body.event.title).toBe('Renamed meeting');
+        expect(createdBody.success).toBe(true);
+        expect(createdBody.event.title).toBe('Planning session');
+        expect(createdBody.event.type).toBe('calendar');
     });
 
-    test('deletes an event', async ({ seed, api }) => {
+    test('event listing is week-scoped, user-scoped, and rejects bad dates', async ({ seed, api }) => {
         const data = await seed();
-        const event = data.named.clientCall;
-
-        const res = await api.post('/api/deleteEvent', {
-            data: { eventId: event._id.toString() },
-        });
-        const body = await res.json();
-
-        expect(body.success).toBe(true);
-        expect(body.eventList.map((e) => e._id)).not.toContain(event._id.toString());
-    });
-
-    test('returns events overlapping exactly the requested local week', async ({ seed, api }) => {
-        const data = await seed();
-        const { EventDetails } = require('../../models');
         const anchor = data.anchor.format('YYYY-MM-DD');
         const sunday = data.anchor.clone().startOf('week');
 
@@ -96,33 +62,42 @@ test.describe('events', () => {
             type: 'calendar',
         });
 
-        const body = await (await api.get(`/api/getUserEvents/${anchor}`)).json();
-        expect(body.success).toBe(true);
-        expect(body.events.some((event) => event._id === spanning._id.toString())).toBe(true);
-        expect(body.events.some((event) => event._id === following._id.toString())).toBe(false);
+        const listed = await (await api.get(`/api/getUserEvents/${anchor}`)).json();
+        expect(listed.success).toBe(true);
+        expect(listed.events.some((event) => event._id === spanning._id.toString())).toBe(true);
+        expect(listed.events.some((event) => event._id === following._id.toString())).toBe(false);
+        expect(listed.events.some((event) => event.title.includes('OTHER USER SECRET'))).toBe(false);
+
+        const badDate = await (await api.get('/api/getUserEvents/not-a-date')).json();
+        expect(badDate.success).toBe(false);
+        expect(badDate.log).toContain('valid date');
+        expect(badDate.log).not.toContain('Cast to date');
     });
 
-    test('never returns another user\'s events', async ({ seed, api }) => {
+    test('update, delete, and Google event transforms preserve intended event semantics', async ({ seed, api }) => {
         const data = await seed();
 
-        const res = await api.get(`/api/getUserEvents/${data.anchor.format('YYYY-MM-DD')}`);
-        const body = await res.json();
+        const updated = await api.post('/api/updateEvent', {
+            data: { eventId: data.named.meeting._id.toString(), title: 'Renamed meeting' },
+        });
+        const updatedBody = await updated.json();
+        expect(updatedBody.success).toBe(true);
+        expect(updatedBody.event.title).toBe('Renamed meeting');
 
-        expect(body.events.some((e) => e.title.includes('OTHER USER SECRET'))).toBe(false);
-    });
+        const deleted = await api.post('/api/deleteEvent', {
+            data: { eventId: data.named.clientCall._id.toString() },
+        });
+        const deletedBody = await deleted.json();
+        expect(deletedBody.success).toBe(true);
+        expect(deletedBody.eventList.map((event) => event._id)).not.toContain(data.named.clientCall._id.toString());
 
-    test('parses Google wall timestamps using their source timezone', () => {
-        const { transformGoogleEventData } = require('../../controllers/eventController');
         const timed = transformGoogleEventData({
             start: { dateTime: '2024-03-10T09:00:00', timeZone: 'America/New_York' },
             end: { dateTime: '2024-03-10T10:00:00', timeZone: 'America/New_York' },
         }, 'UTC');
         expect(timed.startDate.toISOString()).toBe('2024-03-10T13:00:00.000Z');
         expect(timed.endDate.toISOString()).toBe('2024-03-10T14:00:00.000Z');
-    });
 
-    test('preserves Google all-day dates and exclusive end', () => {
-        const { transformGoogleEventData } = require('../../controllers/eventController');
         const allDay = transformGoogleEventData(
             { start: { date: '2024-03-10' }, end: { date: '2024-03-11' } },
             'America/New_York'
@@ -138,17 +113,5 @@ test.describe('events', () => {
             'Pacific/Auckland'
         );
         expect(sourceZone.startDate.toISOString()).toBe('2024-03-09T11:00:00.000Z');
-    });
-
-    test('rejects an unparseable date instead of leaking a cast error', async ({ seed, api }) => {
-        await seed();
-
-        const res = await api.get('/api/getUserEvents/not-a-date');
-        const body = await res.json();
-
-        expect(body.success).toBe(false);
-        expect(body.log).toContain('valid date');
-        // The raw Mongoose failure must never reach the caller.
-        expect(body.log).not.toContain('Cast to date');
     });
 });

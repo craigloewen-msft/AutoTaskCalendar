@@ -4,8 +4,49 @@ AutoTaskCalendar has one test suite: **Playwright**, covering both the HTTP API 
 Vue UI. This file is the whole manual — how to run it, how to add to it, and how to debug
 a failure.
 
-**The rule: any behaviour change ships with a spec.** If you fix a bug, add the test that
-would have caught it. If you add a feature, add the test that proves it works.
+**The rule: any behaviour change ships with a focused spec.** If you fix a bug, add the
+smallest test that would have caught it. If you add a feature, add the test that proves
+its contract.
+
+This suite is intentionally lean and risk-based, not an endpoint-by-endpoint catalog.
+Prefer one clear test for the behavior that matters over many near-duplicates.
+
+Keep a test when it protects at least one of these:
+
+- a primary user journey
+- an auth or cross-tenant boundary
+- scheduler invariants
+- recurrence identity, idempotence, or completed-history preservation
+- date, time, timezone, DST, or migration correctness
+- destructive lifecycle behavior that could lose user data
+
+Delete or avoid tests that are mainly:
+
+- duplicate API and UI coverage of the same behavior
+- one validation permutation among many equivalent ones
+- routine CRUD already covered by a broader lifecycle
+- payload-shape or implementation-detail assertions
+- visual labels, badges, summaries, disabled states, or minor error states
+- empty-state or trivial negative-path checks
+- repeated auth or tenant checks on every endpoint
+- old regression cases whose underlying invariant is already covered directly
+
+When in doubt, keep the spec closest to the behavior and delete the duplicate.
+
+## What to test when behavior changes
+
+Most changes should add or update one focused spec, not several parallel ones.
+
+- Choose the narrowest layer that proves the contract.
+- Prefer API specs for business rules and data transitions.
+- Keep UI specs for primary user-visible flows and route guards.
+- Do not duplicate the same rule at endpoint, validation, and UI layers unless each layer
+  has distinct behavior worth protecting.
+- If one representative validation case proves the rule, do not add every permutation.
+- If a broader lifecycle test already proves create/edit/delete/list behavior, do not add a
+  separate CRUD micro-test.
+
+The goal is confidence per test, not coverage theater.
 
 ## Running the tests
 
@@ -50,6 +91,14 @@ Tests share one database and therefore run serially (`workers: 1`). Each test re
 whatever it needs, so order never matters.
 
 ## Writing a test
+
+Before adding a test, ask two questions:
+
+1. What behavior changed?
+2. What is the smallest spec that would fail without that change?
+
+If the answer is already covered by an existing journey, invariant, or boundary test,
+update that test or delete the duplicate instead of adding another one.
 
 Everything lives in `tests/`:
 
@@ -127,20 +176,26 @@ await seed.clearTasks();
 
 ## Testing the scheduler
 
-`controllers/scheduling.js` is the highest-risk code in the repo. Its tests
-(`tests/api/scheduling.spec.js`) assert **invariants**, not exact timestamps, because the
-result depends on the current time:
+`controllers/scheduling.js` is the highest-risk code in the repo, so it keeps focused API
+coverage. The scheduler tests assert a small set of **invariants**, not exact timestamps,
+because results depend on the current time and available calendar space.
 
-- nothing is scheduled outside working hours or on a non-working day
-- nothing overlaps a calendar event or another scheduled task
-- nothing is scheduled before its dependency or before its own start date
-- broken-up tasks never exceed their total duration
-- completed tasks are never scheduled
-- re-running the scheduler is idempotent
-- the hostile edge-case tasks complete rather than hanging
+The suite protects these guarantees:
 
-When you change the scheduler, add an invariant rather than pinning a timestamp. Pinned
-timestamps break every time the clock moves, and everyone learns to ignore them.
+- scheduled work stays inside working windows and working days
+- scheduled work does not overlap calendar events or other scheduled work
+- tasks are not scheduled before their own eligibility or required dependencies
+- broken-up tasks do not exceed their total duration
+- completed tasks are not rescheduled
+- re-running the scheduler stays idempotent
+- dense, recurring, far-future, and hostile scenarios still respect the same invariants
+
+What the suite does **not** promise is one exact placement for every task. The scheduler is
+best-effort, so tests should protect constraints and stability, not pin a timestamp that
+will drift as the clock moves.
+
+When scheduler behavior changes, add or update the invariant that captures the contract.
+Do not add duplicate endpoint, validation, or UI checks for the same placement rule.
 
 ## Debugging a failure
 

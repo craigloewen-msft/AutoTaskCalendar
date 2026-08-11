@@ -8,7 +8,6 @@ const { CONTAINER_NAME } = require('../../scripts/db');
 
 const repoRoot = path.join(__dirname, '..', '..');
 
-// Resolve an instance descriptor for an arbitrary name, without ambient overrides leaking in.
 function resolveNamed(name, extraEnv = {}) {
     const overridden = {
         AUTOTASKCALENDAR_INSTANCE: name,
@@ -64,77 +63,43 @@ async function dropDatabase(mongoUrl) {
 }
 
 test.describe('dev environment', () => {
-    test('isolates instances by database name', () => {
+    test('instance naming stays isolated, stable, bounded, and accepts pinned ports', () => {
         const a = resolveNamed('dev-env-spec-a');
         const b = resolveNamed('dev-env-spec-b');
-
-        expect(a.dbName).toBe('autotaskcalendar_dev_env_spec_a');
-        expect(b.dbName).not.toBe(a.dbName);
-    });
-
-    test('gives every instance the same mongo port', () => {
-        const a = resolveNamed('dev-env-spec-a');
-        const b = resolveNamed('dev-env-spec-b');
-
-        // One container serves the whole host; isolation comes from the database name.
-        expect(b.mongoPort).toBe(a.mongoPort);
-    });
-
-    test('keeps long branch names inside MongoDB 63-byte database names', () => {
-        const long = 'feature/'.padEnd(120, 'x');
-        const a = resolveNamed(`${long}-one`);
-        const b = resolveNamed(`${long}-two`);
-
-        expect(a.dbName.length).toBeLessThanOrEqual(63);
-        expect(b.dbName.length).toBeLessThanOrEqual(63);
-        expect(a.dbName).not.toBe(b.dbName);
-    });
-
-    test('derives a stable database name from the same instance name', () => {
-        expect(resolveNamed('dev-env-spec-a').dbName)
-            .toBe(resolveNamed('dev-env-spec-a').dbName);
-    });
-
-    test('honours pinned ports from the environment', () => {
+        const stable = resolveNamed('dev-env-spec-stable');
         const pinned = resolveNamed('dev-env-spec-a', {
             AUTOTASKCALENDAR_API_PORT: '4567',
             AUTOTASKCALENDAR_WEB_PORT: '4568',
         });
+        const long = 'feature/'.padEnd(120, 'x');
+        const longA = resolveNamed(`${long}-one`);
+        const longB = resolveNamed(`${long}-two`);
 
+        expect(a.dbName).toBe('autotaskcalendar_dev_env_spec_a');
+        expect(b.dbName).not.toBe(a.dbName);
+        expect(b.mongoPort).toBe(a.mongoPort);
+        expect(resolveNamed('dev-env-spec-a').dbName).toBe(resolveNamed('dev-env-spec-a').dbName);
+        expect(resolveNamed('dev-env-spec-stable').apiPort).toBe(stable.apiPort);
+        expect(resolveNamed('dev-env-spec-stable').webPort).toBe(stable.webPort);
+        expect(resolveNamed('dev-env-spec-stable').inspectPort).toBe(stable.inspectPort);
+        expect(longA.dbName.length).toBeLessThanOrEqual(63);
+        expect(longB.dbName.length).toBeLessThanOrEqual(63);
+        expect(longA.dbName).not.toBe(longB.dbName);
         expect(pinned.apiPort).toBe(4567);
         expect(pinned.webPort).toBe(4568);
-    });
-
-    test('rejects a nonsense port override', () => {
         expect(() => resolveNamed('dev-env-spec-a', { AUTOTASKCALENDAR_API_PORT: 'abc' }))
             .toThrow(/must be an integer/);
     });
 
-    test('resolves the same ports every time within one process', () => {
-        // The API and the web proxy resolve separately; if they disagreed, the proxy
-        // would forward to a port nothing is listening on.
-        const first = resolveNamed('dev-env-spec-stable');
-        const second = resolveNamed('dev-env-spec-stable');
-
-        expect(second.apiPort).toBe(first.apiPort);
-        expect(second.webPort).toBe(first.webPort);
-        expect(second.inspectPort).toBe(first.inspectPort);
-    });
-
-    test('never hands two concurrent instances the same port', async () => {
+    test('concurrent port resolution and ensureDatabase avoid shared-container collisions', async () => {
         test.slow();
 
-        // Two real processes, because that is the case that matters: two agents starting
-        // stacks at the same time must not both be told port 3000 is free.
         const script = `
             const { resolveInstance } = require(${JSON.stringify(path.join(repoRoot, 'instance.js'))});
             const i = resolveInstance();
             process.stdout.write(JSON.stringify([i.apiPort, i.webPort, i.inspectPort]) + '\\n');
             setTimeout(() => {}, 5000);
         `;
-
-        // The test runner pins its own ports through the environment; a child inheriting
-        // them would skip port probing entirely, which is the thing under test.
         const env = { ...process.env };
         delete env.AUTOTASKCALENDAR_API_PORT;
         delete env.AUTOTASKCALENDAR_WEB_PORT;
@@ -167,10 +132,6 @@ test.describe('dev environment', () => {
         } finally {
             first.child.kill();
         }
-    });
-
-    test('ensureDatabase is idempotent and leaves exactly one container', () => {
-        test.slow();
 
         const db = path.join(repoRoot, 'scripts', 'db.js');
         execFileSync(process.execPath, [db], { cwd: repoRoot, stdio: 'ignore' });
