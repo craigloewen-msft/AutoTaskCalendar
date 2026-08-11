@@ -66,9 +66,10 @@ On each run, per series:
 3. Create occurrences for dates that have none. Existing documents keep their identity.
 4. Delete **past incomplete** occurrences across all series.
 
-Each occurrence inherits title, notes, duration, chunking, priority and dependencies from
-its template, and gets `dueDate` = end of its own day, which is what drives the scheduler's
-deadline ordering.
+Each occurrence inherits title, notes, duration, chunking, priority, dependencies, and
+`projectRef` from its template, and gets `dueDate` = its own civil day, which drives the
+scheduler's deadline ordering. Project inheritance keeps active and completed occurrences
+aligned with the series throughout Calendar and Weekly Plan.
 
 ### Why the two extra fields
 

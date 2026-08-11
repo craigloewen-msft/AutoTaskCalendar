@@ -36,15 +36,38 @@ Each card walks through the live Compass hierarchy:
 3. Review each started project.
 4. Check the tasks already due this week.
 5. Open **Other active tasks** to avoid duplicating work that is due outside the week.
-6. Click any task to edit or manage it without leaving Weekly Plan.
-7. Add the concrete tasks that should be due this week.
+6. If present, open **Completed last week** for context from the previous Monday–Sunday.
+7. Click any active task to edit or manage it without leaving Weekly Plan.
+8. Add the concrete tasks that should be due this week.
 
 Compass continues to own hierarchy changes. Empty branches link there rather than embedding
 role, goal, or project editing in the planning page.
 
+### Review what was completed last week
+
+A started project shows a quiet, collapsed **Completed last week** disclosure only when it has
+matching history. It sits after active work and immediately before **Quick task**, so recent
+progress can inform the next plan without competing with this week's tasks. Expanding it shows
+static task titles and local completion dates, newest first; completed rows do not reopen the
+active task editor.
+
+“Last week” means the previous complete Monday–Sunday period, not a rolling seven days. A task
+belongs to that period when its `completedDate` instant falls between local Monday midnight
+(inclusive) and the following Monday midnight (exclusive) in the user's saved IANA timezone.
+Its due, start, and recurrence occurrence dates do not decide inclusion.
+
+Duration is intentionally absent. Chunk completion reduces the task's mutable `duration`, so
+that field is not a trustworthy record of historical effort. Count and task identity remain
+accurate.
+
+Completion history is optional context. A failed history read leaves the hierarchy, active
+tasks, and quick forms available and displays a small retry status instead of pretending the
+week had no completions. Returning to the page after a Monday rollover recomputes and reloads
+the previous-week window.
+
 ### Edit and manage tasks
 
-Every task row is a keyboard-accessible button. Selecting one opens the shared task editor
+Every active task row is a keyboard-accessible button. Selecting one opens the shared task editor
 over the Weekly Plan page, with title, dates, duration, priority, project, notes, backlog,
 chunking, recurrence, and dependency controls. Calendar uses this exact same editor for Add
 Task and task editing. The same view can complete or delete the task.
@@ -136,15 +159,22 @@ correct.
 
 ## Data and endpoints
 
-The page loads these reads in parallel:
+The page starts these reads in parallel:
 
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /api/getCompass` | Live roles with goals and projects nested beneath them. |
 | `GET /api/getUserTasks` | Incomplete tasks and materialised recurrence occurrences. |
+| `GET /api/getProjectCompletions?completedFrom=&completedTo=` | Minimal project-linked completion history for the previous week. |
 
-All grouping and totals are client-side derivations over those existing payloads. No Weekly
-Plan endpoint or model exists.
+Compass and incomplete tasks are required page data. Completion history is a separate,
+non-blocking read because `getUserTasks` intentionally excludes completed work and `getCompass`
+does not carry task rollups. Its required bounds are strict inclusive civil dates; the server
+converts them to timezone-aware instants and returns only `_id`, `title`, `projectRef`,
+`completedDate`, and `seriesRef`, newest first.
+
+All grouping and totals are client-side derivations over these payloads. No Weekly Plan
+endpoint or model exists.
 
 Writes reuse:
 
@@ -153,8 +183,9 @@ Writes reuse:
 | `POST /api/createTask` | Create a normal task under the surrounding project. |
 | `POST /api/setTaskProject` | Optionally align an existing unaligned task. |
 
-A Compass or task read failure is shown explicitly with a retry. The page must not present a
-failed task load as though every project has no work.
+A Compass or active-task read failure is shown explicitly with a full-page retry. The page must
+not present a failed task load as though every project has no work. A completion-history failure
+uses its smaller inline retry and does not block planning.
 
 ---
 
@@ -192,8 +223,11 @@ Tests:
 - `tests/api/temporal.spec.js` pins Monday bounds across DST and year boundaries while
   preserving Sunday-based event bounds.
 - `tests/api/compass.spec.js` pins project-linked quick-create fields and ownership behavior.
-- `tests/ui/weeklyPlan.spec.js` covers hierarchy review, task grouping, quick creation,
-  failure recovery, Someday, unaligned work, saved-timezone behavior, and narrow screens.
+- `tests/ui/weeklyPlan.spec.js` covers hierarchy review, active and completed task grouping,
+  quick creation, failure recovery, Someday, unaligned work, saved-timezone behavior, and
+  narrow screens.
+- `tests/api/tasks.spec.js` pins the bounded completion-history query, ownership, validation,
+  and timezone-aware completion boundaries.
 
 Run a focused UI check while iterating:
 

@@ -1,5 +1,6 @@
 const { test, expect, withDb } = require('../fixtures');
-const { EventDetails } = require('../../models');
+const { TaskDetails, UserDetails, EventDetails } = require('../../models');
+const { parseDateOnly, todayInZone } = require('../../utils/temporal');
 
 // The API returns due dates as ISO strings; helper keeps assertions readable.
 function titles(taskList) {
@@ -10,6 +11,22 @@ function dateOnly(days = 0) {
     const date = new Date();
     date.setUTCDate(date.getUTCDate() + days);
     return date.toISOString().slice(0, 10);
+}
+
+function completedTask(data, overrides) {
+    return {
+        title: 'Completed project task',
+        duration: 30,
+        startDate: parseDateOnly('2024-01-01').date,
+        dueDate: parseDateOnly('2024-01-02').date,
+        completed: true,
+        completedDate: new Date('2024-03-06T12:00:00.000Z'),
+        isBacklog: false,
+        priority: 100,
+        userRef: data.primary.user._id,
+        projectRef: data.named.migrationProject._id,
+        ...overrides,
+    };
 }
 
 test.describe('tasks', () => {
@@ -34,6 +51,160 @@ test.describe('tasks', () => {
         const body = await res.json();
 
         expect(titles(body.taskList).some((t) => t.includes('OTHER USER SECRET'))).toBe(false);
+    });
+
+    test('returns only owned project completions inside the requested completion window', async ({
+        seed,
+        api,
+    }) => {
+        const data = await seed();
+        await withDb(() => TaskDetails.create([
+            completedTask(data, {
+                title: 'Completed inside despite later due date',
+                dueDate: parseDateOnly('2024-04-20').date,
+                completedDate: new Date('2024-03-08T15:00:00.000Z'),
+            }),
+            completedTask(data, {
+                title: 'Due inside but completed outside',
+                dueDate: parseDateOnly('2024-03-06').date,
+                completedDate: new Date('2024-03-11T12:00:00.000Z'),
+            }),
+            completedTask(data, {
+                title: 'Unaligned completion',
+                projectRef: null,
+            }),
+            completedTask(data, {
+                title: 'OTHER USER SECRET COMPLETION',
+                userRef: data.other.user._id,
+                projectRef: data.named.otherProject._id,
+            }),
+        ]));
+
+        const res = await api.get(
+            '/api/getProjectCompletions?completedFrom=2024-03-04&completedTo=2024-03-10'
+        );
+        const body = await res.json();
+
+        expect(body.success).toBe(true);
+        expect(body.completedFrom).toBe('2024-03-04');
+        expect(body.completedTo).toBe('2024-03-10');
+        expect(body.items.map((task) => task.title)).toEqual([
+            'Completed inside despite later due date',
+        ]);
+        expect(Object.keys(body.items[0]).sort()).toEqual(
+            ['_id', 'completedDate', 'projectRef', 'seriesRef', 'title'].sort()
+        );
+    });
+
+    test('returns a genuinely materialised recurring project completion', async ({ seed, api }) => {
+        const data = await seed();
+        const today = todayInZone('UTC');
+        const created = await (await api.post('/api/createTask', {
+            data: {
+                title: 'Project-linked daily review',
+                duration: 20,
+                startDate: today,
+                dueDate: today,
+                projectRef: String(data.named.emptyProject._id),
+                recurrence: { freq: 'daily', interval: 1 },
+            },
+        })).json();
+        expect(created.success).toBe(true);
+
+        const occurrence = created.taskList.find((task) => {
+            return task.title === 'Project-linked daily review' && task.dueDate === today;
+        });
+        expect(occurrence).toMatchObject({
+            projectRef: String(data.named.emptyProject._id),
+        });
+        expect(occurrence.seriesRef).toBeTruthy();
+
+        const completion = await api.post('/api/completeTask', {
+            data: { taskId: occurrence._id },
+        });
+        expect((await completion.json()).success).toBe(true);
+
+        const body = await (
+            await api.get(
+                `/api/getProjectCompletions?completedFrom=${today}&completedTo=${today}`
+            )
+        ).json();
+        const item = body.items.find((task) => task._id === occurrence._id);
+        expect(item).toMatchObject({
+            title: occurrence.title,
+            projectRef: String(data.named.emptyProject._id),
+            seriesRef: occurrence.seriesRef,
+        });
+    });
+
+    test('uses the saved timezone for inclusive completion boundaries across DST', async ({
+        seed,
+        api,
+    }) => {
+        const data = await seed();
+        await withDb(async () => {
+            await UserDetails.updateOne(
+                { _id: data.primary.user._id },
+                { $set: { timeZone: 'America/New_York' } }
+            );
+            await TaskDetails.create([
+                completedTask(data, {
+                    title: 'Before local Monday',
+                    completedDate: new Date('2024-03-04T04:59:59.999Z'),
+                }),
+                completedTask(data, {
+                    title: 'At local Monday',
+                    completedDate: new Date('2024-03-04T05:00:00.000Z'),
+                }),
+                completedTask(data, {
+                    title: 'Late local Sunday',
+                    completedDate: new Date('2024-03-11T03:59:59.999Z'),
+                }),
+                completedTask(data, {
+                    title: 'At next local Monday',
+                    completedDate: new Date('2024-03-11T04:00:00.000Z'),
+                }),
+            ]);
+        });
+
+        const body = await (
+            await api.get(
+                '/api/getProjectCompletions?completedFrom=2024-03-04&completedTo=2024-03-10'
+            )
+        ).json();
+
+        expect(body.items.map((task) => task.title)).toEqual([
+            'Late local Sunday',
+            'At local Monday',
+        ]);
+    });
+
+    test('returns an empty completion window and rejects invalid bounds', async ({ seed, api }) => {
+        await seed();
+
+        const empty = await (
+            await api.get(
+                '/api/getProjectCompletions?completedFrom=2000-01-03&completedTo=2000-01-09'
+            )
+        ).json();
+        expect(empty).toMatchObject({ success: true, items: [] });
+
+        for (const query of [
+            '',
+            '?completedFrom=2024-03-04&completedTo=not-a-date',
+            '?completedFrom=2024-03-11&completedTo=2024-03-10',
+        ]) {
+            const body = await (await api.get(`/api/getProjectCompletions${query}`)).json();
+            expect(body.success).toBe(false);
+            expect(body.log).toBeTruthy();
+        }
+    });
+
+    test('requires authentication for project completion history', async ({ apiAnon }) => {
+        const response = await apiAnon.get(
+            '/api/getProjectCompletions?completedFrom=2024-03-04&completedTo=2024-03-10'
+        );
+        expect(response.status()).toBe(401);
     });
 
     test('creates a task', async ({ seed, api }) => {
@@ -125,6 +296,37 @@ test.describe('tasks', () => {
 
         const after = await (await api.get('/api/getUserTasks')).json();
         expect(titles(after.taskList)).toContain('Renamed by the test');
+    });
+
+    test('does not allow edits to forge server-owned completion identity', async ({ seed, api }) => {
+        const data = await seed();
+        const task = data.named.proposal;
+        const forgedCompletion = new Date('2024-03-06T12:00:00.000Z');
+
+        const response = await api.post('/api/editTask', {
+            data: {
+                task: {
+                    _id: String(task._id),
+                    title: 'Legitimate title edit',
+                    completed: true,
+                    completedDate: forgedCompletion,
+                    userRef: data.other.user._id,
+                    seriesRef: data.named.weekdaysSeries._id,
+                    occurrenceDate: forgedCompletion,
+                    scheduledDate: forgedCompletion,
+                },
+            },
+        });
+        expect((await response.json()).success).toBe(true);
+
+        const saved = await withDb(() => TaskDetails.findById(task._id));
+        expect(saved.title).toBe('Legitimate title edit');
+        expect(saved.completed).not.toBe(true);
+        expect(saved.completedDate).toBeFalsy();
+        expect(String(saved.userRef)).toBe(String(data.primary.user._id));
+        expect(saved.seriesRef).toBeNull();
+        expect(saved.occurrenceDate).toBeNull();
+        expect(saved.scheduledDate).toBeFalsy();
     });
 
     test('rejects a self-referencing dependency', async ({ seed, api }) => {
