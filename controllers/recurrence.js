@@ -21,7 +21,7 @@ const {
 } = require('../utils/temporal');
 
 const FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'];
-const UNAVAILABLE_BEHAVIORS = ['skip', 'next-available'];
+const WHEN_UNSCHEDULABLE_BEHAVIORS = ['skip', 'next-available'];
 const DEFAULT_UNAVAILABLE_BEHAVIOR = 'skip';
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -53,9 +53,9 @@ function validateRecurrence(rule) {
     if (
         rule.unavailableBehavior !== undefined
         && rule.unavailableBehavior !== null
-        && !UNAVAILABLE_BEHAVIORS.includes(rule.unavailableBehavior)
+        && !WHEN_UNSCHEDULABLE_BEHAVIORS.includes(rule.unavailableBehavior)
     ) {
-        return `Recurrence unavailableBehavior must be one of: ${UNAVAILABLE_BEHAVIORS.join(', ')}`;
+        return `Recurrence unavailableBehavior must be one of: ${WHEN_UNSCHEDULABLE_BEHAVIORS.join(', ')}`;
     }
 
     if (rule.interval !== undefined && rule.interval !== null) {
@@ -159,7 +159,7 @@ function normaliseLegacyRepeat(task) {
 }
 
 function recurrenceUnavailableBehavior(rule) {
-    return UNAVAILABLE_BEHAVIORS.includes(rule?.unavailableBehavior)
+    return WHEN_UNSCHEDULABLE_BEHAVIORS.includes(rule?.unavailableBehavior)
         ? rule.unavailableBehavior
         : DEFAULT_UNAVAILABLE_BEHAVIOR;
 }
@@ -526,7 +526,7 @@ async function expandSeries(template, rule, today, horizonEnd) {
 
 module.exports = {
     FREQUENCIES,
-    UNAVAILABLE_BEHAVIORS,
+    WHEN_UNSCHEDULABLE_BEHAVIORS,
     DEFAULT_UNAVAILABLE_BEHAVIOR,
     WEEKDAY_NAMES,
     MAX_OCCURRENCES_PER_SERIES,

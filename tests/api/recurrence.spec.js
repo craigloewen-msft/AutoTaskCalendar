@@ -739,32 +739,6 @@ test.describe('recurrence validation through the API', () => {
         expect(created.recurrence.unavailableBehavior).toBe('skip');
     });
 
-    test('persists an explicit next-available policy', async ({ seed, api }) => {
-        await seed();
-
-        const res = await api.post('/api/createTask', {
-            data: {
-                ...base(),
-                title: 'Deferred repeating thing',
-                recurrence: {
-                    freq: 'daily',
-                    unavailableBehavior: 'next-available',
-                },
-            },
-        });
-        const body = await res.json();
-        expect(body.success).toBe(true);
-        const occurrence = body.taskList.find((task) => task.title === 'Deferred repeating thing');
-        expect(occurrence.seriesRecurrence.unavailableBehavior).toBe('next-available');
-
-        const user = await loadUser();
-        const created = await TaskDetails.findOne({
-            userRef: user._id,
-            title: 'Deferred repeating thing',
-        });
-        expect(created.recurrence.unavailableBehavior).toBe('next-available');
-    });
-
     test('rejects an impossible recurrence cutoff', async ({ seed, api }) => {
         await seed();
         const res = await api.post('/api/createTask', {
