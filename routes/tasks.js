@@ -285,9 +285,17 @@ function createTaskRoutes(config, authenticateToken) {
                 return res.send(returnFailure('Task not found'));
             }
 
-            // Reflect a changed rule immediately, as on create.
-            if (task.recurrence !== undefined) {
-                await expandRecurrences(user, SCHEDULING_HORIZON_DAYS);
+            // Refresh every series edit immediately. Expansion also synchronizes authored
+            // template fields onto pending occurrences, even when the rule was not posted.
+            const isSeriesEdit = isOccurrence
+                || !!existing?.recurrence?.freq
+                || !!existing?.repeat
+                || !!update.recurrence?.freq
+                || !!update.repeat;
+            if (isSeriesEdit) {
+                await expandRecurrences(user, SCHEDULING_HORIZON_DAYS, {
+                    synchronizeSeriesId: targetId,
+                });
             }
 
             return res.json({ success: true });

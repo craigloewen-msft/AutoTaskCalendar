@@ -73,8 +73,13 @@ On each run, per series:
 
 Each occurrence inherits title, notes, duration, chunking, priority, dependencies, and
 `projectRef` from its template, and gets `dueDate` = its canonical civil-date marker, which
-drives the scheduler's deadline ordering. Project inheritance keeps active and completed
-occurrences aligned with the series throughout Calendar and Weekly Plan.
+drives the scheduler's deadline ordering.
+
+Editing an occurrence writes these authored fields to the template, then refreshes every
+pending occurrence in that series immediately. Their identity and scheduler placement stay
+intact. Completed occurrences are history, so later series edits never rewrite their saved
+fields or project. Normal expansion does not refresh existing occurrences, preserving
+per-occurrence progress such as duration remaining after a chunk is completed.
 
 ### Why the two extra fields
 
@@ -135,7 +140,7 @@ expansion recreates it as a duplicate.
 | You complete an occurrence | That document is marked complete. The next one already exists. Two ticks = two records, each with its own date |
 | You miss a skip-policy occurrence | The past incomplete occurrence is deleted, so chores do not pile up |
 | You miss a next-available occurrence | It remains pending and can be scheduled on a later run |
-| You edit anything on an occurrence | The edit applies to the **whole series** (v1). The modal says so |
+| You edit anything on an occurrence | The edit applies to the **whole series** (v1). Pending occurrences refresh immediately; completed history stays unchanged. The modal says so |
 | You delete an occurrence | The whole series goes: template + incomplete occurrences. Completed ones stay |
 | You pick a non-working day | The occurrence is still created. Skip leaves it unscheduled; next-available moves it to a later working slot |
 | The day is already full | Skip leaves it unscheduled; next-available carries it forward, but never earlier than its occurrence date |

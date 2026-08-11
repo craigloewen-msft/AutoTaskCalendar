@@ -388,7 +388,7 @@ const INHERITED_FIELDS = [
  * Idempotent: keyed on (seriesRef, occurrenceDate), so running it twice is a no-op.
  * Completed occurrences are never pruned or regenerated — they are the user's history.
  */
-async function expandRecurrences(user, horizonDays) {
+async function expandRecurrences(user, horizonDays, { synchronizeSeriesId = null } = {}) {
     const todayValue = todayInZone(user.timeZone);
     const today = civilDay(todayValue);
     const horizonEnd = civilDay(addDateOnlyDays(todayValue, horizonDays));
@@ -425,7 +425,9 @@ async function expandRecurrences(user, horizonDays) {
             await template.save();
         }
 
-        await expandSeries(template, rule, today, horizonEnd);
+        const synchronizePending = !!synchronizeSeriesId
+            && template._id.toString() === synchronizeSeriesId.toString();
+        await expandSeries(template, rule, today, horizonEnd, { synchronizePending });
     }
 
     // Skip-policy chores never pile up. Deferred occurrences remain eligible across runs.
@@ -465,7 +467,7 @@ async function pruneOccurrencesOfCompletedSeries(user) {
 }
 
 /** Materialise one series' occurrences and prune its stale future ones. */
-async function expandSeries(template, rule, today, horizonEnd) {
+async function expandSeries(template, rule, today, horizonEnd, { synchronizePending }) {
     const anchor = template.startDate || template.occurrenceDate || today.toDate();
 
     // Generate from today rather than the anchor: past occurrences are pruned anyway.
@@ -492,15 +494,33 @@ async function expandSeries(template, rule, today, horizonEnd) {
 
     // Survivors keep their identity, which is what makes a re-run a no-op.
     const staleSet = new Set(staleIds.map((id) => id.toString()));
-    const taken = new Set(
-        existing
-            .filter((t) => !staleSet.has(t._id.toString()))
-            .map((t) => t.occurrenceDate.getTime())
-    );
+    const survivors = existing.filter((t) => !staleSet.has(t._id.toString()));
+    const taken = new Set(survivors.map((t) => t.occurrenceDate.getTime()));
 
     const inherited = {};
     for (const field of INHERITED_FIELDS) {
         inherited[field] = template[field];
+    }
+
+    // Only explicit series edits refresh survivors. Normal expansion must preserve
+    // per-occurrence progress such as duration remaining after partial chunk completion.
+    if (synchronizePending) {
+        const inheritedSet = {};
+        const inheritedUnset = {};
+        for (const field of INHERITED_FIELDS) {
+            if (template[field] === undefined) {
+                inheritedUnset[field] = 1;
+            } else {
+                inheritedSet[field] = template[field];
+            }
+        }
+
+        const pendingSurvivorIds = survivors.filter((t) => !t.completed).map((t) => t._id);
+        if (pendingSurvivorIds.length > 0) {
+            const update = { $set: inheritedSet };
+            if (Object.keys(inheritedUnset).length > 0) update.$unset = inheritedUnset;
+            await TaskDetails.updateMany({ _id: { $in: pendingSurvivorIds } }, update);
+        }
     }
 
     const toCreate = wanted

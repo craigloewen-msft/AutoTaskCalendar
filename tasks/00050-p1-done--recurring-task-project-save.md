@@ -17,6 +17,15 @@ This affects other template-owned edits too: the documented “edits apply to th
 
 A project selected while editing any occurrence is saved on the series and immediately reflected by every pending occurrence. Reopening the task, reloading Calendar, and viewing project-grouped task data all show the saved project. New occurrences inherit it as well.
 
+## Completed
+
+Recurring-series edits now synchronize all template-owned fields—title, notes, duration,
+chunking, priority, dependencies, and project—onto every pending occurrence immediately.
+Completed occurrences remain immutable, and occurrence identity plus scheduler placement are
+preserved. Normal expansion leaves existing occurrence fields alone so partial chunk progress
+survives scheduling. Test changes developed for this task were removed at the user's request.
+After rebasing onto `main`, the pre-existing `npm test` suite passes all 196 tests.
+
 ## Implementation
 
 1. Update recurrence inheritance in `controllers/recurrence.js`:
@@ -30,14 +39,6 @@ A project selected while editing any occurrence is saved on the series and immed
 
 No frontend behavior change should be necessary unless implementation testing shows that the shared editor is not posting the selected `projectRef`; its current request construction already does so.
 
-## Regression coverage
-
-Add focused Playwright coverage for both layers:
-
-- **API recurrence spec:** edit a series through one of its occurrence IDs and assign an owned project; assert the template and all pending occurrences carry that project immediately, including for a minimal edit payload without `recurrence`. Assert a completed occurrence retains its historical project value.
-- **Materialisation spec:** create or expand a recurring series with a project and assert newly generated occurrences inherit it.
-- **Calendar UI spec:** schedule/open an existing recurring occurrence from the task sidebar, choose a seeded project, click **Save changes**, reload Calendar, reopen the occurrence, and assert the project remains selected. Confirm persistence in MongoDB so the test covers the complete UI → API → template → occurrence path.
-
 ## Acceptance criteria
 
 - Saving a project from an existing recurring occurrence succeeds and survives a page reload.
@@ -47,4 +48,4 @@ Add focused Playwright coverage for both layers:
 - Completed occurrences remain unchanged as historical records.
 - Other series-owned edits consistently refresh pending occurrences without changing occurrence identity or scheduling state.
 - Invalid or cross-user projects remain rejected by the existing ownership validation.
-- Targeted recurrence and Calendar UI specs pass, followed by the full `npm test` suite during finalization.
+- The pre-existing `npm test` suite passes during finalization.
