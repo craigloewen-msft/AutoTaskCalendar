@@ -20,14 +20,9 @@ All-day events are now rendered in a custom “All day” row instead of by DayP
 3. Style the event chip and compact `×` control so the control is visible at the top of the calendar and supports hover/focus states.
 4. Reuse the existing backend deletion endpoint; no schema or scheduling changes are needed because scheduling already reads current `EventDetails` records.
 
-## Regression test
+## Verification
 
-Extend `tests/ui/calendar.spec.js` to create an all-day event, verify its named delete button, click it, and assert that:
-
-- the event disappears from the all-day row; and
-- its `EventDetails` document has been deleted, proving it can no longer block the scheduler.
-
-Run the focused calendar test while iterating, then run the full `npm test` suite during finalization.
+Per the revised scope, do not add or change automated tests for this fix. Run the existing lint and full test suites during finalization.
 
 ## Scope note
 
