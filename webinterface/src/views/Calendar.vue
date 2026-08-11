@@ -91,7 +91,16 @@
             :data-event-date="event.allDayStart"
             :data-event-end="event.allDayEnd"
           >
-            {{ allDayEventRange(event) }} · {{ event.title }}
+            <span>{{ allDayEventRange(event) }} · {{ event.title }}</span>
+            <button
+              class="all-day-delete"
+              type="button"
+              :aria-label="`Delete event: ${event.title}`"
+              :title="`Delete event: ${event.title}`"
+              @click.stop="deleteAllDayEvent(event)"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
           </span>
         </div>
         <div class="calendar-container">
@@ -313,6 +322,20 @@ export default {
       return lastDay && lastDay !== event.allDayStart
         ? `${event.allDayStart} – ${lastDay}`
         : event.allDayStart;
+    },
+    async deleteAllDayEvent(event) {
+      try {
+        const response = await this.$http.post("/api/deleteEvent", {
+          eventId: event._id,
+        });
+        if (!response.data.success) {
+          console.error(response.data.log);
+          return;
+        }
+        this.allDayEvents = this.allDayEvents.filter(({ _id }) => _id !== event._id);
+      } catch (error) {
+        console.error(error);
+      }
     },
     isRecurringTask(task) {
       return !!(task?.seriesRef || task?.repeat);
@@ -1092,9 +1115,38 @@ export default {
 }
 
 .all-day-event {
-  padding: 3px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 5px 3px 8px;
   border-radius: 4px;
   background: #a27cf9;
   color: #fff;
+}
+
+.all-day-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.2);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.all-day-delete:hover,
+.all-day-delete:focus-visible {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.all-day-delete:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
 }
 </style>

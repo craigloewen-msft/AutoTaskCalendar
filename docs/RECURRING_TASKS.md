@@ -71,9 +71,10 @@ On each run, per series:
 4. Delete **past incomplete** occurrences for skip-policy series. Next-available occurrences
    remain pending across runs until they can be placed or completed.
 
-Each occurrence inherits title, notes, duration, chunking, priority and dependencies from
-its template, and gets `dueDate` = its canonical civil-date marker, which drives the
-scheduler's deadline ordering.
+Each occurrence inherits title, notes, duration, chunking, priority, dependencies, and
+`projectRef` from its template, and gets `dueDate` = its canonical civil-date marker, which
+drives the scheduler's deadline ordering. Project inheritance keeps active and completed
+occurrences aligned with the series throughout Calendar and Weekly Plan.
 
 ### Why the two extra fields
 

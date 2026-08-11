@@ -150,6 +150,7 @@ const ProjectDetail = new Schema({
 
 // Expansion dedupes on this key, so re-runs never duplicate occurrences.
 TaskDetail.index({ seriesRef: 1, occurrenceDate: 1 });
+TaskDetail.index({ userRef: 1, completed: 1, completedDate: -1, projectRef: 1 });
 
 // Add a new schema for events
 const EventDetail = new Schema({

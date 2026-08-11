@@ -378,6 +378,7 @@ const INHERITED_FIELDS = [
     'breakUpTaskChunkDuration',
     'priority',
     'dependsOn',
+    'projectRef',
 ];
 
 /**

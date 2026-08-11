@@ -212,9 +212,8 @@ through finished goals the same way it pages through finished tasks.
   only because that is what bounds the payload.
 - **No per-project task rollups.** The client already loads `/api/getUserTasks`, which
   carries `projectRef` on every task, so per-project active counts are a `reduce` over data
-  the page holds anyway. If a future phase needs *completed*-per-project counts (which
-  cannot be derived from the active list), give that its own small endpoint — do not extend
-  `getCompass`.
+  the page holds anyway. Weekly Plan gets its previous-week completion detail from the
+  separate, bounded `/api/getProjectCompletions` endpoint; do not extend `getCompass`.
 
 ### Validation
 
@@ -324,8 +323,10 @@ events, and a failure there is logged but never blocks the calendar.
 `/weekly-plan` is the Monday–Sunday creation lens over Compass. It renders the same live
 Role → Goal → Project hierarchy with descriptions, groups existing incomplete tasks by
 `projectRef` and `dueDate`, and puts a compact normal-task form under every started project.
-Clicking any task opens the full task editor in place, so its details can be changed, completed,
-or deleted without leaving the review.
+When a project has matching history, a collapsed **Completed last week** disclosure uses the
+bounded `/api/getProjectCompletions` read to show task titles completed during the previous
+Monday–Sunday in the user's saved timezone. Clicking any active task opens the full task editor
+in place, so its details can be changed, completed, or deleted without leaving the review.
 
 Weekly Plan does not add a planning model or selection field. Creating a task is the planning
 action, and the task's existing dates are the record of which week it was intended for. See
