@@ -372,17 +372,28 @@ test.describe('scheduling', () => {
 
         const user = await loadUser();
         const events = await taskEvents(user);
-        const occurrenceIds = new Set(
-            (await TaskDetails.find({ seriesRef: template._id })).map((o) => o._id.toString())
+        const occurrenceDays = new Map(
+            (await TaskDetails.find({ seriesRef: template._id }))
+                .map((o) => [o._id.toString(), o.occurrenceDate])
         );
 
-        const seriesEvents = events.filter(
-            (e) => e.taskRef && occurrenceIds.has(e.taskRef.toString())
-        );
+        // Today's own occurrence is excluded deliberately. Run this after working hours
+        // and there is no slot left today, so the scheduler moves it to the next working
+        // day -- correct behaviour, but it would make the assertion depend on the clock.
+        const todayStart = moment().startOf('day').valueOf();
+        const seriesEvents = events.filter((e) => {
+            const occurrenceDate = e.taskRef && occurrenceDays.get(e.taskRef.toString());
+            return occurrenceDate && occurrenceDate.getTime() > todayStart;
+        });
 
         expect(seriesEvents.length).toBeGreaterThan(0);
         for (const event of seriesEvents) {
-            expect(['Monday', 'Tuesday']).toContain(dayName(event.startDate));
+            const day = dayName(event.startDate);
+
+            expect(['Monday', 'Tuesday']).toContain(day);
+            // Stronger than the rule alone: each occurrence keeps its own weekday rather
+            // than sliding onto the other one.
+            expect(day).toBe(dayName(occurrenceDays.get(event.taskRef.toString())));
         }
     });
 
