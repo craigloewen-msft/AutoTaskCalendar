@@ -305,8 +305,9 @@ a branch for any caller that genuinely wants that.
 
 ### On the Calendar page
 
-The task modal's Advanced Options carry a **Project (optional)** select, grouped by the
-ladder above each project:
+The shared task editor carries a **Project (optional)** select, grouped by the ladder above
+each project. Calendar and Weekly Plan use this same modern editor for both task creation and
+editing:
 
 ```
 Project (optional)     [ ─ none ─                  ▾ ]

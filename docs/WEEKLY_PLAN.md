@@ -44,9 +44,10 @@ role, goal, or project editing in the planning page.
 
 ### Edit and manage tasks
 
-Every task row is a keyboard-accessible button. Selecting one opens the task editor over the
-Weekly Plan page, with title, dates, duration, priority, project, notes, backlog, chunking,
-recurrence, and dependency controls. The same view can complete or delete the task.
+Every task row is a keyboard-accessible button. Selecting one opens the shared task editor
+over the Weekly Plan page, with title, dates, duration, priority, project, notes, backlog,
+chunking, recurrence, and dependency controls. Calendar uses this exact same editor for Add
+Task and task editing. The same view can complete or delete the task.
 
 Saving reloads the incomplete task list and closes the editor. Because Weekly Plan is derived
 from normal task fields, a changed due date or project immediately moves the task to its new
@@ -176,8 +177,9 @@ availability. Future Compass scheduling influence remains a separate, higher-ris
 
 ## Work on Weekly Plan
 
-The page is `webinterface/src/views/WeeklyPlan.vue`; the in-page editor is
-`webinterface/src/components/WeeklyTaskEditor.vue`. Its route and navigation live in
+The page is `webinterface/src/views/WeeklyPlan.vue`; the shared modern editor is
+`webinterface/src/components/TaskEditor.vue` and is used by both Weekly Plan and Calendar.
+Its route and navigation live in
 `webinterface/src/router/index.js` and `webinterface/src/App.vue`. Authentication remains in
 the normal router guard, and page state stays local rather than expanding the auth-focused
 Vuex store.

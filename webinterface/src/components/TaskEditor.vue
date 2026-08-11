@@ -5,14 +5,14 @@
       class="task-editor"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="weekly-task-editor-title"
-      data-test="weekly-task-editor"
+      aria-labelledby="task-editor-title"
+      data-test="task-editor"
       tabindex="-1"
     >
       <header class="editor-header">
         <div>
-          <p class="editor-eyebrow">Manage task</p>
-          <h2 id="weekly-task-editor-title">Edit task</h2>
+          <p class="editor-eyebrow">{{ isEdit ? "Manage task" : "New task" }}</p>
+          <h2 id="task-editor-title">{{ isEdit ? "Edit task" : "Add task" }}</h2>
         </div>
         <button class="close-button" type="button" aria-label="Close task editor" @click="close">
           ×
@@ -20,20 +20,20 @@
       </header>
 
       <div class="editor-body">
-        <p v-if="isSeriesTask" class="series-banner" data-test="weekly-series-banner">
+        <p v-if="isSeriesTask" class="series-banner" data-test="series-banner">
           <span aria-hidden="true">↻</span>
           Part of a repeating series — edits and deletion apply to the whole series.
         </p>
 
-        <p v-if="error" class="editor-error" role="alert" data-test="weekly-editor-error">
+        <p v-if="error" class="editor-error" role="alert" data-test="task-editor-error">
           {{ error }}
         </p>
 
-        <form id="weekly-task-edit-form" @submit.prevent="save">
+        <form id="task-editor-form" novalidate @submit.prevent="save">
           <div class="form-group">
-            <label for="weekly-edit-title">Task title*</label>
+            <label for="task-title">Task title*</label>
             <input
-              id="weekly-edit-title"
+              id="task-title"
               ref="titleInput"
               v-model="draft.title"
               class="form-control"
@@ -44,9 +44,9 @@
 
           <div class="editor-grid">
             <div class="form-group">
-              <label for="weekly-edit-duration">Duration in minutes*</label>
+              <label for="task-duration">Duration in minutes*</label>
               <input
-                id="weekly-edit-duration"
+                id="task-duration"
                 v-model.number="draft.duration"
                 class="form-control"
                 type="number"
@@ -57,9 +57,9 @@
             </div>
 
             <div class="form-group">
-              <label for="weekly-edit-priority">Priority</label>
+              <label for="task-priority">Priority</label>
               <input
-                id="weekly-edit-priority"
+                id="task-priority"
                 v-model.number="draft.priority"
                 class="form-control"
                 type="number"
@@ -69,9 +69,9 @@
             </div>
 
             <div class="form-group">
-              <label for="weekly-edit-start">Start date*</label>
+              <label for="task-start-date">Start date*</label>
               <input
-                id="weekly-edit-start"
+                id="task-start-date"
                 v-model="draft.startDate"
                 class="form-control date-input"
                 type="date"
@@ -81,9 +81,9 @@
             </div>
 
             <div v-if="!draft.isBacklog" class="form-group">
-              <label for="weekly-edit-due">Due date*</label>
+              <label for="task-due-date">Due date*</label>
               <input
-                id="weekly-edit-due"
+                id="task-due-date"
                 v-model="draft.dueDate"
                 class="form-control date-input"
                 type="date"
@@ -93,14 +93,14 @@
             </div>
           </div>
 
-          <label class="checkbox-row" for="weekly-edit-backlog">
-            <input id="weekly-edit-backlog" v-model="draft.isBacklog" type="checkbox" />
+          <label class="checkbox-row" for="task-is-backlog">
+            <input id="task-is-backlog" v-model="draft.isBacklog" type="checkbox" />
             Backlog task
           </label>
 
           <div class="form-group">
-            <label for="weekly-edit-project">Project</label>
-            <select id="weekly-edit-project" v-model="draft.projectRef" class="form-control">
+            <label for="task-project">Project</label>
+            <select id="task-project" v-model="draft.projectRef" class="form-control">
               <option :value="null">— none —</option>
               <option v-if="currentProjectOutsideCompass" :value="draft.projectRef">
                 Current project (outside active Compass)
@@ -114,24 +114,19 @@
           </div>
 
           <div class="form-group">
-            <label for="weekly-edit-notes">Notes</label>
-            <textarea
-              id="weekly-edit-notes"
-              v-model="draft.notes"
-              class="form-control"
-              rows="3"
-            ></textarea>
+            <label for="task-notes">Notes</label>
+            <textarea id="task-notes" v-model="draft.notes" class="form-control" rows="3"></textarea>
           </div>
 
-          <label class="checkbox-row" for="weekly-edit-break-up">
-            <input id="weekly-edit-break-up" v-model="draft.breakUpTask" type="checkbox" />
+          <label class="checkbox-row" for="task-break-up-task">
+            <input id="task-break-up-task" v-model="draft.breakUpTask" type="checkbox" />
             Break task into chunks
           </label>
 
           <div v-if="draft.breakUpTask" class="form-group chunk-field">
-            <label for="weekly-edit-chunk-duration">Chunk duration in minutes*</label>
+            <label for="task-break-up-task-chunk-duration">Chunk duration in minutes*</label>
             <input
-              id="weekly-edit-chunk-duration"
+              id="task-break-up-task-chunk-duration"
               v-model.number="draft.breakUpTaskChunkDuration"
               class="form-control"
               type="number"
@@ -144,9 +139,9 @@
           <RepeatEditor v-model="draft.recurrence" :working-days="workingDays" />
 
           <div class="form-group">
-            <label for="weekly-edit-dependencies">Dependencies</label>
+            <label for="task-dependencies">Dependencies</label>
             <select
-              id="weekly-edit-dependencies"
+              id="task-dependencies"
               v-model="draft.dependsOn"
               class="form-control"
               multiple
@@ -162,13 +157,17 @@
       </div>
 
       <footer class="editor-footer">
-        <div class="destructive-actions">
+        <div v-if="isEdit" class="task-actions">
           <button
-            class="btn btn-outline-success"
+            v-if="showFollowUp"
+            class="btn btn-outline-primary"
             type="button"
             :disabled="busy"
-            @click="completeTask"
+            @click="$emit('follow-up', task)"
           >
+            Follow up
+          </button>
+          <button class="btn btn-outline-success" type="button" :disabled="busy" @click="completeTask">
             Complete
           </button>
           <button class="btn btn-outline-danger" type="button" :disabled="busy" @click="deleteTask">
@@ -179,8 +178,8 @@
           <button class="btn btn-secondary" type="button" :disabled="busy" @click="close">
             Cancel
           </button>
-          <button class="btn btn-primary" type="submit" form="weekly-task-edit-form" :disabled="busy">
-            {{ busy ? "Saving…" : "Save changes" }}
+          <button class="btn btn-primary" type="submit" form="task-editor-form" :disabled="busy">
+            {{ busy ? "Saving…" : isEdit ? "Save changes" : "Add task" }}
           </button>
         </div>
       </footer>
@@ -190,18 +189,23 @@
 
 <script>
 import RepeatEditor from "./RepeatEditor.vue";
-import { apiDateOnly } from "../utils/temporal";
+import { apiDateOnly, dateOnlyInTimeZone } from "../utils/temporal";
 
 export default {
-  name: "WeeklyTaskEditor",
+  name: "TaskEditor",
   components: { RepeatEditor },
   props: {
-    task: { type: Object, required: true },
+    task: { type: Object, default: null },
     tasks: { type: Array, default: () => [] },
     projectGroups: { type: Array, default: () => [] },
     workingDays: { type: Array, default: () => [] },
+    defaultStartDate: { type: String, default: "" },
+    defaultDueDate: { type: String, default: "" },
+    timeZone: { type: String, default: "UTC" },
+    completionChunkDuration: { type: Number, default: null },
+    showFollowUp: { type: Boolean, default: false },
   },
-  emits: ["close", "changed"],
+  emits: ["close", "changed", "follow-up"],
   data() {
     return {
       draft: this.buildDraft(this.task),
@@ -210,8 +214,11 @@ export default {
     };
   },
   computed: {
+    isEdit() {
+      return !!this.task?._id;
+    },
     isSeriesTask() {
-      return !!this.task.seriesRef;
+      return !!this.task?.seriesRef;
     },
     currentProjectOutsideCompass() {
       if (!this.draft.projectRef) return false;
@@ -220,7 +227,7 @@ export default {
       });
     },
     dependencyCandidates() {
-      return this.tasks.filter((candidate) => candidate._id !== this.task._id);
+      return this.tasks.filter((candidate) => candidate._id !== this.task?._id);
     },
   },
   mounted() {
@@ -233,18 +240,20 @@ export default {
   methods: {
     buildDraft(task) {
       return {
-        title: task.title || "",
-        duration: Number(task.duration) || 0,
-        priority: task.priority ?? 100,
-        startDate: apiDateOnly(task.startDate),
-        dueDate: apiDateOnly(task.dueDate) || "",
-        isBacklog: !!task.isBacklog,
-        projectRef: task.projectRef || null,
-        notes: task.notes || "",
-        breakUpTask: !!task.breakUpTask,
-        breakUpTaskChunkDuration: Number(task.breakUpTaskChunkDuration) || 30,
-        recurrence: clone(task.recurrence || task.seriesRecurrence || null),
-        dependsOn: [...(task.dependsOn || [])],
+        title: task?.title || "",
+        duration: Number(task?.duration) || 30,
+        priority: task?.priority ?? 100,
+        startDate: apiDateOnly(task?.startDate)
+          || this.defaultStartDate
+          || dateOnlyInTimeZone(this.timeZone),
+        dueDate: apiDateOnly(task?.dueDate) || this.defaultDueDate || "",
+        isBacklog: !!task?.isBacklog,
+        projectRef: task?.projectRef || null,
+        notes: task?.notes || "",
+        breakUpTask: !!task?.breakUpTask,
+        breakUpTaskChunkDuration: Number(task?.breakUpTaskChunkDuration) || 30,
+        recurrence: clone(task?.recurrence || task?.seriesRecurrence || null),
+        dependsOn: [...(task?.dependsOn || [])],
       };
     },
     validate() {
@@ -263,9 +272,8 @@ export default {
       }
       return "";
     },
-    taskPayload() {
+    fields() {
       return {
-        ...this.task,
         title: this.draft.title.trim(),
         duration: Number(this.draft.duration),
         priority: Number(this.draft.priority ?? 100),
@@ -288,14 +296,20 @@ export default {
       this.busy = true;
 
       try {
-        const response = await this.$http.post("/api/editTask", { task: this.taskPayload() });
+        const response = this.isEdit
+          ? await this.$http.post("/api/editTask", { task: { ...this.task, ...this.fields() } })
+          : await this.$http.post("/api/createTask", this.fields());
         if (!response.data.success) {
-          this.error = response.data.log || "Task could not be saved.";
+          this.error = response.data.log || `Task could not be ${this.isEdit ? "saved" : "created"}.`;
           return;
         }
-        await this.refreshAndClose();
+        if (response.data.taskList) {
+          this.$emit("changed", response.data.taskList);
+        } else {
+          await this.refreshAndClose();
+        }
       } catch (error) {
-        this.error = "Task could not be saved.";
+        this.error = `Task could not be ${this.isEdit ? "saved" : "created"}.`;
       } finally {
         this.busy = false;
       }
@@ -304,7 +318,12 @@ export default {
       this.error = "";
       this.busy = true;
       try {
-        const response = await this.$http.post("/api/completeTask", { taskId: this.task._id });
+        const response = this.completionChunkDuration
+          ? await this.$http.post("/api/completeTaskChunk", {
+            taskId: this.task._id,
+            chunkDuration: this.completionChunkDuration,
+          })
+          : await this.$http.post("/api/completeTask", { taskId: this.task._id });
         if (!response.data.success) {
           this.error = response.data.log || "Task could not be completed.";
           return;
@@ -480,7 +499,7 @@ function clone(value) {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.destructive-actions,
+.task-actions,
 .save-actions {
   display: flex;
   gap: 8px;
@@ -488,6 +507,19 @@ function clone(value) {
 
 .date-input {
   color-scheme: dark;
+}
+
+@media (max-width: 760px) {
+  .editor-footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .task-actions,
+  .save-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  }
 }
 
 @media (max-width: 620px) {
@@ -505,17 +537,6 @@ function clone(value) {
 
   .editor-grid {
     grid-template-columns: 1fr;
-  }
-
-  .editor-footer {
-    align-items: stretch;
-    flex-direction: column-reverse;
-  }
-
-  .destructive-actions,
-  .save-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
   }
 }
 </style>

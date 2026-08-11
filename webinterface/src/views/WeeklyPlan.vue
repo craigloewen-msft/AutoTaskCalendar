@@ -292,7 +292,7 @@
       </details>
     </BContainer>
 
-    <WeeklyTaskEditor
+    <TaskEditor
       v-if="selectedTask"
       :key="selectedTask._id"
       :task="selectedTask"
@@ -307,7 +307,7 @@
 
 <script>
 import { BContainer } from "bootstrap-vue-next";
-import WeeklyTaskEditor from "../components/WeeklyTaskEditor.vue";
+import TaskEditor from "../components/TaskEditor.vue";
 import { buildRoleColorMap } from "../utils/roleColors";
 import {
   apiDateOnly,
@@ -318,7 +318,7 @@ import {
 
 export default {
   name: "WeeklyPlan",
-  components: { BContainer, WeeklyTaskEditor },
+  components: { BContainer, TaskEditor },
   data() {
     const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
 

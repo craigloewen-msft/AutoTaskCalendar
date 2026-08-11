@@ -90,14 +90,14 @@ test.describe('weekly plan page', () => {
         const project = page.locator(`[data-project-id="${data.named.emptyProject._id}"]`);
         await project.getByRole('button', { name: /Edit this weekly task/ }).click();
 
-        const editor = page.locator('[data-test=weekly-task-editor]');
+        const editor = page.locator('[data-test=task-editor]');
         await expect(editor).toBeVisible();
-        await expect(editor.locator('#weekly-edit-title')).toHaveValue('Edit this weekly task');
-        await expect(editor.locator('#weekly-edit-duration')).toHaveValue('40');
+        await expect(editor.locator('#task-title')).toHaveValue('Edit this weekly task');
+        await expect(editor.locator('#task-duration')).toHaveValue('40');
 
-        await editor.locator('#weekly-edit-title').fill('Edited from Weekly Plan');
-        await editor.locator('#weekly-edit-duration').fill('55');
-        await editor.locator('#weekly-edit-due').fill(week.nextStartDate);
+        await editor.locator('#task-title').fill('Edited from Weekly Plan');
+        await editor.locator('#task-duration').fill('55');
+        await editor.locator('#task-due-date').fill(week.nextStartDate);
         await editor.getByRole('button', { name: 'Save changes' }).click();
 
         await expect(editor).toHaveCount(0);
@@ -126,7 +126,7 @@ test.describe('weekly plan page', () => {
 
         await openPlan(page);
         await page.getByRole('button', { name: /Complete from Weekly Plan/ }).click();
-        const editor = page.locator('[data-test=weekly-task-editor]');
+        const editor = page.locator('[data-test=task-editor]');
         await editor.getByRole('button', { name: 'Complete', exact: true }).click();
 
         await expect(editor).toHaveCount(0);

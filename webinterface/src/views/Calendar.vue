@@ -78,202 +78,21 @@
       </div>
       </div>
     </div>
-    <BModal
-      id="task-modal"
-      ref="addtaskmodal"
-      @ok="resolveTaskModal"
-      @hidden="resetTaskModal"
-      :title="this.selectedTask ? 'Edit Task' : 'Add Task'"
-    >
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-body">
-            <div v-if="input.error">{{ input.error }}</div>
-            <div v-if="isSeriesTask" class="series-banner" data-test="series-banner">
-              <span aria-hidden="true">&#8635;</span>
-              Part of a repeating series &mdash; changes apply to all occurrences.
-            </div>
-            <form ref="form" @submit.stop.prevent="handleSubmit">
-              <div class="form-group">
-                <label for="task-title">Task Title*</label>
-                <input
-                  type="text"
-                  v-model="input.taskTitle"
-                  class="form-control"
-                  id="task-title"
-                  placeholder="Enter task title"
-                />
-              </div>
-              <div v-if="!input.taskIsBacklog" class="form-group">
-                <label for="task-due-date">Due Date*</label>
-                <input
-                  type="date"
-                  v-model="input.taskDueDate"
-                  class="form-control date-input"
-                  id="task-due-date"
-                />
-              </div>
-              <div class="form-group">
-                <label for="task-duration">Duration*</label>
-                <input
-                  type="number"
-                  v-model="input.taskDuration"
-                  class="form-control"
-                  id="task-duration"
-                />
-              </div>
-              <div class="advanced-options-section">
-                <button
-                  type="button"
-                  class="btn btn-link advanced-options-toggle"
-                  @click="showAdvancedOptions = !showAdvancedOptions"
-                >
-                  <span class="toggle-icon">{{ showAdvancedOptions ? '▼' : '▶' }}</span>
-                  Advanced Options
-                </button>
-                <div v-show="showAdvancedOptions" class="advanced-options-content">
-                  <div class="form-group">
-                    <label for="task-priority">Priority (lower = higher priority)</label>
-                    <input
-                      type="number"
-                      v-model.number="input.taskPriority"
-                      class="form-control"
-                      id="task-priority"
-                      min="0"
-                      placeholder="100"
-                    />
-                  </div>
-                  <div class="form-group">
-                    <BFormCheckbox
-                      v-model="input.taskIsBacklog"
-                      class="form-control"
-                      id="task-is-backlog"
-                      >Mark as Backlog Task</BFormCheckbox
-                    >
-                  </div>
-                  <div class="form-group">
-                    <BFormCheckbox
-                      v-model="input.taskBreakUpTask"
-                      class="form-control"
-                      id="task-break-up-task"
-                      @change="onBreakUpTaskChange"
-                      >Break Up Task Into Chunks</BFormCheckbox
-                    >
-                  </div>
-                  <div v-if="input.taskBreakUpTask" class="form-group">
-                    <label for="task-break-up-task-chunk-duration"
-                      >Chunk Duration</label
-                    >
-                    <input
-                      type="number"
-                      v-model="input.taskBreakUpTaskChunkDuration"
-                      class="form-control"
-                      id="task-break-up-task-chunk-duration"
-                    />
-                  </div>
-                  <div class="form-group">
-                    <label for="task-start-date">Start Date</label>
-                    <input
-                      type="date"
-                      v-model="input.taskStartDate"
-                      class="form-control date-input"
-                      id="task-start-date"
-                    />
-                  </div>
-                  <RepeatEditor
-                    v-model="input.recurrence"
-                    :working-days="userWorkingDays"
-                  />
-                  <div class="form-group">
-                    <label for="task-notes">Notes</label>
-                    <input
-                      type="text"
-                      v-model="input.taskNotes"
-                      class="form-control"
-                      id="task-notes"
-                      placeholder="Enter task notes"
-                    />
-                  </div>
-                  <div class="form-group">
-                    <label for="task-project">Project (optional)</label>
-                    <select
-                      v-model="input.projectRef"
-                      class="form-control"
-                      id="task-project"
-                    >
-                      <option :value="null">— none —</option>
-                      <optgroup
-                        v-for="group in projectOptionGroups"
-                        :key="group.label"
-                        :label="group.label"
-                      >
-                        <option
-                          v-for="project in group.projects"
-                          :key="project._id"
-                          :value="project._id"
-                        >
-                          {{ project.title }}
-                        </option>
-                      </optgroup>
-                    </select>
-                    <small class="form-text text-muted">
-                      Links this task to a Compass project. See the Compass page.
-                    </small>
-                  </div>
-                  <div class="form-group">
-                    <label for="task-dependencies">Dependencies (must complete these first)</label>
-                    <select
-                      v-model="input.dependsOn"
-                      class="form-control"
-                      id="task-dependencies"
-                      multiple
-                      size="4"
-                    >
-                      <option
-                        v-for="task in availableTasksForDependencies"
-                        :key="task._id"
-                        :value="task._id"
-                      >
-                        {{ task.title }}
-                      </option>
-                    </select>
-                    <small class="form-text text-muted">
-                      Hold Ctrl (Cmd on Mac) to select multiple tasks
-                    </small>
-                  </div>
-                </div>
-              </div>
-              <div v-if="this.selectedTask" class="task-controls-buttons">
-                <button
-                  class="btn btn-secondary"
-                  v-on:click="toggleBacklog(selectedTask)"
-                >
-                  {{ selectedTask.isBacklog ? 'Remove from Backlog' : 'Move to Backlog' }}
-                </button>
-                <button
-                  class="btn btn-primary"
-                  v-on:click="openFollowUpModal(selectedTask)"
-                >
-                  Set Follow Up
-                </button>
-                <button
-                  class="btn btn-primary"
-                  v-on:click="completeTask(selectedTask._id)"
-                >
-                  Complete
-                </button>
-                <button
-                  class="btn btn-danger"
-                  v-on:click="deleteTask(selectedTask._id)"
-                >
-                  Delete
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    </BModal>
+    <TaskEditor
+      v-if="taskEditorOpen"
+      :key="selectedTask?._id || 'new-task'"
+      :task="selectedTask"
+      :tasks="taskList || []"
+      :project-groups="projectOptionGroups"
+      :working-days="userWorkingDays"
+      :time-zone="$store.state.user?.timeZone || 'UTC'"
+      :default-start-date="editorDefaultStartDate"
+      :completion-chunk-duration="selectedChunkDuration"
+      show-follow-up
+      @close="closeTaskEditor"
+      @changed="applyTaskChanges"
+      @follow-up="openFollowUpModal"
+    />
     <BModal
       id="followup-modal"
       ref="followupmodal"
@@ -309,8 +128,8 @@
 
 <script>
 import { DayPilot, DayPilotCalendar } from "@daypilot/daypilot-lite-vue";
-import { BButton, BModal, BFormCheckbox } from 'bootstrap-vue-next';
-import RepeatEditor from "../components/RepeatEditor.vue";
+import { BButton, BModal } from 'bootstrap-vue-next';
+import TaskEditor from "../components/TaskEditor.vue";
 import {
   addCalendarDays,
   apiDateOnly,
@@ -331,8 +150,7 @@ export default {
     DayPilotCalendar,
     BButton,
     BModal,
-    BFormCheckbox,
-    RepeatEditor
+    TaskEditor
   },
   data() {
     return {
@@ -453,28 +271,14 @@ export default {
       taskList: null,
       input: {
         taskTitle: null,
-        taskDueDate: null,
-        taskDuration: null,
-        taskNotes: null,
-        taskStartDate: this.changeDateToShortCalendarFormat(new Date()),
-        taskBreakUpTask: false,
-        taskBreakUpTaskChunkDuration: 30,
-        error: null,
-        repeat: null,
-        recurrence: null,
         followUpDays: null,
-        taskIsBacklog: false,
-        dependsOn: [],
-        taskPriority: 100,
-        projectRef: null,
+        error: null,
       },
-      showAdvancedOptions: false,
-      showModal: false,
+      taskEditorOpen: false,
       currentDate: dateOnlyInTimeZone(this.$store.state.user?.timeZone),
       selectedTask: null,
       selectedEvent: null,
       allDayEvents: [],
-      taskModalShow: false,
       // Compass roles, nested with their goals and projects.
       compassRoles: [],
     };
@@ -485,11 +289,6 @@ export default {
       return lastDay && lastDay !== event.allDayStart
         ? `${event.allDayStart} – ${lastDay}`
         : event.allDayStart;
-    },
-    onBreakUpTaskChange(value) {
-      if (value) {
-        this.input.taskBreakUpTaskChunkDuration = 60;
-      }
     },
     async loadTasks() {
       const taskDataResponse = await this.$http.get("/api/getUserTasks/");
@@ -558,54 +357,6 @@ export default {
       const taskDataResponse = await this.$http.get("/api/synccalendar/");
       this.loadCalendarEvents();
     },
-    async addTask(bvModalEvent) {
-      // Prevent modal from closing
-      bvModalEvent.preventDefault();
-
-      this.input.error = "";
-
-      if (!this.input.taskTitle) {
-        this.input.error = "Need task title";
-      } else if (!this.input.taskIsBacklog && !this.input.taskDueDate) {
-        this.input.error = "Need task due date for non-backlog tasks";
-      } else if (!this.input.taskDuration) {
-        this.input.error = "Need duration";
-      }
-
-      if (this.input.error) {
-        return;
-      }
-
-      this.$nextTick(() => {
-        this.$refs.addtaskmodal.hide();
-      });
-
-      const inputDueDate = this.input.taskDueDate || null;
-      const inputStartDate = this.input.taskStartDate ||
-        dateOnlyInTimeZone(this.$store.state.user.timeZone);
-
-      try {
-        const response = await this.$http.post("/api/createTask/", {
-          title: this.input.taskTitle,
-          dueDate: inputDueDate,
-          duration: this.input.taskDuration,
-          startDate: inputStartDate,
-          notes: this.input.taskNotes,
-          breakUpTask: this.input.taskBreakUpTask,
-          breakUpTaskChunkDuration: this.input.taskBreakUpTaskChunkDuration,
-          recurrence: this.input.recurrence,
-          isBacklog: this.input.taskIsBacklog,
-          dependsOn: this.input.dependsOn || [],
-          priority: this.input.taskPriority != null ? this.input.taskPriority : 100,
-          projectRef: this.input.projectRef || null,
-        });
-        this.taskList = response.data.taskList;
-
-        Object.keys(this.input).forEach((i) => (this.input[i] = null));
-      } catch (error) {
-        console.error(error);
-      }
-    },
     async createFollowUp(bvModalEvent) {
       // Prevent modal from closing
       bvModalEvent.preventDefault();
@@ -644,93 +395,6 @@ export default {
         this.$refs.followupmodal.hide();
       });
     },
-    async editTask(bvModalEvent) {
-      bvModalEvent.preventDefault();
-
-      // Set all of the input to the current task
-      this.selectedTask.title = this.input.taskTitle;
-      this.selectedTask.dueDate = this.input.taskDueDate || null;
-      this.selectedTask.duration = this.input.taskDuration;
-      this.selectedTask.notes = this.input.taskNotes;
-      this.selectedTask.startDate = this.input.taskStartDate;
-      this.selectedTask.breakUpTask = this.input.taskBreakUpTask;
-      this.selectedTask.breakUpTaskChunkDuration =
-        this.input.taskBreakUpTaskChunkDuration;
-
-      this.selectedTask.recurrence = this.input.recurrence;
-      this.selectedTask.isBacklog = this.input.taskIsBacklog;
-      this.selectedTask.dependsOn = this.input.dependsOn || [];
-      this.selectedTask.priority = this.input.taskPriority != null ? this.input.taskPriority : 100;
-      this.selectedTask.projectRef = this.input.projectRef || null;
-
-      try {
-        const response = await this.$http.post("/api/editTask/", {
-          task: this.selectedTask,
-        });
-        this.$nextTick(() => {
-          this.$refs.addtaskmodal.hide();
-        });
-      } catch (error) {
-        console.error(error);
-      }
-    },
-    async deleteTask(taskId) {
-      try {
-        const response = await this.$http.post(`/api/deleteTask`, { taskId });
-        // refresh task list after deletion
-        this.taskList = response.data.taskList;
-        this.$refs.addtaskmodal.hide();
-      } catch (error) {
-        console.error(error);
-      }
-    },
-    async completeTask(taskId) {
-      try {
-        let response;
-        if (this.selectedEvent?.tags.type === "task-chunk") {
-          const chunkDuration =
-            (this.selectedEvent.end.getTime() -
-              this.selectedEvent.start.getTime()) /
-            60000; // convert milliseconds to minutes
-          response = await this.$http.post(`/api/completeTaskChunk`, {
-            taskId,
-            chunkDuration,
-          });
-        } else {
-          response = await this.$http.post(`/api/completeTask`, { taskId });
-        }
-        // refresh task list after deletion
-        this.taskList = response.data.taskList;
-        this.$refs.addtaskmodal.hide();
-      } catch (error) {
-        console.error(error);
-      }
-    },
-    async toggleBacklog(task) {
-      try {
-        // Toggle the isBacklog status
-        task.isBacklog = !task.isBacklog;
-        
-        // Update the input to reflect the change
-        this.input.taskIsBacklog = task.isBacklog;
-        
-        // If moving to backlog, clear the due date
-        if (task.isBacklog) {
-          task.dueDate = null;
-          this.input.taskDueDate = null;
-        }
-        
-        // Save the updated task
-        const response = await this.$http.post("/api/editTask/", {
-          task: task,
-        });
-        
-        // Refresh the task list
-        this.loadTasks();
-      } catch (error) {
-        console.error(error);
-      }
-    },
     addDays(date, days) {
       return addCalendarDays(apiDateOnly(date) || localDateOnly(date), days);
     },
@@ -757,93 +421,51 @@ export default {
         console.error(error);
       }
     },
-    changeDateToShortCalendarFormat(inDate) {
-      return localDateOnly(inDate);
-    },
     openAddTaskModal() {
       this.selectedTask = null;
-
-      // Make all of this.input null
-      Object.keys(this.input).forEach((i) => (this.input[i] = null));
-      this.input.taskPriority = 100;
-      this.input.taskIsBacklog = false;
-      this.input.taskBreakUpTask = false;
-      this.input.dependsOn = [];
-      this.input.projectRef = null;
-      this.showAdvancedOptions = false;
-      this.$refs.addtaskmodal.show();
+      this.selectedEvent = null;
+      this.taskEditorOpen = true;
+    },
+    closeTaskEditor() {
+      this.taskEditorOpen = false;
+      this.selectedTask = null;
+      this.selectedEvent = null;
+    },
+    applyTaskChanges(taskList) {
+      this.taskList = taskList;
+      this.closeTaskEditor();
+      this.loadCalendarEvents();
     },
     openFollowUpModal(inputTask) {
+      this.taskEditorOpen = false;
       this.selectedTask = inputTask;
-
-      // Make all of this.input null
-      Object.keys(this.input).forEach((i) => (this.input[i] = null));
-
-      if (inputTask) {
-        this.input.taskTitle = inputTask.title;
-      }
-
-      this.$nextTick(() => {
-        this.$refs.addtaskmodal.hide();
-      });
-      
-      this.$refs.followupmodal.show();
+      this.input = {
+        taskTitle: inputTask?.title || null,
+        followUpDays: null,
+        error: null,
+      };
+      this.$nextTick(() => this.$refs.followupmodal.show());
     },
     openEditTaskModal(inputTask) {
+      if (!inputTask) return;
       this.selectedTask = inputTask;
-
-      // Make all this input be that of the task's
-      this.input.taskTitle = inputTask.title;
-      this.input.taskDueDate = apiDateOnly(inputTask.dueDate) || null;
-      this.input.taskDuration = inputTask.duration;
-      this.input.taskStartDate = apiDateOnly(inputTask.startDate);
-      this.input.taskNotes = inputTask.notes;
-      this.input.taskBreakUpTask = inputTask.breakUpTask;
-      this.input.taskBreakUpTaskChunkDuration =
-        inputTask.breakUpTaskChunkDuration;
-
-      // An occurrence carries no rule of its own; the API attaches its series' rule.
-      this.input.recurrence = inputTask.recurrence || inputTask.seriesRecurrence || null;
-      this.input.taskIsBacklog = inputTask.isBacklog || false;
-      this.input.dependsOn = inputTask.dependsOn || [];
-      this.input.taskPriority = inputTask.priority != null ? inputTask.priority : 100;
-      this.input.projectRef = inputTask.projectRef || null;
-
-      // Always show advanced options when editing an existing task
-      this.showAdvancedOptions = true;
-
-      this.$refs.addtaskmodal.show();
+      this.taskEditorOpen = true;
     },
     openEditTaskModalFromEvent(eventDetails) {
-      let inTaskId = eventDetails.tags.taskId;
       this.selectedEvent = eventDetails;
-      // Find the task with the right Id
-      let foundTask = this.taskList.find((object) => object._id == inTaskId);
+      const foundTask = this.taskList.find((task) => task._id == eventDetails.tags.taskId);
       this.openEditTaskModal(foundTask);
-    },
-    resolveTaskModal(bvModalEvent) {
-      if (this.selectedTask) {
-        this.editTask(bvModalEvent);
-      } else {
-        this.addTask(bvModalEvent);
-      }
     },
     resolveFollowUpModal(bvModalEvent) {
       this.createFollowUp(bvModalEvent);
     },
-    resetTaskModal() {
-      this.selectedEvent = null;
-    },
     resetFollowUpModal() {
+      this.selectedTask = null;
       this.selectedEvent = null;
     },
     getTaskDaysBetweenDeadlineAndSchedule(inTask) {
       if (!inTask.dueDate || !inTask.scheduledDate) return null;
       return calendarDayDifference(inTask.dueDate, inTask.scheduledDate);
-    },
-    handleSubmit() {
-      // DO nothing on general modal submit
-      return null;
     },
     getTaskDate(task) {
       if (task.isBacklog && !task.scheduledDate) {
@@ -917,19 +539,12 @@ export default {
     userWorkingDays() {
       return this.$store.state.user?.workingDays || [];
     },
-    isSeriesTask() {
-      return !!(this.selectedTask && this.selectedTask.seriesRef);
+    editorDefaultStartDate() {
+      return dateOnlyInTimeZone(this.$store.state.user?.timeZone);
     },
-    availableTasksForDependencies() {
-      if (!this.taskList) return [];
-      
-      // Filter out completed tasks and the task being edited (if editing)
-      return this.taskList.filter(task => {
-        if (this.selectedTask && task._id === this.selectedTask._id) {
-          return false; // Can't depend on itself
-        }
-        return !task.completed;
-      });
+    selectedChunkDuration() {
+      if (this.selectedEvent?.tags?.type !== "task-chunk") return null;
+      return (this.selectedEvent.end.getTime() - this.selectedEvent.start.getTime()) / 60000;
     },
     taskGroupedByDate() {
       const groupedTasks = {};
@@ -1256,19 +871,6 @@ export default {
   opacity: 0.8;
 }
 
-.series-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  background: rgba(102, 126, 234, 0.15);
-  border-left: 3px solid #667eea;
-  color: #c7d2fe;
-  font-size: 13px;
-}
-
 .task-badge,
 .task-days {
   font-size: 11px;
@@ -1372,46 +974,6 @@ export default {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
-.task-controls-buttons * {
-  margin-right: 5px;
-  margin-top: 5px;
-}
-
-/* Fix date input styling for dark theme */
-.date-input {
-  color-scheme: dark;
-}
-
-/* Advanced options section */
-.advanced-options-section {
-  margin-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 4px;
-}
-
-.advanced-options-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  color: #a0a0b0;
-  font-size: 14px;
-  font-weight: 500;
-  text-decoration: none;
-  width: 100%;
-  text-align: left;
-}
-
-.advanced-options-toggle:hover {
-  color: #c0c0d0;
-  text-decoration: none;
-}
-
-.toggle-icon {
-  font-size: 10px;
-  transition: transform 0.2s ease;
-}
-
 .all-day-events {
   display: flex;
   gap: 8px;
@@ -1430,9 +992,5 @@ export default {
   border-radius: 4px;
   background: #a27cf9;
   color: #fff;
-}
-
-.advanced-options-content {
-  padding-top: 4px;
 }
 </style>

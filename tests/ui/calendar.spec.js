@@ -18,16 +18,19 @@ test.describe('calendar page', () => {
         await expect(page.locator('.task-badge', { hasText: 'BACKLOG' }).first()).toBeVisible();
     });
 
-    test('creates a task through the modal', async ({ seed, loggedInPage: page }) => {
+    test('creates a task through the shared editor', async ({ seed, loggedInPage: page }) => {
         await seed();
 
         await page.goto('/#/calendar');
         await page.click('button:has-text("Add Task")');
 
+        await expect(page.locator('[data-test=task-editor]')).toBeVisible();
+        await expect(page.locator('[data-test=weekly-task-editor]')).toHaveCount(0);
+
         await page.fill('#task-title', 'Task created from the UI');
         await page.fill('#task-due-date', isoDay(3));
         await page.fill('#task-duration', '45');
-        await page.click('.modal-footer button:has-text("OK")');
+        await page.getByRole('button', { name: 'Add task', exact: true }).click();
 
         await expect(page.locator('.task-list')).toContainText('Task created from the UI');
     });
@@ -38,7 +41,7 @@ test.describe('calendar page', () => {
         await page.fill('#task-title', 'Non UTC task');
         await page.fill('#task-due-date', '2030-03-10');
         await page.fill('#task-duration', '30');
-        await page.click('.modal-footer button:has-text("OK")');
+        await page.getByRole('button', { name: 'Add task', exact: true }).click();
 
         const task = page.locator('.task-item', { hasText: 'Non UTC task' }).first();
         await expect(task).toBeVisible();
@@ -52,18 +55,19 @@ test.describe('calendar page', () => {
         await page.goto('/#/calendar');
         await page.click('button:has-text("Add Task")');
         await page.fill('#task-duration', '45');
-        await page.click('.modal-footer button:has-text("OK")');
+        await page.getByRole('button', { name: 'Add task', exact: true }).click();
 
-        // The modal stays open and explains itself.
-        await expect(page.locator('#task-modal')).toContainText('Need task title');
+        // The editor stays open and explains itself.
+        await expect(page.locator('[data-test=task-editor-error]')).toContainText('Enter a task title');
     });
 
-    test('completes a task from the edit modal', async ({ seed, loggedInPage: page }) => {
+    test('completes a task from the shared editor', async ({ seed, loggedInPage: page }) => {
         const data = await seed();
         const title = data.named.proposal.title;
 
         await page.goto('/#/calendar');
         await page.locator('.task-item', { hasText: title }).first().click();
+        await expect(page.locator('[data-test=task-editor]')).toBeVisible();
         await page.click('button:has-text("Complete")');
 
         await expect(page.locator('.task-list')).not.toContainText(title);
@@ -128,7 +132,7 @@ test.describe('calendar page', () => {
         await expect(page.locator('.task-date-header', { hasText: 'UNSCHEDULED' })).toBeVisible();
     });
 
-    test('creates a weekly task on chosen weekdays through the modal', async ({ seed, loggedInPage: page }) => {
+    test('creates a weekly task on chosen weekdays through the shared editor', async ({ seed, loggedInPage: page }) => {
         await seed();
 
         await page.goto('/#/calendar');
@@ -138,7 +142,6 @@ test.describe('calendar page', () => {
         await page.fill('#task-due-date', isoDay(3));
         await page.fill('#task-duration', '30');
 
-        await page.click('.advanced-options-toggle');
         await page.selectOption('#task-repeat', 'weekly');
 
         // Start from a known state: select Monday and Tuesday, and clear every other day.
@@ -159,7 +162,7 @@ test.describe('calendar page', () => {
             'Every week on Monday and Tuesday'
         );
 
-        await page.click('.modal-footer button:has-text("OK")');
+        await page.getByRole('button', { name: 'Add task', exact: true }).click();
 
         // Occurrences appear immediately, without pressing "Schedule Tasks" first.
         await expect(page.locator('.task-list')).toContainText('Mon and Tue only');
@@ -171,7 +174,6 @@ test.describe('calendar page', () => {
     test('shows a recurrence cutoff on the selected civil date west of UTC', async ({ nonUtcPage: page }) => {
         await page.goto('/#/calendar');
         await page.click('button:has-text("Add Task")');
-        await page.click('.advanced-options-toggle');
         await page.selectOption('#task-repeat', 'daily');
         await page.check('#repeat-ends-on');
         await page.fill('#repeat-ends-on-date', '2030-03-31');
@@ -188,7 +190,6 @@ test.describe('calendar page', () => {
         await page.fill('#task-due-date', isoDay(3));
         await page.fill('#task-duration', '30');
 
-        await page.click('.advanced-options-toggle');
         await page.selectOption('#task-repeat', 'weekly');
 
         // The seeded user works Monday to Friday, so Saturday is flagged before you pick it.
@@ -202,7 +203,7 @@ test.describe('calendar page', () => {
         );
 
         // A warning, not a validation error: the rule still saves.
-        await page.click('.modal-footer button:has-text("OK")');
+        await page.getByRole('button', { name: 'Add task', exact: true }).click();
         await expect(page.locator('.task-list')).toContainText('Weekend chore');
     });
 

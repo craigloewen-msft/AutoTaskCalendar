@@ -115,7 +115,7 @@ test.describe('compass page', () => {
         await expect(page.locator('#compass-start')).toHaveValue('2024-03-01');
     });
 
-    test('offers projects grouped by role and goal on the task modal', async ({
+    test('offers projects grouped by role and goal in the shared task editor', async ({
         seed,
         loggedInPage: page,
     }) => {
@@ -123,8 +123,6 @@ test.describe('compass page', () => {
 
         await page.goto('/#/calendar');
         await page.click('button:has-text("Add Task")');
-        await page.click('button:has-text("Advanced Options")');
-
         const select = page.locator('#task-project');
         await expect(select).toBeVisible();
 
@@ -147,9 +145,8 @@ test.describe('compass page', () => {
         await page.fill('#task-duration', '30');
         await page.fill('#task-due-date', '2030-01-15');
 
-        await page.click('button:has-text("Advanced Options")');
         await page.selectOption('#task-project', { label: 'Migration plan' });
-        await page.click('.modal-footer button:has-text("OK")');
+        await page.getByRole('button', { name: 'Add task', exact: true }).click();
 
         // The Compass page counts it against that project.
         await page.goto('/#/compass');
