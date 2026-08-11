@@ -945,7 +945,7 @@ export default {
   transition: opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
-.task-item:hover .quick-complete-button,
+.quick-complete-button:hover,
 .quick-complete-button:focus-visible {
   border-color: #6ee7b7;
   background: rgba(16, 185, 129, 0.14);
