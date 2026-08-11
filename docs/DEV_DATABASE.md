@@ -23,12 +23,46 @@ at one no matter how many instances exist.
 | Mongo container `autotaskcalendar-mongo` | shared, one per host |
 | Volume `autotaskcalendar-mongo-data` | shared, one per host |
 | Mongo port (default 27017) | shared, one per host |
-| Database `autotaskcalendar_<instance>` | **per instance** |
-| API / web / inspect ports | per instance (offset by branch) |
+| Database `autotaskcalendar_<instance>` | **per instance**, pinned to the branch name |
+| API / web / inspect ports | **allocated at startup**, preferred block from the branch name |
 | Session cookie | per instance |
 
 `instance.js` is the single source of truth. The Mongo port is deliberately *not* offset by
 instance; override it host-wide with `AUTOTASKCALENDAR_MONGO_PORT` if 27017 is taken.
+
+## Ports are allocated, not assumed
+
+The branch name hashes to a *preferred* block of ports, but there are only 49 blocks, so
+distinct branches collide routinely — with a handful of agents it is the normal case, not
+bad luck. `npm run dev` therefore probes from the preferred block and takes the first one
+whose api/web/inspect ports actually bind (`scripts/port-allocator.js`), then prints what it
+took:
+
+```
+AutoTaskCalendar instance "my-branch"
+  web        http://localhost:8490
+  api        http://localhost:3410
+  debugger   9639
+  database   autotaskcalendar_my_branch
+  note       preferred block 41 was busy; using 42 instead
+```
+
+**That banner is the source of truth for where to connect.** Do not compute the URL from
+the branch name; read it from the output. `npm test` allocates the same way.
+
+Before this, two branches that hashed alike both derived port 3030, and the second one
+silently drove the first one's server — a different codebase against a different database,
+with nothing to indicate it.
+
+Two consequences worth knowing:
+
+- **The database never moves.** Its name is derived from the instance name only, so an
+  instance that gets bumped to another port block still opens its own data.
+- **Pinning still works.** Set `AUTOTASKCALENDAR_API_PORT`, `AUTOTASKCALENDAR_WEB_PORT` and
+  `AUTOTASKCALENDAR_INSPECT_PORT` to bypass allocation entirely.
+
+Running `npx playwright test` directly skips the allocator and will collide with your own
+dev stack; go through `npm test`.
 
 ## Commands
 

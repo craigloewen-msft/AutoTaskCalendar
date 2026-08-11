@@ -12,12 +12,16 @@ npm run seed        # optional: testuser / testpassword
 npm run dev         # starts mongo, API, and web UI
 ```
 
-Nothing needs to be exported. Each git branch automatically gets its own ports, MongoDB
-database, container, and session cookie, so several agents can run at once without
-colliding. `main` uses the standard 8080/3000/27017.
+Nothing needs to be exported. Each git branch automatically gets its own MongoDB database
+and session cookie, and `npm run dev` allocates a free block of ports at startup, so
+several agents can run at once without colliding.
 
-Run `npm run db:status` to print the ports and database name for your branch. Override the
-name with `AUTOTASKCALENDAR_INSTANCE` if you need two stacks on one branch.
+**Read the ports off the `npm run dev` banner** — it prints the web/api/debugger ports and
+the database it actually bound. Branch names hash into only 49 port blocks, so the
+preferred block is often already taken and the allocator moves on; computing the URL from
+the branch name will send you to another agent's stack. `npm run db:status` prints the same
+information. Override the instance name with `AUTOTASKCALENDAR_INSTANCE` if you need two
+stacks on one branch.
 
 Only when you're done your changes and are doing finalization should you run the test suite as it takes a long time.
 

@@ -172,3 +172,52 @@ test.describe('shared dev database', () => {
         await dropDatabase(bystander.mongoUrl);
     });
 });
+
+test.describe('dev port allocation', () => {
+    test('two instances that prefer the same block get different ports', async () => {
+        const net = require('net');
+        const { allocatePorts, portsForOffset } = require('../../scripts/port-allocator');
+
+        // Branch names hash into only 49 blocks, so distinct branches routinely prefer the
+        // same one. The first instance must not be able to hand the second its ports.
+        const preferred = 7;
+        const block = portsForOffset(preferred);
+
+        const first = [block.apiPort, block.webPort, block.inspectPort].map((port) => {
+            const server = net.createServer();
+            server.listen(port, '0.0.0.0');
+            return server;
+        });
+        await new Promise((resolve) => setTimeout(resolve, 200));
+
+        try {
+            const second = await allocatePorts({ preferredOffset: preferred });
+
+            expect(second.apiPort).not.toBe(block.apiPort);
+            expect(second.webPort).not.toBe(block.webPort);
+            expect(second.inspectPort).not.toBe(block.inspectPort);
+            // And it says so, rather than moving silently.
+            expect(second.movedFrom).toBe(preferred);
+        } finally {
+            await Promise.all(first.map((server) => new Promise((resolve) => server.close(resolve))));
+        }
+    });
+
+    test('an instance keeps its database when its ports move', () => {
+        // A database name that tracked the port offset would come up empty after a bump.
+        const atPreferred = resolveNamed('port-move-spec', { AUTOTASKCALENDAR_PORT_OFFSET: '7' });
+        const atFallback = resolveNamed('port-move-spec', { AUTOTASKCALENDAR_PORT_OFFSET: '8' });
+
+        expect(atFallback.apiPort).not.toBe(atPreferred.apiPort);
+        expect(atFallback.dbName).toBe(atPreferred.dbName);
+    });
+
+    test('long branch names keep a stable database across port moves', () => {
+        const long = 'feature/'.padEnd(120, 'y');
+        const atPreferred = resolveNamed(long, { AUTOTASKCALENDAR_PORT_OFFSET: '3' });
+        const atFallback = resolveNamed(long, { AUTOTASKCALENDAR_PORT_OFFSET: '25' });
+
+        expect(atPreferred.dbName.length).toBeLessThanOrEqual(63);
+        expect(atFallback.dbName).toBe(atPreferred.dbName);
+    });
+});

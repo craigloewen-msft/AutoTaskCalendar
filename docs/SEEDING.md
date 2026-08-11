@@ -25,8 +25,14 @@ Log in with:
 | --- | --- |
 | `testuser` | `testpassword` |
 | `otheruser` | `testpassword` |
+| `recurruser` | `testpassword` |
 
 `otheruser` exists only to prove their data never leaks into `testuser`'s views.
+`recurruser` is the recurring-task scenario: three one-off tasks plus a single
+weekly-on-Monday series. `testuser` carries hundreds of occurrences, which makes one
+duplicate impossible to spot, so use `recurruser` when you need to check repeating
+behaviour by eye — the calendar should show exactly one "Weekly Monday standup" per
+Monday and nothing else.
 
 ## What the dataset contains
 
@@ -43,6 +49,8 @@ All of it belongs to `testuser` unless noted:
   `fortnightlySeries` every 2 weeks, `monthlySeries` 1st and last day). The scheduler
   materialises their occurrences; the templates themselves never appear in the task list.
   See `docs/RECURRING_TASKS.md`.
+- **A minimal recurring scenario** on `recurruser` — `data.named.mondaySeries` (weekly on
+  Mondays) plus three one-off tasks, small enough to audit by hand.
 - **70 completed tasks** spread over 90 days, kept as completion history and to prove the
   scheduler never schedules a completed task.
 - **Edge cases** — a zero-duration task, one longer than the working day, one overdue by a

@@ -77,11 +77,8 @@ function detectName() {
     return slugify(branch);
 }
 
-/**
- * FNV-1a. Short, dependency-free, and stable across Node versions, so a given name always
- * maps to the same ports.
- */
-function hashToOffset(name) {
+/** FNV-1a. Short, dependency-free, and stable across Node versions. */
+function fnv1a(name) {
     let hash = 0x811c9dc5;
 
     for (let i = 0; i < name.length; i++) {
@@ -89,8 +86,16 @@ function hashToOffset(name) {
         hash = Math.imul(hash, 0x01000193) >>> 0;
     }
 
+    return hash >>> 0;
+}
+
+/**
+ * The instance's preferred port offset. Only 49 blocks exist, so collisions are routine;
+ * scripts/port-allocator.js treats this as a starting point.
+ */
+function hashToOffset(name) {
     // Offset 0 is reserved for the "default" instance.
-    return (hash % MAX_OFFSET) + 1;
+    return (fnv1a(name) % MAX_OFFSET) + 1;
 }
 
 function resolvePort(envVarName, basePort, offset) {
@@ -142,10 +147,10 @@ const MAX_DB_NAME_LENGTH = 63;
 /**
  * Build a Mongo-safe database name that always fits in 63 characters.
  *
- * Long branch names are truncated, with the port offset appended so two branches that
- * share a prefix still get separate databases.
+ * The suffix is derived from the name, never the port offset: ports are allocated at
+ * startup and can move, and a database that moved with them would silently come up empty.
  */
-function buildDbName(name, offset) {
+function buildDbName(name) {
     const normalized = name.replace(/-/g, '_');
     const full = `${DB_NAME_PREFIX}${normalized}`;
 
@@ -153,7 +158,7 @@ function buildDbName(name, offset) {
         return full;
     }
 
-    const suffix = `_${offset}`;
+    const suffix = `_${fnv1a(name).toString(36)}`;
     const room = MAX_DB_NAME_LENGTH - DB_NAME_PREFIX.length - suffix.length;
 
     return `${DB_NAME_PREFIX}${normalized.slice(0, room)}${suffix}`;
@@ -170,9 +175,8 @@ function resolveInstance() {
     const mongoPort = resolvePort('AUTOTASKCALENDAR_MONGO_PORT', BASE_PORTS.mongoPort, 0);
     const inspectPort = resolvePort('AUTOTASKCALENDAR_INSPECT_PORT', BASE_PORTS.inspectPort, offset);
 
-    // MongoDB caps database names at 63 bytes, and branch names can be long. Truncate the
-    // name portion and keep the port offset as a suffix so distinct instances stay distinct.
-    const dbName = buildDbName(name, offset);
+    // MongoDB caps database names at 63 bytes; truncate and append a hash of the name.
+    const dbName = buildDbName(name);
     const mongoUrl =
         process.env.AUTOTASKCALENDAR_MONGO_URL ||
         `mongodb://127.0.0.1:${mongoPort}/${dbName}`;
@@ -197,3 +201,7 @@ function resolveInstance() {
 
 module.exports = resolveInstance();
 module.exports.resolveInstance = resolveInstance;
+// Port block arithmetic, used by scripts/port-allocator.js.
+module.exports.BASE_PORTS = BASE_PORTS;
+module.exports.PORT_STRIDE = PORT_STRIDE;
+module.exports.MAX_OFFSET = MAX_OFFSET;

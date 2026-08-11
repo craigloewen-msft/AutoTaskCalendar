@@ -33,13 +33,19 @@ Stored in `recurrence` on the template (`models/index.js`):
 |---|---|---|
 | `freq` | `daily` \| `weekly` \| `monthly` \| `yearly` | `'weekly'` |
 | `interval` | Every N periods | `2` = fortnightly |
-| `byWeekday` | Days of the week, `0`=Sunday..`6`=Saturday (weekly) | `[1,2]` = Mon **and** Tue |
+| `byWeekday` | Days of the week, `0`=Sunday..`6`=Saturday (weekly). Empty = the day the series starts on | `[1,2]` = Mon **and** Tue |
 | `byMonthDay` | Days of the month, `1`-`31`, or `-1` for the last day (monthly) | `[1,-1]` |
 | `endsOn` | Stop after this date. `null` = never | |
 | `endsAfter` | Stop after N occurrences ever. `null` = never | |
 
 The shape deliberately mirrors iCalendar RRULE, so a future `.ics` import/export or Google
 Calendar recurring-event mapping is mechanical. There is no RRULE dependency.
+
+**An empty `byWeekday` means "the start day", not "every day".** A weekly rule that names no
+day falls back to the weekday its series starts on, exactly as RRULE defaults BYDAY to the
+DTSTART weekday. Treating "no days chosen" as "all days" is what once turned a single
+weekly task into 60 daily ones: a legacy `repeat: 'weekly'` string carries no `byWeekday`
+at all.
 
 **`byMonthDay: [31]` does not roll over.** In a 30-day month the rule simply does not fire.
 `-1` is the way to say "end of the month", and it handles a leap February correctly.
@@ -112,6 +118,10 @@ expansion recreates it as a duplicate.
   never removed by a rule edit or a series delete. They are the user's history.
 - **The template is never scheduled and never listed.** `'recurrence.freq': {$exists: false}`
   guards the task-list query and both scheduler queries. It is a rule, not work.
+- **A completed task is not a template.** Expansion skips any task marked complete, and
+  deletes the pending occurrences of a series whose template was completed. Without this a
+  ticked-off repeating task keeps generating work forever, and the calendar fills with
+  copies of something the user already finished.
 
 ## Behaviour you should know about
 
@@ -159,6 +169,10 @@ The old `repeat: 'weekly'` string still works. There is no migration script: the
 expansion promotes such a task in place (writes its `recurrence`) and it
 behaves as a series from then on. Until promotion, completing one still clones it forward,
 so nothing breaks mid-migration.
+
+A promoted legacy string has an **empty `byWeekday`**, which is why the "empty means the
+start day" rule above matters: without it, every legacy weekly task silently became a daily
+one the first time the scheduler ran.
 
 ## Adding a new frequency
 
