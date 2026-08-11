@@ -22,34 +22,56 @@
         <div class="task-controls">
           <div class="task-list">
             <h3 class="sidebar-title">Tasks</h3>
-          <div v-for="date in tasksDatesArray" :key="date" class="task-group">
-            <h4 class="task-date-header">{{ date }}</h4>
-            <ul class="task-items">
-              <li
-                v-for="task in taskGroupedByDate[date]"
-                :key="task._id"
-                v-bind:class="{
-                  'task-item': true,
-                  'late-task': !task.isBacklog && getTaskDaysBetweenDeadlineAndSchedule(task) < 0,
-                  'on-track-task': !task.isBacklog &&
-                    getTaskDaysBetweenDeadlineAndSchedule(task) > 0,
-                  'due-that-day-task': !task.isBacklog &&
-                    getTaskDaysBetweenDeadlineAndSchedule(task) == 0,
-                  'backlog-task': task.isBacklog
-                }"
-                v-on:click="openEditTaskModal(task)"
-              >
-                <span class="task-title">
-                  <span v-if="task.seriesRef" class="recurring-icon" title="Part of a repeating series" role="img" aria-label="Repeating task">↻</span>
-                  <span v-if="task.dependsOn && task.dependsOn.length > 0" class="dependency-icon" title="Has dependencies" role="img" aria-label="Has dependencies">🔗</span>
-                  {{ task.title }}
-                </span>
-                <span class="task-badge" v-if="task.isBacklog">BACKLOG</span>
-                <span class="task-days" v-else>{{ getTaskDaysBetweenDeadlineAndSchedule(task) }}</span>
-              </li>
-            </ul>
+            <p
+              v-if="quickCompleteError"
+              class="quick-complete-error"
+              role="alert"
+              data-test="quick-complete-error"
+            >
+              {{ quickCompleteError }}
+            </p>
+            <div v-for="date in tasksDatesArray" :key="date" class="task-group">
+              <h4 class="task-date-header">{{ date }}</h4>
+              <ul class="task-items">
+                <li
+                  v-for="task in taskGroupedByDate[date]"
+                  :key="task._id"
+                  v-bind:class="{
+                    'task-item': true,
+                    'late-task': !task.isBacklog && getTaskDaysBetweenDeadlineAndSchedule(task) < 0,
+                    'on-track-task': !task.isBacklog &&
+                      getTaskDaysBetweenDeadlineAndSchedule(task) > 0,
+                    'due-that-day-task': !task.isBacklog &&
+                      getTaskDaysBetweenDeadlineAndSchedule(task) == 0,
+                    'backlog-task': task.isBacklog
+                  }"
+                  v-on:click="openEditTaskModal(task)"
+                >
+                  <span class="task-title">
+                    <span v-if="isRecurringTask(task)" class="recurring-icon" title="Part of a repeating series" role="img" aria-label="Repeating task">↻</span>
+                    <span v-if="task.dependsOn && task.dependsOn.length > 0" class="dependency-icon" title="Has dependencies" role="img" aria-label="Has dependencies">🔗</span>
+                    {{ task.title }}
+                  </span>
+                  <span class="task-row-meta">
+                    <span class="task-badge" v-if="task.isBacklog">BACKLOG</span>
+                    <span class="task-days" v-else>{{ getTaskDaysBetweenDeadlineAndSchedule(task) }}</span>
+                    <button
+                      v-if="isRecurringTask(task)"
+                      class="quick-complete-button"
+                      type="button"
+                      :aria-label="`Complete recurring task: ${task.title}`"
+                      :aria-busy="isQuickCompleting(task)"
+                      title="Complete this occurrence"
+                      :disabled="isQuickCompleting(task)"
+                      @click.stop="quickCompleteTask(task)"
+                    >
+                      <span aria-hidden="true">{{ isQuickCompleting(task) ? "…" : "✓" }}</span>
+                    </button>
+                  </span>
+                </li>
+              </ul>
+            </div>
           </div>
-        </div>
       </div>
         <div class="main-calendar">
         <div class="calendar-controls">
@@ -279,6 +301,8 @@ export default {
       selectedTask: null,
       selectedEvent: null,
       allDayEvents: [],
+      quickCompletingTaskIds: [],
+      quickCompleteError: "",
       // Compass roles, nested with their goals and projects.
       compassRoles: [],
     };
@@ -289,6 +313,38 @@ export default {
       return lastDay && lastDay !== event.allDayStart
         ? `${event.allDayStart} – ${lastDay}`
         : event.allDayStart;
+    },
+    isRecurringTask(task) {
+      return !!(task?.seriesRef || task?.repeat);
+    },
+    isQuickCompleting(task) {
+      return this.quickCompletingTaskIds.includes(task?._id);
+    },
+    async quickCompleteTask(task) {
+      const taskId = task?._id;
+      if (!taskId || this.quickCompletingTaskIds.includes(taskId)) return;
+
+      this.quickCompleteError = "";
+      this.quickCompletingTaskIds = [...this.quickCompletingTaskIds, taskId];
+      let completed = false;
+
+      try {
+        const response = await this.$http.post("/api/completeTask", { taskId });
+        if (!response.data.success || !Array.isArray(response.data.taskList)) {
+          this.quickCompleteError = response.data.log || "Task could not be completed.";
+          return;
+        }
+
+        this.taskList = response.data.taskList;
+        completed = true;
+        await this.loadCalendarEvents();
+      } catch (error) {
+        this.quickCompleteError = completed
+          ? "Task completed, but the calendar could not refresh."
+          : "Task could not be completed.";
+      } finally {
+        this.quickCompletingTaskIds = this.quickCompletingTaskIds.filter((id) => id !== taskId);
+      }
     },
     async loadTasks() {
       const taskDataResponse = await this.$http.get("/api/getUserTasks/");
@@ -860,8 +916,56 @@ export default {
 
 .task-title {
   flex: 1;
+  min-width: 0;
   font-weight: 500;
   color: #e0e0e0;
+}
+
+.task-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.quick-complete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(110, 231, 183, 0.45);
+  border-radius: 50%;
+  background: transparent;
+  color: #6ee7b7;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.quick-complete-button:hover,
+.quick-complete-button:focus-visible {
+  border-color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.14);
+  opacity: 1;
+}
+
+.quick-complete-button:focus-visible {
+  outline: 2px solid #a7f3d0;
+  outline-offset: 2px;
+}
+
+.quick-complete-button:disabled {
+  cursor: progress;
+  opacity: 0.4;
+}
+
+.quick-complete-error {
+  margin: -8px 0 14px;
+  color: #fca5a5;
+  font-size: 13px;
 }
 
 .dependency-icon,

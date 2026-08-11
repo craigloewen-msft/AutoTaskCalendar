@@ -1,4 +1,51 @@
 const { test, expect, withDb } = require('../fixtures');
+const { EventDetails, TaskDetails } = require('../../models');
+const { addDateOnlyDays, parseDateOnly, todayInZone, zonedDateTime } = require('../../utils/temporal');
+
+async function createQuickCompleteFixture(data, occurrenceCount = 2) {
+    const today = todayInZone('UTC');
+
+    return withDb(async () => {
+        const occurrences = [];
+        for (let index = 0; index < occurrenceCount; index++) {
+            const occurrence = await TaskDetails.create({
+                title: 'Quick recurring task',
+                duration: 30,
+                startDate: parseDateOnly(addDateOnlyDays(today, index)).date,
+                dueDate: parseDateOnly(addDateOnlyDays(today, index)).date,
+                scheduledDate: zonedDateTime(today, (10 + index) * 60, 'UTC'),
+                completed: false,
+                isBacklog: false,
+                seriesRef: data.named.weekdaysSeries._id,
+                occurrenceDate: parseDateOnly(addDateOnlyDays(today, index)).date,
+                userRef: data.primary.user._id,
+            });
+            occurrences.push(occurrence);
+
+            await EventDetails.create({
+                title: occurrence.title,
+                startDate: zonedDateTime(today, (10 + index) * 60, 'UTC'),
+                endDate: zonedDateTime(today, (10 + index) * 60 + 30, 'UTC'),
+                type: 'task',
+                taskRef: occurrence._id,
+                userRef: data.primary.user._id,
+            });
+        }
+
+        const ordinary = await TaskDetails.create({
+            title: 'Quick ordinary task',
+            duration: 30,
+            startDate: parseDateOnly(today).date,
+            dueDate: parseDateOnly(today).date,
+            scheduledDate: zonedDateTime(today, 14 * 60, 'UTC'),
+            completed: false,
+            isBacklog: false,
+            userRef: data.primary.user._id,
+        });
+
+        return { occurrences, ordinary };
+    });
+}
 
 test.describe('calendar page', () => {
     test('renders the seeded tasks in the sidebar', async ({ seed, loggedInPage: page }) => {
@@ -71,6 +118,86 @@ test.describe('calendar page', () => {
         await page.click('button:has-text("Complete")');
 
         await expect(page.locator('.task-list')).not.toContainText(title);
+    });
+
+    test('quick-completes only the selected recurring occurrence', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        await createQuickCompleteFixture(data);
+        await page.goto('/#/calendar');
+
+        const recurringRows = page.locator('.task-item', { hasText: 'Quick recurring task' });
+        const recurringEvents = page.locator('.calendar_default_event', {
+            hasText: 'Quick recurring task',
+        });
+        await expect(recurringRows).toHaveCount(2);
+        await expect(recurringEvents).toHaveCount(2);
+
+        const ordinaryRow = page.locator('.task-item', { hasText: 'Quick ordinary task' });
+        await expect(ordinaryRow.locator('.quick-complete-button')).toHaveCount(0);
+
+        const legacyRow = page.locator('.task-item', { hasText: 'Recurring weekly check-in' });
+        await expect(legacyRow.getByRole('button', {
+            name: 'Complete recurring task: Recurring weekly check-in',
+        })).toBeVisible();
+
+        const completeButton = recurringRows.first().getByRole('button', {
+            name: 'Complete recurring task: Quick recurring task',
+        });
+        await expect(completeButton).toHaveAttribute('title', 'Complete this occurrence');
+        await completeButton.click();
+
+        await expect(page.locator('[data-test=task-editor]')).toHaveCount(0);
+        await expect(recurringRows).toHaveCount(1);
+        await expect(recurringEvents).toHaveCount(1);
+    });
+
+    test('keeps a recurring task when quick completion fails', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        await createQuickCompleteFixture(data, 1);
+        let releaseResponse;
+        let requestCount = 0;
+        const responseGate = new Promise((resolve) => {
+            releaseResponse = resolve;
+        });
+        let markRequestSeen;
+        const requestSeen = new Promise((resolve) => {
+            markRequestSeen = resolve;
+        });
+
+        await page.route('**/api/completeTask', async (route) => {
+            requestCount++;
+            markRequestSeen();
+            await responseGate;
+            await route.fulfill({
+                contentType: 'application/json',
+                body: JSON.stringify({ success: false, log: 'Could not complete occurrence.' }),
+            });
+        });
+        await page.goto('/#/calendar');
+
+        const row = page.locator('.task-item', { hasText: 'Quick recurring task' });
+        const button = row.getByRole('button', {
+            name: 'Complete recurring task: Quick recurring task',
+        });
+        await button.click();
+        await requestSeen;
+
+        await expect(button).toBeDisabled();
+        await button.evaluate((element) => element.click());
+        expect(requestCount).toBe(1);
+        releaseResponse();
+
+        await expect(page.locator('[data-test=quick-complete-error]')).toContainText(
+            'Could not complete occurrence.'
+        );
+        await expect(row).toBeVisible();
+        await expect(page.locator('[data-test=task-editor]')).toHaveCount(0);
     });
 
     test('schedules tasks and draws them on the calendar', async ({ seed, loggedInPage: page }) => {
