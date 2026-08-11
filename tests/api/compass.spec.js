@@ -418,6 +418,9 @@ test.describe('compass', () => {
             });
             const created = (await createRes.json()).taskList.find((t) => t.title === 'Aligned task');
             expect(created.projectRef).toBe(projectId);
+            expect(created.startDate).toBe(daysFromNow(0));
+            expect(created.dueDate).toBe(daysFromNow(1));
+            expect(created.isBacklog).toBe(false);
 
             const newProjectId = String(data.named.hiringProject._id);
             const editRes = await api.post('/api/editTask', {

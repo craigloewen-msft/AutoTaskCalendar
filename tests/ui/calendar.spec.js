@@ -141,15 +141,18 @@ test.describe('calendar page', () => {
         await page.click('.advanced-options-toggle');
         await page.selectOption('#task-repeat', 'weekly');
 
-        // Start from a known state: clear whatever day defaulted on, then pick Mon + Tue.
-        const selected = page.locator('.weekday-pill.selected');
-        await expect(selected).toHaveCount(1);
-
-        await page.click('.weekday-pill[data-day="Monday"]');
-        await page.click('.weekday-pill[data-day="Tuesday"]');
-        const initial = await selected.first().getAttribute('data-day');
-        if (initial !== 'Monday' && initial !== 'Tuesday') {
-            await page.click(`.weekday-pill[data-day="${initial}"]`);
+        // Start from a known state: select Monday and Tuesday, and clear every other day.
+        for (const day of ['Monday', 'Tuesday']) {
+            const pill = page.locator(`.weekday-pill[data-day="${day}"]`);
+            if (!(await pill.evaluate((element) => element.classList.contains('selected')))) {
+                await pill.click();
+            }
+        }
+        for (const day of ['Sunday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']) {
+            const pill = page.locator(`.weekday-pill[data-day="${day}"]`);
+            if (await pill.evaluate((element) => element.classList.contains('selected'))) {
+                await pill.click();
+            }
         }
 
         await expect(page.locator('[data-test=repeat-summary]')).toContainText(

@@ -9,6 +9,7 @@
         <BNavbarNav>
           <!--- Left-aligned navigation items --->
           <Bootstrapnavlinkcustom v-if="isLoggedIn" to="/calendar">Calendar</Bootstrapnavlinkcustom>
+          <Bootstrapnavlinkcustom v-if="isLoggedIn" to="/weekly-plan">Weekly Plan</Bootstrapnavlinkcustom>
           <Bootstrapnavlinkcustom v-if="isLoggedIn" to="/compass">Compass</Bootstrapnavlinkcustom>
           <Bootstrapnavlinkcustom to="/about">About</Bootstrapnavlinkcustom>
         </BNavbarNav>

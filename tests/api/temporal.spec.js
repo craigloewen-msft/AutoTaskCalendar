@@ -4,6 +4,7 @@ const {
     parseDateOnly,
     parseInstant,
     localWeekBounds,
+    mondayWeekBounds,
 } = require('../../utils/temporal');
 const { migrateTemporalData, legacyTaskDate } = require('../../utils/temporalMigration');
 const moment = require('moment-timezone');
@@ -23,6 +24,28 @@ test.describe('temporal primitives and migration', () => {
         const bounds = localWeekBounds('2024-03-10', 'America/New_York');
         expect(bounds.start.toISOString()).toBe('2024-03-10T05:00:00.000Z');
         expect(bounds.end.toISOString()).toBe('2024-03-17T04:00:00.000Z');
+    });
+
+    test('builds Monday week bounds across DST', () => {
+        const bounds = mondayWeekBounds('2024-03-10', 'America/New_York');
+        expect(bounds.startDate).toBe('2024-03-04');
+        expect(bounds.endDate).toBe('2024-03-10');
+        expect(bounds.nextStartDate).toBe('2024-03-11');
+        expect(bounds.start.toISOString()).toBe('2024-03-04T05:00:00.000Z');
+        expect(bounds.end.toISOString()).toBe('2024-03-11T04:00:00.000Z');
+    });
+
+    test('builds Monday week bounds across a year boundary', () => {
+        const bounds = mondayWeekBounds('2025-01-01', 'UTC');
+        expect(bounds.startDate).toBe('2024-12-30');
+        expect(bounds.endDate).toBe('2025-01-05');
+        expect(bounds.nextStartDate).toBe('2025-01-06');
+    });
+
+    test('keeps Sunday as the default local week start', () => {
+        const bounds = localWeekBounds('2025-01-01', 'UTC');
+        expect(bounds.startDate).toBe('2024-12-29');
+        expect(bounds.endDate).toBe('2025-01-04');
     });
 
     test('recovers the selected day from the old fixed-ms due timestamp', () => {

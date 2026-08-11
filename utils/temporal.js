@@ -166,23 +166,31 @@ function todayInZone(timeZone, now = new Date()) {
     return moment(now).tz(normaliseTimeZone(timeZone)).format('YYYY-MM-DD');
 }
 
-function localWeekBounds(value, timeZone) {
+function localWeekBounds(value, timeZone, weekStartsOn = 0) {
     const zone = normaliseTimeZone(timeZone);
     const anchorDate = typeof value === 'string' && DATE_ONLY_RE.test(value)
         ? value
         : dateOnlyInZone(value, zone);
     const parsed = parseDateOnly(anchorDate);
-    if (!parsed.valid || !parsed.value) return null;
+    if (!parsed.valid || !parsed.value || !Number.isInteger(weekStartsOn) || weekStartsOn < 0 || weekStartsOn > 6) {
+        return null;
+    }
 
     const day = dateOnlyDay(parsed.value);
-    const startDate = addDateOnlyDays(parsed.value, -day);
+    const daysSinceStart = (day - weekStartsOn + 7) % 7;
+    const startDate = addDateOnlyDays(parsed.value, -daysSinceStart);
     const nextStartDate = addDateOnlyDays(startDate, 7);
     return {
         startDate,
+        endDate: addDateOnlyDays(nextStartDate, -1),
         nextStartDate,
         start: startOfDateInZone(startDate, zone),
         end: startOfDateInZone(nextStartDate, zone),
     };
+}
+
+function mondayWeekBounds(value, timeZone) {
+    return localWeekBounds(value, timeZone, 1);
 }
 
 function taskEligibleInstant(value, timeZone) {
@@ -230,6 +238,7 @@ module.exports = {
     endOfDateInZone,
     todayInZone,
     localWeekBounds,
+    mondayWeekBounds,
     taskEligibleInstant,
     legacyWorkingMinutes,
 };

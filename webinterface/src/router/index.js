@@ -57,6 +57,14 @@ const routes = [
     }
   },
   {
+    path: '/weekly-plan',
+    name: 'WeeklyPlan',
+    component: () => import('../views/WeeklyPlan.vue'),
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
     path: '/compass',
     name: 'Compass',
     component: () => import(/* webpackChunkName: "about" */ '../views/Compass.vue'),

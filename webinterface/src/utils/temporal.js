@@ -42,6 +42,22 @@ export function addCalendarDays(value, days) {
   return localDateOnly(date);
 }
 
+export function mondayWeekBounds(value) {
+  const source = apiDateOnly(value) || localDateOnly(value);
+  if (!source) return null;
+  const [year, month, day] = source.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  const daysSinceMonday = (date.getDay() + 6) % 7;
+  const startDate = addCalendarDays(source, -daysSinceMonday);
+  const nextStartDate = addCalendarDays(startDate, 7);
+
+  return {
+    startDate,
+    endDate: addCalendarDays(nextStartDate, -1),
+    nextStartDate,
+  };
+}
+
 export function calendarDayDifference(left, right) {
   const parse = (value) => {
     const text = String(value || "");

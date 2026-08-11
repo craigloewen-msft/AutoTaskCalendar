@@ -318,6 +318,16 @@ Project (optional)     [ ─ none ─                  ▾ ]
 `projectRef` is sent on both create and edit. Compass data is loaded alongside tasks and
 events, and a failure there is logged but never blocks the calendar.
 
+### On the Weekly Plan page
+
+`/weekly-plan` is the Monday–Sunday creation lens over Compass. It renders the same live
+Role → Goal → Project hierarchy with descriptions, groups existing incomplete tasks by
+`projectRef` and `dueDate`, and puts a compact normal-task form under every started project.
+
+Weekly Plan does not add a planning model or selection field. Creating a task is the planning
+action, and the task's existing dates are the record of which week it was intended for. See
+[WEEKLY_PLAN.md](WEEKLY_PLAN.md) for the full workflow and date rules.
+
 ---
 
 ## Working on Compass
@@ -426,6 +436,9 @@ ENGINEER│▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
 ### Phase 4 — Scheduling influence (unscheduled; needs its own design pass)
 
 **Goal.** Let the ladder affect what gets scheduled, not just what gets displayed.
+
+The existing Weekly Plan workflow only creates ordinary project-linked tasks and does not
+change scheduler behavior. This future phase remains distinct.
 
 **Sketch.** Role time budgets ("at least 4h/week on Health"), goal-weighted task priority,
 deprioritising tasks that sit under an ended goal.
