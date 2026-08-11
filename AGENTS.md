@@ -36,8 +36,8 @@ reset it, use Docker directly (`docker logs autotaskcalendar-mongo`,
 ## Verify
 
 `npm test` must pass — it builds the frontend if `dist/` is stale, installs the Playwright
-browser if missing, and runs the whole suite against its own isolated database, so it
-never disturbs your dev stack. **Any behaviour change ships with a spec.**
+browser if missing, and runs four isolated Playwright workers against one test database,
+so it never disturbs your dev stack. **Any behaviour change ships with a spec.**
 
 While iterating, stay narrow: `npm test -- tests/api` (~1 min) or `npm test -- -g "<name>"`
 (seconds). Save the full run for just before you commit.

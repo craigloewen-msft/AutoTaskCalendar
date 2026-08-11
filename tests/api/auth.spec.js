@@ -2,19 +2,20 @@ const { test, expect, baseURL } = require('../fixtures');
 
 test.describe('auth', () => {
     test('login and registration handle success and duplicate credentials', async ({ seed, apiAnon }) => {
-        await seed();
+        const data = await seed();
+        const newUsername = `${data.namespace}-brandnew`;
 
         const login = await apiAnon.post('/api/login', {
-            data: { username: 'testuser', password: 'testpassword' },
+            data: { username: data.primary.username, password: data.primary.password },
         });
         const loginBody = await login.json();
 
         expect(loginBody.success).toBe(true);
         expect(loginBody.token).toBeTruthy();
-        expect(loginBody.user.username).toBe('testuser');
+        expect(loginBody.user.username).toBe(data.primary.username);
 
         const wrongPassword = await apiAnon.post('/api/login', {
-            data: { username: 'testuser', password: 'wrong' },
+            data: { username: data.primary.username, password: 'wrong' },
         });
         expect((await wrongPassword.json()).success).toBe(false);
 
@@ -25,8 +26,8 @@ test.describe('auth', () => {
 
         const register = await apiAnon.post('/api/register', {
             data: {
-                username: 'brandnew',
-                email: 'brandnew@example.com',
+                username: newUsername,
+                email: `${newUsername}@example.test`,
                 password: 'hunter2hunter2',
                 timeZone: 'Asia/Kathmandu',
             },
@@ -34,16 +35,16 @@ test.describe('auth', () => {
         const registerBody = await register.json();
 
         expect(registerBody.success).toBe(true);
-        expect(registerBody.user.username).toBe('brandnew');
+        expect(registerBody.user.username).toBe(newUsername);
 
         const brandnewLogin = await apiAnon.post('/api/login', {
-            data: { username: 'brandnew', password: 'hunter2hunter2' },
+            data: { username: newUsername, password: 'hunter2hunter2' },
         });
         expect((await brandnewLogin.json()).success).toBe(true);
 
         const duplicate = await apiAnon.post('/api/register', {
             data: {
-                username: 'testuser',
+                username: data.primary.username,
                 email: 'dupe@example.com',
                 password: 'somepassword',
                 timeZone: 'UTC',

@@ -51,16 +51,18 @@ The goal is confidence per test, not coverage theater.
 ## Running the tests
 
 ```bash
-npm test                                     # the whole suite (~3 min)
-npm test -- tests/api                        # API tests only (~1 min)
+npm test                                     # whole suite, four workers
+npm test -- tests/api                        # API tests only
 npm test -- tests/api/tasks.spec.js          # one file
 npm test -- -g "completes a task"            # one test by name, seconds
+npm test -- --workers=1                      # force serial execution
 npm test -- --ui                             # watch, step, time-travel
 ```
 
-Everything after `--` goes straight to Playwright.
+Everything after `--` goes straight to Playwright. The configuration uses four workers by
+default; `--workers=<n>` overrides it exactly as documented by Playwright.
 
-**Iterating on one thing? Do not run the whole suite.** `npm test -- -g "<name>"` takes
+**Iterating on one thing? Do not run the whole suite.** File filters and `-g` still take
 seconds; save the full run for just before you commit.
 
 `npm test` handles the setup itself: it starts the database, downloads the Chromium
@@ -70,25 +72,28 @@ beforehand.
 
 ## How isolation works
 
-Tests never touch the database you develop against. `scripts/test.js` runs everything
-under the instance name `<your-branch>-test`, and `instance.js` turns that name into its
-own ports, database, and session cookie. All instances share one MongoDB container and are
-isolated by database name.
+Tests never touch the database you develop against. Each `npm test` invocation gets one
+run-specific database, API port, session cookie, artifact directory, and Express server.
+Four Playwright workers share that app stack.
 
 ```mermaid
 flowchart LR
-  A["npm run dev (instance: my-branch)"] --> B[("db: ..._my_branch")]
-  C["npm test (instance: my-branch-test)"] --> D[("db: ..._my_branch_test")]
+  A["Playwright worker 1"] --> E["one Express server"]
+  B["Playwright worker 2"] --> E
+  C["Playwright worker 3"] --> E
+  D["Playwright worker 4"] --> E
+  E --> F[("one test-run database")]
 ```
 
-So you can leave `npm run dev` running while the suite executes, and several agents can
-test at once without colliding. `npm test` prints the ports and database it chose.
+The `seed` fixture does **not** wipe the database. It creates uniquely named primary,
+secondary, and recurring users for the current test. Application queries are scoped by the
+authenticated user's ID, so workers can schedule, mutate, and delete their own data without
+touching another test. The fixture removes that tenant after the test; the runner drops the
+entire run database when Playwright exits.
 
-The suite runs the **built** bundle served by Express (one server on the API port), which
-is closer to production and faster than the webpack dev server.
-
-Tests share one database and therefore run serially (`workers: 1`). Each test reseeds
-whatever it needs, so order never matters.
+This is why native `--workers=4` is safe here. The suite drives one **built** bundle served
+by one Express process, which is both simple and close to production. You can leave
+`npm run dev` running or start two test commands on the same branch without collisions.
 
 ## Writing a test
 
@@ -106,7 +111,7 @@ Everything lives in `tests/`:
 tests/
   fixtures/index.js     shared fixtures (seed, api, loggedInPage, withDb, ...)
   fixtures/db.js        database connection handling
-  api/*.spec.js         HTTP-level tests
+  api/*.spec.js         HTTP-level tests, including tenant-isolation coverage
   ui/*.spec.js          browser tests
 ```
 
@@ -117,12 +122,12 @@ directly — that is what gives you seeding and authentication.
 
 | Fixture | What it gives you |
 | --- | --- |
-| `seed()` | Wipes the database and builds the dataset. Returns everything it created. |
+| `seed()` | Rebuilds this test's tenant and returns everything it created. |
 | `seed.clearTasks()` | Removes the primary user's tasks and events, for empty-state tests. |
-| `api` | Request context authenticated as `testuser`. |
+| `api` | Request context authenticated as this test's primary user. |
 | `apiAnon` | Request context with no credentials, for auth-failure tests. |
 | `loginAs(user, pass)` | Authenticated request context for any seeded user. |
-| `loggedInPage` | A browser page already logged in as `testuser`. |
+| `loggedInPage` | Browser page logged in as this test's primary user. |
 | `withDb(fn)` | Run a query against the test database, connecting if needed. |
 
 ### API test template
@@ -199,23 +204,25 @@ Do not add duplicate endpoint, validation, or UI checks for the same placement r
 
 ## Debugging a failure
 
-Artifacts are captured **on failure only**, so a green run leaves `test-results/` empty.
-A failed test leaves four things behind:
+Artifacts are captured **on failure only**. Every invocation prints its run directory;
+concurrent invocations therefore never overwrite one another:
 
 ```
-test-results/calendar-calendar-page-renders-tasks-ui/
-  test-failed-1.png     screenshot at the moment of failure
-  video.webm            video of the whole test
-  trace.zip             full time-travel recording (the useful one)
-  error-context.md      the page's accessibility tree as text
+.playwright/runs/<run-id>/
+  test-results/<failing-test>/
+    test-failed-1.png     screenshot at the moment of failure
+    video.webm            video of the whole test
+    trace.zip             full time-travel recording (the useful one)
+    error-context.md      the page's accessibility tree as text
+  playwright-report/      HTML report for the run
 ```
 
 The trace is a step-by-step recording where you can scrub through the test and inspect the
 DOM at each step:
 
 ```bash
-npx playwright show-trace test-results/<the-failing-test>/trace.zip
-npx playwright show-report        # the HTML report for the whole run
+npx playwright show-trace .playwright/runs/<run-id>/test-results/<test>/trace.zip
+npx playwright show-report .playwright/runs/<run-id>/playwright-report
 ```
 
 `error-context.md` is worth knowing about if you are an agent rather than a human — it is

@@ -1,10 +1,10 @@
 'use strict';
 
 /**
- * Seed runner. Wipes the target database and builds the dataset.
+ * Seed runner for development and tests.
  *
- * Used by both `npm run seed` (scripts/seed.js) and the Playwright `seed` fixture, so the
- * data a test runs against is exactly the data you can reproduce locally.
+ * CLI seeding wipes the instance; tests replace one namespaced tenant so workers can run
+ * concurrently against the same database.
  */
 
 const mongoose = require('mongoose');
@@ -28,6 +28,8 @@ const { UserDetails, TaskDetails, EventDetails, RoleDetails, GoalDetails, Projec
 const instance = require('../instance');
 const factories = require('./factories');
 const dataset = require('./dataset');
+
+let seedQueue = Promise.resolve();
 
 function resolveMongoUrl(explicitUrl) {
     if (explicitUrl) {
@@ -56,19 +58,54 @@ async function wipe() {
     ]);
 }
 
+function namespacePattern(namespace) {
+    const escaped = namespace.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`^${escaped}-`);
+}
+
+/** Remove one test tenant without touching concurrent workers. */
+async function wipeNamespace(namespace) {
+    const users = await UserDetails.find({ username: namespacePattern(namespace) }).select('_id');
+    const userIds = users.map((user) => user._id);
+
+    if (userIds.length === 0) return;
+
+    const owned = { userRef: { $in: userIds } };
+    await Promise.all([
+        TaskDetails.deleteMany(owned),
+        EventDetails.deleteMany(owned),
+        RoleDetails.deleteMany(owned),
+        GoalDetails.deleteMany(owned),
+        ProjectDetails.deleteMany(owned),
+    ]);
+    await UserDetails.deleteMany({ _id: { $in: userIds } });
+}
+
 /**
  * The imperative API handed to the dataset builder. Persisting as we go means it can
  * reference real ObjectIds (task dependencies, event taskRefs) without extra plumbing.
  */
-function makeBuilder(anchor) {
+function makeBuilder(anchor, namespace) {
     const created = { users: [], tasks: [], events: [], roles: [], goals: [], projects: [] };
+
+    function namespaceUser(overrides) {
+        if (!namespace) return overrides;
+
+        const base = overrides.username || 'testuser';
+        return {
+            ...overrides,
+            username: `${namespace}-${base}`,
+            email: `${namespace}-${base}@example.test`,
+        };
+    }
 
     const builder = {
         anchor,
         ...factories,
 
         async createUser(overrides = {}) {
-            const { password, attributes } = factories.makeUser({ anchor, ...overrides });
+            const namespaced = namespaceUser(overrides);
+            const { password, attributes } = factories.makeUser({ anchor, ...namespaced });
             const user = await UserDetails.register(attributes, password);
             const record = { user, username: attributes.username, password };
             created.users.push(record);
@@ -133,12 +170,12 @@ function makeBuilder(anchor) {
 }
 
 /**
- * Seed the database.
+ * Build the dataset, replacing either the whole instance or one namespaced tenant.
  *
  * Returns `{ anchor, users, tasks, events, roles, goals, projects, primary, other, named,
  * counts }` — everything the dataset created, so tests can assert without re-querying.
  */
-async function runSeed({ mongoUrl, anchor, disconnect = false } = {}) {
+async function executeSeed({ mongoUrl, anchor, disconnect = false, namespace = null } = {}) {
     const url = resolveMongoUrl(mongoUrl);
     const ownsConnection = mongoose.connection.readyState === 0;
 
@@ -150,13 +187,15 @@ async function runSeed({ mongoUrl, anchor, disconnect = false } = {}) {
         factories.resetRandomness();
 
         const seedAnchor = anchor || factories.defaultAnchor();
-        const { builder, created } = makeBuilder(seedAnchor);
+        const { builder, created } = makeBuilder(seedAnchor, namespace);
 
-        await wipe();
+        if (namespace) await wipeNamespace(namespace);
+        else await wipe();
         const result = (await dataset.build(builder)) || {};
 
         return {
             anchor: seedAnchor,
+            namespace,
             ...created,
             ...result,
         };
@@ -167,6 +206,13 @@ async function runSeed({ mongoUrl, anchor, disconnect = false } = {}) {
     }
 }
 
+function runSeed(options = {}) {
+    const next = seedQueue.then(() => executeSeed(options));
+    seedQueue = next.catch(() => {});
+    return next;
+}
+
 module.exports = {
     runSeed,
+    wipeNamespace,
 };

@@ -62,8 +62,8 @@ test.describe('temporal primitives and migration', () => {
 
         const response = await apiAnon.post('/api/login', {
             data: {
-                username: 'testuser',
-                password: 'testpassword',
+                username: data.primary.username,
+                password: data.primary.password,
                 timeZone: 'America/New_York',
             },
         });
@@ -142,7 +142,10 @@ test.describe('temporal primitives and migration', () => {
             const templateAfter = await TaskDetails.findById(data.named.weekdaysSeries._id);
             expect(templateAfter.recurrence.endsOn.toISOString().slice(0, 10)).toBe(cutoffDate);
 
-            const roleAfter = await RoleDetails.findOne({ title: 'Legacy local date' });
+            const roleAfter = await RoleDetails.findOne({
+                title: 'Legacy local date',
+                userRef: data.primary.user._id,
+            });
             expect(roleAfter.startDate.toISOString()).toBe('2024-03-10T00:00:00.000Z');
             expect(await TaskDetails.countDocuments({
                 seriesRef: data.named.weekdaysSeries._id,

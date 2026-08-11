@@ -3,10 +3,15 @@ const { execFileSync, spawn } = require('child_process');
 const path = require('path');
 const mongoose = require('mongoose');
 
-const { resolveInstance } = require('../../instance');
+const { resolveInstance, resolveInstanceName } = require('../../instance');
 const { CONTAINER_NAME } = require('../../scripts/db');
 
 const repoRoot = path.join(__dirname, '..', '..');
+const testRunNamespace = `pid-${process.pid}`;
+
+function testInstanceName(name) {
+    return `${name}-${testRunNamespace}`;
+}
 
 function resolveNamed(name, extraEnv = {}) {
     const overridden = {
@@ -64,31 +69,41 @@ async function dropDatabase(mongoUrl) {
 
 test.describe('dev environment', () => {
     test('instance naming stays isolated, stable, bounded, and accepts pinned ports', () => {
-        const a = resolveNamed('dev-env-spec-a');
-        const b = resolveNamed('dev-env-spec-b');
-        const stable = resolveNamed('dev-env-spec-stable');
-        const pinned = resolveNamed('dev-env-spec-a', {
+        const a = resolveNamed(testInstanceName('dev-env-spec-a'));
+        const b = resolveNamed(testInstanceName('dev-env-spec-b'));
+        const stable = resolveNamed(testInstanceName('dev-env-spec-stable'));
+        const pinned = resolveNamed(testInstanceName('dev-env-spec-a'), {
             AUTOTASKCALENDAR_API_PORT: '4567',
             AUTOTASKCALENDAR_WEB_PORT: '4568',
         });
         const long = 'feature/'.padEnd(120, 'x');
-        const longA = resolveNamed(`${long}-one`);
-        const longB = resolveNamed(`${long}-two`);
+        const longA = resolveNamed(testInstanceName(`${long}-one`));
+        const longB = resolveNamed(testInstanceName(`${long}-two`));
 
-        expect(a.dbName).toBe('autotaskcalendar_dev_env_spec_a');
+        expect(a.dbName).toContain('autotaskcalendar_dev_env_spec_a');
         expect(b.dbName).not.toBe(a.dbName);
         expect(b.mongoPort).toBe(a.mongoPort);
-        expect(resolveNamed('dev-env-spec-a').dbName).toBe(resolveNamed('dev-env-spec-a').dbName);
-        expect(resolveNamed('dev-env-spec-stable').apiPort).toBe(stable.apiPort);
-        expect(resolveNamed('dev-env-spec-stable').webPort).toBe(stable.webPort);
-        expect(resolveNamed('dev-env-spec-stable').inspectPort).toBe(stable.inspectPort);
+        expect(resolveNamed(testInstanceName('dev-env-spec-a')).dbName).toBe(a.dbName);
+        expect(resolveNamed(testInstanceName('dev-env-spec-stable')).apiPort).toBe(stable.apiPort);
+        expect(resolveNamed(testInstanceName('dev-env-spec-stable')).webPort).toBe(stable.webPort);
+        expect(resolveNamed(testInstanceName('dev-env-spec-stable')).inspectPort).toBe(stable.inspectPort);
         expect(longA.dbName.length).toBeLessThanOrEqual(63);
         expect(longB.dbName.length).toBeLessThanOrEqual(63);
         expect(longA.dbName).not.toBe(longB.dbName);
         expect(pinned.apiPort).toBe(4567);
         expect(pinned.webPort).toBe(4568);
-        expect(() => resolveNamed('dev-env-spec-a', { AUTOTASKCALENDAR_API_PORT: 'abc' }))
-            .toThrow(/must be an integer/);
+        expect(() => resolveNamed(testInstanceName('dev-env-spec-a'), {
+            AUTOTASKCALENDAR_API_PORT: 'abc',
+        })).toThrow(/must be an integer/);
+
+        const savedPort = process.env.AUTOTASKCALENDAR_API_PORT;
+        process.env.AUTOTASKCALENDAR_API_PORT = 'not-a-port';
+        try {
+            expect(resolveInstanceName()).toBeTruthy();
+        } finally {
+            if (savedPort === undefined) delete process.env.AUTOTASKCALENDAR_API_PORT;
+            else process.env.AUTOTASKCALENDAR_API_PORT = savedPort;
+        }
     });
 
     test('concurrent port resolution and ensureDatabase avoid shared-container collisions', async () => {
@@ -141,8 +156,8 @@ test.describe('dev environment', () => {
     });
 
     test('one instance database does not leak into another', async () => {
-        const a = resolveNamed('dev-env-spec-marker-a');
-        const b = resolveNamed('dev-env-spec-marker-b');
+        const a = resolveNamed(testInstanceName('dev-env-spec-marker-a'));
+        const b = resolveNamed(testInstanceName('dev-env-spec-marker-b'));
 
         await dropDatabase(a.mongoUrl);
         await dropDatabase(b.mongoUrl);

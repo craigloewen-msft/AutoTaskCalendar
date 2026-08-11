@@ -17,8 +17,8 @@ async function complete(api, taskId) {
     expect((await res.json()).success).toBe(true);
 }
 
-async function loadUser(username = 'testuser') {
-    return withDb(() => UserDetails.findOne({ username }));
+async function loadPrimaryUser(seed) {
+    return withDb(() => UserDetails.findById(seed.last().primary.user._id));
 }
 
 async function occurrencesOf(template) {
@@ -269,7 +269,7 @@ test.describe('recurrence expansion', () => {
         await seed();
         await schedule(api);
 
-        const user = await loadUser();
+        const user = await loadPrimaryUser(seed);
         const legacy = await withDb(() => TaskDetails.findOne({
             userRef: user._id,
             title: 'Recurring weekly check-in',
@@ -308,12 +308,12 @@ test.describe('recurrence expansion', () => {
 test.describe('scheduling a recurring series', () => {
     test('scheduler places a weekly Monday series once per Monday', async ({ seed, loginAs }) => {
         const data = await seed();
-        const recurruserApi = await loginAs('recurruser');
+        const recurruserApi = await loginAs(data.recurring.username);
 
         const scheduled = await recurruserApi.get('/api/scheduletasks');
         expect((await scheduled.json()).success).toBe(true);
 
-        const user = await loadUser('recurruser');
+        const user = await withDb(() => UserDetails.findById(data.recurring.user._id));
         const events = await withDb(() => EventDetails.find({
             userRef: user._id,
             title: data.named.mondaySeries.title,

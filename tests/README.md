@@ -3,9 +3,10 @@
 Playwright suite covering the API and the Vue UI.
 
 ```bash
-npm test                    # everything (~3 min)
-npm test -- tests/api       # API only (~1 min)
+npm test                    # everything, four workers
+npm test -- tests/api       # API only
 npm test -- -g "a name"     # one test, seconds
+npm test -- --workers=1     # force serial execution
 npm test -- --ui            # interactive UI mode
 ```
 
@@ -27,7 +28,7 @@ test('does the thing', async ({ seed, api }) => {
 Layout:
 
 - `fixtures/` — `seed`, `api`, `apiAnon`, `loginAs`, `loggedInPage`, `withDb`.
-- `api/` — HTTP-level tests. Fast; put logic coverage here.
+- `api/` — HTTP-level and tenant-isolation tests. Fast; put logic coverage here.
 - `ui/` — browser tests. Slower; keep them to user-visible smoke paths.
 
 Reading the database directly? Go through `withDb`, which connects to the right
@@ -36,5 +37,6 @@ per-instance database for you:
 ```js
 const { test, expect, withDb } = require('../fixtures');
 
-const user = await withDb(() => UserDetails.findOne({ username: 'testuser' }));
+const data = await seed();
+const user = await withDb(() => UserDetails.findById(data.primary.user._id));
 ```

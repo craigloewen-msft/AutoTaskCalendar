@@ -351,7 +351,7 @@ function buildInstance() {
 
 // Resolved on first property access rather than on require, so merely importing this
 // module never claims ports.
-module.exports = { resolveInstance };
+module.exports = { resolveInstance, resolveInstanceName: detectName };
 
 for (const field of [
     'name',

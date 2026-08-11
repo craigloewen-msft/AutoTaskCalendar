@@ -74,6 +74,17 @@ test.describe('events', () => {
         expect(badDate.log).not.toContain('Cast to date');
     });
 
+    test('uses the running Express origin for OAuth callback redirects', async ({ apiAnon }) => {
+        const response = await apiAnon.get('/api/connectGoogleCallback?error=denied', {
+            maxRedirects: 0,
+        });
+
+        expect(response.status()).toBe(302);
+        expect(response.headers().location).toBe(
+            `${process.env.AUTOTASKCALENDAR_BASE_URL}?error=oauth_error`
+        );
+    });
+
     test('update, delete, and Google event transforms preserve intended event semantics', async ({ seed, api }) => {
         const data = await seed();
 

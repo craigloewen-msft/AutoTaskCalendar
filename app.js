@@ -35,7 +35,8 @@ if (process.env.NODE_ENV == 'production') {
 } else {
     // Derived per instance so multiple instances can run side by side. See instance.js.
     mongooseConnectionString = instance.mongoUrl;
-    config.appUrl = `http://localhost:${instance.webPort}`;
+    config.appUrl = process.env.AUTOTASKCALENDAR_BASE_URL
+        || `http://localhost:${instance.webPort}`;
 }
 
 // Set up Mongoose connection.

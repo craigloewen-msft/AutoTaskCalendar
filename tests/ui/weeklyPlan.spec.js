@@ -168,7 +168,10 @@ test.describe('weekly plan page', () => {
         await project.locator('.other-tasks summary').click();
         await expect(project.getByRole('button', { name: /Edited from Weekly Plan/ })).toBeVisible();
 
-        const saved = await withDb(() => TaskDetails.findOne({ title: 'Edited from Weekly Plan' }));
+        const saved = await withDb(() => TaskDetails.findOne({
+            title: 'Edited from Weekly Plan',
+            userRef: data.primary.user._id,
+        }));
         expect(saved.duration).toBe(55);
         expect(saved.dueDate.toISOString().slice(0, 10)).toBe(week.nextStartDate);
     });
@@ -194,8 +197,8 @@ test.describe('weekly plan page', () => {
         });
         const page = await context.newPage();
         await page.goto('/#/login');
-        await page.fill('input[name="username"]', 'testuser');
-        await page.fill('input[name="password"]', 'testpassword');
+        await page.fill('input[name="username"]', data.primary.username);
+        await page.fill('input[name="password"]', data.primary.password);
         await page.click('button:has-text("Sign in")');
         await page.waitForFunction(() => !!localStorage.getItem('token'));
         await page.clock.install({ time: fixedNow });

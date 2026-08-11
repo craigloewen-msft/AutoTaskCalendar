@@ -16,8 +16,10 @@ the dataset — a single thing to understand and a single thing to keep correct.
 npm run seed
 ```
 
-Seeding **wipes** the users, tasks, events, roles, goals, and projects in your instance's
-database first, so each run gives you a clean, known state.
+The `npm run seed` command **wipes** the users, tasks, events, roles, goals, and projects in
+your development instance first, so each run gives you a clean, known state. The test
+fixture instead namespaces its users and removes only that test's tenant, allowing native
+Playwright workers to seed concurrently.
 
 Log in with:
 
@@ -92,7 +94,8 @@ flowchart LR
   `makeProject`. Sensible defaults, every field overridable, powered by `@faker-js/faker`
   with a fixed seed so runs are reproducible.
 - **`seed/dataset.js`** — the dataset itself, as one readable `build(b)` function.
-- **`seed/index.js`** — `runSeed()`: connects, wipes, builds, and returns the created data.
+- **`seed/index.js`** — `runSeed()`: connects, builds, and returns the created data. CLI
+  calls wipe the instance; namespaced test calls replace only their own tenant.
 - **`scripts/seed.js`** — the CLI wrapper.
 
 ### Dates are anchored, never absolute
@@ -117,7 +120,8 @@ re-querying:
 ```js
 const data = await seed();
 
-data.primary.user       // the testuser mongoose document
+data.primary.user       // primary user's mongoose document
+data.primary.username   // unique username for this test
 data.other.user         // the second user
 data.named.research     // named tasks, by key
 data.named.engineerRole // Compass roles, goals, and projects are named too

@@ -12,7 +12,7 @@
  *   });
  *
  * Fixtures available:
- *   seed()          reseed the database, returns the created data
+ *   seed()          rebuild this test's tenant, returns the created data
  *   seed.clearTasks()  wipe the primary user's tasks/events, for empty-state tests
  *   api             request context authenticated as the seeded primary user
  *   apiAnon         request context with no credentials, for auth-failure tests
@@ -25,13 +25,20 @@
  */
 
 const base = require('@playwright/test');
+const { createHash } = require('crypto');
 
-const { runSeed } = require('../../seed');
+const { runSeed, wipeNamespace } = require('../../seed');
 const { TaskDetails, EventDetails, UserDetails } = require('../../models');
 const instance = require('../../instance');
 const { withDb } = require('./db');
 
 const baseURL = process.env.AUTOTASKCALENDAR_BASE_URL || `http://127.0.0.1:${instance.apiPort}`;
+
+function testNamespace(testInfo) {
+    const identity = [testInfo.testId, testInfo.retry, testInfo.repeatEachIndex].join(':');
+    const hash = createHash('sha1').update(identity).digest('hex').slice(0, 12);
+    return `pw-${process.pid}-${testInfo.workerIndex}-${hash}`;
+}
 
 /**
  * One mongoose connection per worker, reused by every seed call in that worker.
@@ -67,14 +74,28 @@ async function createAuthedContext(playwright, username, password) {
 
 const test = base.test.extend({
     /**
-     * Reseed the database. Call it first in any test that depends on data.
+     * Rebuild this test's tenant. Concurrent workers keep their own data.
      */
-    seed: async ({}, use) => {
+    seed: async ({}, use, testInfo) => {
         let lastResult = null;
+        let seedInFlight = null;
+        const namespace = testNamespace(testInfo);
 
         const seed = async (options = {}) => {
-            lastResult = await withDb(() => runSeed({ mongoUrl: instance.mongoUrl, ...options }));
-            return lastResult;
+            if (!seedInFlight) {
+                seedInFlight = withDb(() => runSeed({
+                    ...options,
+                    mongoUrl: instance.mongoUrl,
+                    namespace,
+                }));
+            }
+
+            try {
+                lastResult = await seedInFlight;
+                return lastResult;
+            } finally {
+                seedInFlight = null;
+            }
         };
 
         // Let other fixtures see whether this test already seeded.
@@ -97,7 +118,11 @@ const test = base.test.extend({
             return result;
         };
 
-        await use(seed);
+        try {
+            await use(seed);
+        } finally {
+            await withDb(() => wipeNamespace(namespace));
+        }
     },
 
     /**
@@ -111,10 +136,10 @@ const test = base.test.extend({
     },
 
     nonUtcPage: async ({ browser, seed }, use) => {
-        if (!seed.last()) await seed();
+        const data = seed.last() || await seed();
 
         await withDb(() => UserDetails.updateOne(
-            { username: 'testuser' },
+            { _id: data.primary.user._id },
             { $set: { timeZone: 'America/Los_Angeles' } }
         ));
         const context = await browser.newContext({
@@ -123,8 +148,8 @@ const test = base.test.extend({
         });
         const page = await context.newPage();
         await page.goto('/#/login');
-        await page.fill('input[name="username"]', 'testuser');
-        await page.fill('input[name="password"]', 'testpassword');
+        await page.fill('input[name="username"]', data.primary.username);
+        await page.fill('input[name="password"]', data.primary.password);
         await page.click('button:has-text("Sign in")');
         await page.waitForFunction(() => !!localStorage.getItem('token'));
         await use(page);
@@ -147,33 +172,32 @@ const test = base.test.extend({
     },
 
     /**
-     * A request context authenticated as `testuser`. Seeds first if the test has not
-     * already done so.
+     * A request context authenticated as this test's primary user.
      */
     api: async ({ playwright, seed }, use) => {
-        if (!seed.last()) {
-            await seed();
-        }
+        const data = seed.last() || await seed();
 
-        const { context } = await createAuthedContext(playwright, 'testuser', 'testpassword');
+        const { context } = await createAuthedContext(
+            playwright,
+            data.primary.username,
+            data.primary.password
+        );
         await use(context);
         await context.dispose();
     },
 
     /**
-     * A browser page already logged in as `testuser`.
+     * A browser page already logged in as this test's primary user.
      *
      * This drives the real login form rather than planting localStorage, because the app
      * only installs the axios Authorization header during the login dispatch.
      */
     loggedInPage: async ({ page, seed }, use) => {
-        if (!seed.last()) {
-            await seed();
-        }
+        const data = seed.last() || await seed();
 
         await page.goto('/#/login');
-        await page.fill('input[name="username"]', 'testuser');
-        await page.fill('input[name="password"]', 'testpassword');
+        await page.fill('input[name="username"]', data.primary.username);
+        await page.fill('input[name="password"]', data.primary.password);
         await page.click('button:has-text("Sign in")');
 
         // The app redirects home once the store has the token.
@@ -183,4 +207,4 @@ const test = base.test.extend({
     },
 });
 
-module.exports = { test, expect: base.expect, baseURL, withDb };
+module.exports = { test, expect: base.expect, baseURL, testNamespace, withDb };

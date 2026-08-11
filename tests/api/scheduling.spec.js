@@ -12,8 +12,8 @@ async function schedule(api) {
     expect((await res.json()).success).toBe(true);
 }
 
-async function loadUser(username = 'testuser') {
-    return withDb(() => UserDetails.findOne({ username }));
+async function loadUser(seed) {
+    return withDb(() => UserDetails.findById(seed.last().primary.user._id));
 }
 
 async function taskEvents(user) {
@@ -43,7 +43,7 @@ test.describe('scheduling', () => {
         await seed();
         await schedule(api);
 
-        const user = await loadUser();
+        const user = await loadUser(seed);
         const scheduled = await taskEvents(user);
         const existing = await calendarEvents(user);
 
@@ -88,7 +88,7 @@ test.describe('scheduling', () => {
         const data = await seed();
         await schedule(api);
 
-        const user = await loadUser();
+        const user = await loadUser(seed);
         const events = await taskEvents(user);
         const tasks = await TaskDetails.find({ userRef: user._id });
         const byId = new Map(tasks.map((task) => [task._id.toString(), task]));
@@ -146,7 +146,7 @@ test.describe('scheduling', () => {
     }) => {
         await seed();
 
-        const user = await loadUser();
+        const user = await loadUser(seed);
         const beforeCalendar = await calendarEvents(user);
 
         await schedule(api);
@@ -187,7 +187,7 @@ test.describe('scheduling', () => {
 
         await schedule(api);
 
-        const user = await loadUser();
+        const user = await loadUser(seed);
         const events = await taskEvents(user);
 
         for (const event of events) {
@@ -209,7 +209,7 @@ test.describe('scheduling', () => {
 
         await schedule(api);
 
-        const user = await loadUser();
+        const user = await loadUser(seed);
         const scheduled = await taskEvents(user);
 
         for (const task of scheduled) {
@@ -264,7 +264,7 @@ test.describe('scheduling', () => {
 
         await schedule(api);
 
-        const user = await loadUser();
+        const user = await loadUser(seed);
         const events = await taskEvents(user);
         const occurrenceDays = new Map(
             (await TaskDetails.find({ seriesRef: template._id }))

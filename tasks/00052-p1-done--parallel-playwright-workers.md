@@ -1,8 +1,24 @@
-# Run the Playwright suite in parallel with isolated shards
+# Run the Playwright suite with parallel workers and isolated tenants
 
 ## Goal
 
-Reduce the wall-clock time of the full `npm test` gate without introducing database races, port collisions, missing artifacts, or confusing output.
+Reduce the wall-clock time of the full `npm test` gate without introducing database races,
+port collisions, missing artifacts, or confusing output.
+
+## Final design
+
+After validating an isolated-shard implementation, the suite moved to the simpler native
+Playwright model requested during review:
+
+- one Playwright process with `workers: 4`;
+- one Express server and one run-specific database;
+- unique users for every test;
+- tenant-scoped seeding and teardown instead of whole-database wipes;
+- normal Playwright argument and reporting behavior.
+
+The original shard requirements and implementation notes below are retained as the
+point-in-time approved plan; the Result section records the final design.
+
 
 The current suite takes about three minutes because `playwright.config.js` fixes `workers: 1`. Simply raising that number is unsafe: every test's `seed()` call wipes the one database used by the app server. Parallelism must therefore happen above Playwright's workers, with a complete isolated app stack per shard.
 
@@ -71,6 +87,23 @@ Keep test-only orchestration helpers side-effect free so these specs do not recu
 4. Confirm a deliberate failing test still yields one merged terminal summary, an HTML report, and its trace/screenshot/video.
 5. Confirm `npm test -- -g "<one test>"`, `npm test -- --ui`, and an explicit Playwright `--shard` invocation use the documented safe path.
 6. Run the complete `npm test` suite once as the final gate.
+
+## Result
+
+The first implementation used isolated Playwright shards. It passed all 206 tests in
+133.793 seconds versus 329.928 seconds serial, but created unnecessary orchestration.
+
+The final implementation uses Playwright's native `workers: 4` with one Express server and
+one run-specific database. Every test seeds uniquely named users and removes only its own
+tenant, so workers never wipe one another's state. The runner drops the complete database
+on exit. This removed the shard planner, multiple app processes, blob report merging, and
+custom argument rules.
+
+Final verification: 199 tests passed in 138.071 seconds (2.3 minutes), including explicit
+tenant-isolation, OAuth-origin, and instance-name coverage. That is 2.39× faster and 58.2%
+less wall-clock time than the 329.928-second serial baseline. The native-worker version is
+about 3% slower than isolated shards, in exchange for roughly 900 fewer lines and standard
+Playwright behavior.
 
 ## Non-goals
 
