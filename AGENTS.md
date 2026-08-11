@@ -27,11 +27,13 @@ Keep all comments short and concise, usually just 1 or 2 sentences max.
 
 ## Containers: `wslc`, not docker
 
-MongoDB runs in a `wslc` container (no compose support; `scripts/dev-db.sh` replaces it):
+MongoDB runs in **one shared** `wslc` container for the whole host; instances are isolated
+by database name, not by container (`scripts/dev-db.sh` replaces compose):
 `npm run db:up | db:down | db:reset | db:status | db:logs`.
-`npm run db:doctor` lists every instance's container and whether its port actually answers;
-`npm run db:gc` stops the ones you are not using. `scripts/dev-db.sh nuke-all` removes every
-instance's container and volume.
+`db:down` drops *your* database and leaves the shared server up for everyone else.
+`npm run db:doctor` checks the one container and flags leftovers from the old
+one-container-per-instance scheme; `npm run db:migrate` removes those. See
+`docs/DEV_DATABASE.md`.
 
 ## Verify
 

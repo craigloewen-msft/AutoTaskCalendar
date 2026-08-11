@@ -2,8 +2,11 @@
  * Per-instance environment resolution.
  *
  * Several AutoTaskCalendar instances can run on one host at once (one per agent, or per
- * git worktree). Ports, the database, container/volume names, and the session cookie are
- * all derived from one instance name, so instances never collide.
+ * git worktree). Ports, the database, and the session cookie are all derived from one
+ * instance name, so instances never collide.
+ *
+ * MongoDB is the exception: every instance shares one container on one port, and isolation
+ * comes from the per-instance database name. See docs/DEV_DATABASE.md.
  *
  * The name is detected automatically from the git branch, so nothing needs to be exported
  * by hand. Set AUTOTASKCALENDAR_INSTANCE to override it.
@@ -127,6 +130,11 @@ function resolveOffset(name) {
     return name === 'default' ? 0 : hashToOffset(name);
 }
 
+// All instances share a single MongoDB container; each gets its own database inside it.
+const SHARED_CONTAINER_NAME = 'autotaskcalendar-mongo';
+const SHARED_VOLUME_NAME = 'autotaskcalendar-mongo-data';
+const SHARED_CONTAINER_LABEL = 'autotaskcalendar.shared=mongo';
+
 const DB_NAME_PREFIX = 'autotaskcalendar_';
 // MongoDB rejects database names longer than 63 bytes.
 const MAX_DB_NAME_LENGTH = 63;
@@ -157,7 +165,9 @@ function resolveInstance() {
 
     const apiPort = resolvePort('AUTOTASKCALENDAR_API_PORT', BASE_PORTS.apiPort, offset);
     const webPort = resolvePort('AUTOTASKCALENDAR_WEB_PORT', BASE_PORTS.webPort, offset);
-    const mongoPort = resolvePort('AUTOTASKCALENDAR_MONGO_PORT', BASE_PORTS.mongoPort, offset);
+    // Every instance shares one MongoDB container, so the Mongo port is NOT offset by
+    // instance: isolation comes from the per-instance database name instead.
+    const mongoPort = resolvePort('AUTOTASKCALENDAR_MONGO_PORT', BASE_PORTS.mongoPort, 0);
     const inspectPort = resolvePort('AUTOTASKCALENDAR_INSPECT_PORT', BASE_PORTS.inspectPort, offset);
 
     // MongoDB caps database names at 63 bytes, and branch names can be long. Truncate the
@@ -178,9 +188,10 @@ function resolveInstance() {
         mongoUrl,
         // Cookies are scoped by host and ignore the port, so each instance needs its own.
         sessionCookieName: `autotaskcalendar.sid.${name}`,
-        containerName: `autotaskcalendar-mongo-${name}`,
-        volumeName: `autotaskcalendar-mongo-data-${name}`,
-        containerLabel: `autotaskcalendar.instance=${name}`,
+        // One shared container/volume for the whole host; see docs/DEV_DATABASE.md.
+        containerName: SHARED_CONTAINER_NAME,
+        volumeName: SHARED_VOLUME_NAME,
+        containerLabel: SHARED_CONTAINER_LABEL,
     };
 }
 

@@ -45,43 +45,37 @@ rebuilds.
 
 ## When a test fails for reasons that are not your code
 
-MongoDB runs in a `wslc` container reached through a host port-forward. That forward can
-drop connections when the host is busy, and it can die outright while the container still
-reports "running". Either way you get `MongoPoolClearedError`, `MongoNetworkError`, or
-`read ECONNRESET` in whichever test happened to be running.
+MongoDB runs in **one shared** `wslc` container reached through a host port-forward. That
+forward can drop connections when the host is busy, and it can die outright while the
+container still reports "running". Either way you get `MongoPoolClearedError`,
+`MongoNetworkError`, or `read ECONNRESET` in whichever test happened to be running.
 
 Start here:
 
 ```bash
-npm run db:doctor      # every instance's container, and whether its port answers
+npm run db:doctor      # the shared container, and whether its port really answers
 ```
 
 ```
-CONTAINER                                     STATE     PORT
-autotaskcalendar-mongo-my-branch              running   27357 ok
-autotaskcalendar-mongo-my-branch-test         running   27437 REFUSED   <- dead forward
+shared container     autotaskcalendar-mongo
+state                running
+connectivity         UNREACHABLE on 27017 (run: scripts/dev-db.sh up)
 ```
 
-`REFUSED` next to a running container means the forward died. `npm run db:up` now detects
-that and restarts the container for you. If it keeps happening, recreate it (the volume,
-and therefore the data, is kept):
+`UNREACHABLE` next to a running container means the forward died. `npm run db:up` detects
+that and restarts the container for you; it also recreates the container after repeated
+failures. Data lives in the shared volume and survives all of that.
+
+**Leftovers from the old one-container-per-instance scheme are the other cause.** Each one
+held its own forward, and past about three they start resetting each other's connections.
+`db:doctor` lists them; remove them once:
 
 ```bash
-npm run db:down && npm run db:up
+npm run db:migrate     # deletes every legacy per-instance container and volume
 ```
 
-**Too many live forwards is the other cause.** Every running instance holds one, and past
-about three they start resetting each other's connections. `db:doctor` warns when it sees
-this. Free the ones you are not using:
-
-```bash
-npm run db:gc          # stops this branch's other containers
-npm run db:gc -- --all # stops every instance except the current one
-```
-
-`gc` only stops containers; data lives in the volumes and `db:up` brings any of them back.
-The default is deliberately scoped to your own branch, because other worktrees may belong
-to other agents.
+With the shared container there is only ever one forward, so this class of failure should
+not recur. See `docs/DEV_DATABASE.md`.
 
 Four things absorb the rest, so you should rarely see a spurious failure:
 
@@ -109,7 +103,8 @@ exactly like a real regression.
 
 Tests never touch the database you develop against. `scripts/test.js` runs everything
 under the instance name `<your-branch>-test`, and `instance.js` turns that name into its
-own ports, database, MongoDB container, and session cookie.
+own ports, database, and session cookie. All instances share one MongoDB container and are
+isolated by database name.
 
 ```mermaid
 flowchart LR
