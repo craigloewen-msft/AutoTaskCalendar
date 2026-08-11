@@ -1,4 +1,5 @@
-const { test, expect } = require('../fixtures');
+const { test, expect, withDb } = require('../fixtures');
+const { EventDetails } = require('../../models');
 
 // The API returns due dates as ISO strings; helper keeps assertions readable.
 function titles(taskList) {
@@ -167,6 +168,67 @@ test.describe('tasks', () => {
 
         expect(body.success).toBe(true);
         expect(titles(body.taskList)).not.toContain(task.title);
+    });
+
+    test('completion removes only the task generated calendar events', async ({ seed, api }) => {
+        const data = await seed();
+        const task = data.named.proposal;
+        const otherTask = data.named.codeReview;
+        const eventFields = {
+            title: 'Completion cleanup fixture',
+            startDate: new Date('2030-01-01T10:00:00Z'),
+            endDate: new Date('2030-01-01T11:00:00Z'),
+        };
+
+        const events = await withDb(() => EventDetails.create([
+            {
+                ...eventFields,
+                type: 'task',
+                taskRef: task._id,
+                userRef: data.primary.user._id,
+            },
+            {
+                ...eventFields,
+                type: 'task-chunk',
+                taskRef: task._id,
+                userRef: data.primary.user._id,
+            },
+            {
+                ...eventFields,
+                type: 'calendar',
+                taskRef: task._id,
+                userRef: data.primary.user._id,
+            },
+            {
+                ...eventFields,
+                type: 'task',
+                taskRef: otherTask._id,
+                userRef: data.primary.user._id,
+            },
+            {
+                ...eventFields,
+                type: 'task',
+                taskRef: task._id,
+                userRef: data.other.user._id,
+            },
+        ]));
+
+        const res = await api.post('/api/completeTask', {
+            data: { taskId: task._id.toString() },
+        });
+        const body = await res.json();
+        const remainingIds = await withDb(async () => {
+            const remaining = await EventDetails.find({ _id: { $in: events.map((event) => event._id) } });
+            return remaining.map((event) => event._id.toString());
+        });
+
+        expect(body.success).toBe(true);
+        expect(remainingIds).not.toContain(events[0]._id.toString());
+        expect(remainingIds).not.toContain(events[1]._id.toString());
+        expect(remainingIds).toHaveLength(3);
+        expect(remainingIds).toEqual(expect.arrayContaining(
+            events.slice(2).map((event) => event._id.toString())
+        ));
     });
 
     test('completing a legacy repeating task creates the next occurrence', async ({ seed, api }) => {

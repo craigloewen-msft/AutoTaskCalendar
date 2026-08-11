@@ -1,4 +1,4 @@
-const { UserDetails, TaskDetails } = require('../models');
+const { UserDetails, TaskDetails, EventDetails } = require('../models');
 const moment = require('moment');
 const { addDateOnlyDays, dateOnlyFromMarker, parseDateOnly } = require('../utils/temporal');
 const mongoose = require('mongoose');
@@ -59,6 +59,12 @@ const completeTask = async (task, user) => {
     task.completed = true;
     task.completedDate = new Date();
     await task.save();
+
+    await EventDetails.deleteMany({
+        userRef: user._id,
+        taskRef: task._id,
+        type: { $in: ['task', 'task-chunk'] },
+    });
 
     // An occurrence completes on its own: the next one already exists, so each completion
     // stands as its own record rather than overwriting one row.
