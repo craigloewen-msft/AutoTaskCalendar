@@ -215,6 +215,22 @@ test.describe('recurrence expansion', () => {
         ).toBe(true);
     });
 
+    test('materialised occurrences inherit their project', async ({ seed, api }) => {
+        const data = await seed();
+        await TaskDetails.updateOne(
+            { _id: data.named.weekdaysSeries._id },
+            { $set: { projectRef: data.named.emptyProject._id } }
+        );
+
+        await schedule(api);
+        const occurrences = await occurrencesOf(data.named.weekdaysSeries);
+
+        expect(occurrences.length).toBeGreaterThan(0);
+        expect(occurrences.every((occurrence) => {
+            return String(occurrence.projectRef) === String(data.named.emptyProject._id);
+        })).toBe(true);
+    });
+
     test('expansion is idempotent', async ({ seed, api }) => {
         const data = await seed();
 
@@ -478,6 +494,7 @@ test.describe('recurrence expansion', () => {
                     occurrenceDate: occurrence.occurrenceDate,
                     completed: false,
                     scheduledDate: occurrence.scheduledDate,
+                    projectRef: data.named.emptyProject._id.toString(),
                 },
             },
         });
@@ -492,10 +509,15 @@ test.describe('recurrence expansion', () => {
         expect(template.seriesRef).toBeNull();
         expect(template.occurrenceDate).toBeNull();
         expect(template.recurrence.freq).toBe('weekly');
+        expect(String(template.projectRef)).toBe(String(data.named.emptyProject._id));
 
         // And the series still expands.
         await schedule(api);
-        expect((await occurrencesOf(data.named.weekdaysSeries)).length).toBeGreaterThan(0);
+        const after = await occurrencesOf(data.named.weekdaysSeries);
+        expect(after.length).toBeGreaterThan(0);
+        expect(after.filter((item) => !item.completed).every((item) => {
+            return String(item.projectRef) === String(data.named.emptyProject._id);
+        })).toBe(true);
     });
 
     test('a completed repeating task keeps repeating weekly instead of daily', async ({ seed, api }) => {

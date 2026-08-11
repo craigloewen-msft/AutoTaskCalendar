@@ -1,9 +1,33 @@
 const { test, expect, withDb, baseURL } = require('../fixtures');
 const { TaskDetails } = require('../../models');
-const { mondayWeekBounds, parseDateOnly, todayInZone } = require('../../utils/temporal');
+const {
+    addDateOnlyDays,
+    mondayWeekBounds,
+    parseDateOnly,
+    todayInZone,
+} = require('../../utils/temporal');
 
 function currentWeek(timeZone = 'UTC') {
     return mondayWeekBounds(todayInZone(timeZone), timeZone);
+}
+
+function previousWeek(timeZone = 'UTC') {
+    const week = currentWeek(timeZone);
+    return {
+        startDate: addDateOnlyDays(week.startDate, -7),
+        endDate: addDateOnlyDays(week.startDate, -1),
+    };
+}
+
+function formatCivil(value, options) {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Intl.DateTimeFormat('en-US', options).format(new Date(year, month - 1, day));
+}
+
+function previousRangeLabel(week) {
+    const start = formatCivil(week.startDate, { month: 'short', day: 'numeric' });
+    const end = formatCivil(week.endDate, { month: 'short', day: 'numeric' });
+    return `${start} – ${end}`;
 }
 
 async function createTask(data, overrides) {
@@ -70,6 +94,115 @@ test.describe('weekly plan page', () => {
         await expect(laterTask).toBeHidden();
         await experiment.locator('.other-tasks summary').click();
         await expect(laterTask).toBeVisible();
+    });
+
+    test('shows a quiet per-project disclosure for tasks completed last week', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        const lastWeek = previousWeek();
+        const current = currentWeek();
+        const older = await createTask(data, {
+            title: 'Document completed context',
+            dueDate: current.endDate,
+            completed: true,
+            completedDate: new Date(`${lastWeek.startDate}T12:00:00.000Z`),
+            projectRef: data.named.emptyProject._id,
+        });
+        const newer = await createTask(data, {
+            title: 'Validate completed context',
+            dueDate: current.endDate,
+            completed: true,
+            completedDate: new Date(`${lastWeek.endDate}T18:00:00.000Z`),
+            seriesRef: data.named.weekdaysSeries._id,
+            projectRef: data.named.emptyProject._id,
+        });
+        await createTask(data, {
+            title: 'Completed this week instead',
+            dueDate: lastWeek.startDate,
+            completed: true,
+            completedDate: new Date(`${current.startDate}T12:00:00.000Z`),
+            projectRef: data.named.emptyProject._id,
+        });
+
+        await openPlan(page);
+
+        const projectId = String(data.named.emptyProject._id);
+        const history = page.locator(`[data-test="completed-last-week-${projectId}"]`);
+        await expect(history).toBeVisible();
+        await expect(history).toHaveAttribute('data-completed-from', lastWeek.startDate);
+        await expect(history).toHaveAttribute('data-completed-to', lastWeek.endDate);
+        await expect(history.locator('summary')).toContainText('2 tasks completed last week');
+        await expect(history.locator('summary')).toContainText(previousRangeLabel(lastWeek));
+        await expect(history.getByText('Validate completed context')).toBeHidden();
+        await expect(page.locator(
+            `[data-test="completed-last-week-${data.named.perfProject._id}"]`
+        )).toHaveCount(0);
+
+        await history.locator('summary').click();
+        const rows = history.locator('[data-test^="completed-last-week-row-"]');
+        await expect(rows).toHaveCount(2);
+        expect(await rows.locator('strong').allTextContents()).toEqual([
+            'Validate completed context',
+            'Document completed context',
+        ]);
+        const completedOn = formatCivil(lastWeek.endDate, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+        });
+        await expect(history.locator(`[data-test="completed-last-week-row-${newer._id}"]`)).toContainText(
+            `Completed ${completedOn}`
+        );
+        await expect(history.locator(`[data-test="completed-last-week-row-${newer._id}"] .task-marker`)).toBeVisible();
+        await expect(history.locator(`[data-test="completed-last-week-row-${older._id}"]`)).toBeVisible();
+        await expect(history.locator('button')).toHaveCount(0);
+        await expect(page.locator('[data-test=task-editor]')).toHaveCount(0);
+    });
+
+    test('keeps planning available when completion history fails and retries it', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        const lastWeek = previousWeek();
+        await createTask(data, {
+            title: 'History loaded after retry',
+            completed: true,
+            completedDate: new Date(`${lastWeek.endDate}T18:00:00.000Z`),
+            projectRef: data.named.emptyProject._id,
+        });
+        let attempts = 0;
+        await page.route('**/api/getProjectCompletions*', async (route) => {
+            attempts += 1;
+            if (attempts === 1) {
+                await route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({ success: false, log: 'Deliberate history failure' }),
+                });
+                return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 150));
+            await route.continue();
+        });
+
+        await openPlan(page);
+
+        const error = page.locator('[data-test=project-completions-error]');
+        await expect(error).toContainText('Last week’s completions could not be loaded');
+        await expect(page.locator(
+            `[data-test="quick-task-${data.named.emptyProject._id}"]`
+        )).toBeVisible();
+
+        await error.getByRole('button', { name: 'Retry' }).click();
+        await expect(error.getByRole('button', { name: 'Retrying…' })).toBeDisabled();
+        await expect(page.locator(
+            `[data-test="completed-last-week-${data.named.emptyProject._id}"]`
+        )).toBeVisible();
+        await expect(page.locator('.completed-last-week summary').first()).toBeFocused();
+        expect(attempts).toBe(2);
     });
 
     test('opens and edits a task without leaving Weekly Plan', async ({
@@ -232,12 +365,54 @@ test.describe('weekly plan page', () => {
         expect(String(saved.projectRef)).toBe(String(data.named.hiringProject._id));
     });
 
+    test('reloads the previous-week window after a Monday rollover', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        await seed();
+        const requestedWindows = [];
+        await page.route('**/api/getProjectCompletions*', async (route) => {
+            requestedWindows.push(route.request().url());
+            await route.continue();
+        });
+        await page.clock.install({ time: new Date('2026-08-16T12:00:00.000Z') });
+
+        await openPlan(page);
+        await expect.poll(() => requestedWindows.some((url) => {
+            return url.includes('completedFrom=2026-08-03')
+                && url.includes('completedTo=2026-08-09');
+        })).toBe(true);
+
+        await page.clock.setFixedTime(new Date('2026-08-17T12:00:00.000Z'));
+        await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+
+        await expect.poll(() => requestedWindows.some((url) => {
+            return url.includes('completedFrom=2026-08-10')
+                && url.includes('completedTo=2026-08-16');
+        })).toBe(true);
+        await expect(page.locator('[data-test=week-range]')).toHaveAttribute(
+            'data-week-start',
+            '2026-08-17'
+        );
+    });
+
     test('uses the saved timezone and stays usable on a narrow screen', async ({
         seed,
         browser,
     }) => {
         const data = await seed();
-        const week = currentWeek('UTC');
+        const fixedNow = new Date('2026-08-17T01:00:00.000Z');
+        const week = mondayWeekBounds('2026-08-17', 'UTC');
+        const lastWeek = {
+            startDate: addDateOnlyDays(week.startDate, -7),
+            endDate: addDateOnlyDays(week.startDate, -1),
+        };
+        await createTask(data, {
+            title: 'Mobile completion context',
+            completed: true,
+            completedDate: new Date(`${lastWeek.endDate}T01:00:00.000Z`),
+            projectRef: data.named.emptyProject._id,
+        });
         const context = await browser.newContext({
             baseURL,
             timezoneId: 'America/Los_Angeles',
@@ -249,6 +424,7 @@ test.describe('weekly plan page', () => {
         await page.fill('input[name="password"]', 'testpassword');
         await page.click('button:has-text("Sign in")');
         await page.waitForFunction(() => !!localStorage.getItem('token'));
+        await page.clock.install({ time: fixedNow });
         await openPlan(page);
 
         await expect(page.locator('[data-test=week-range]')).toHaveAttribute(
@@ -260,6 +436,13 @@ test.describe('weekly plan page', () => {
         await form.scrollIntoViewIfNeeded();
         await expect(form.locator('input[type=text]')).toBeVisible();
         await expect(form.getByRole('button', { name: 'Add task' })).toBeVisible();
+        const history = page.locator(
+            `[data-test="completed-last-week-${data.named.emptyProject._id}"]`
+        );
+        await history.scrollIntoViewIfNeeded();
+        await history.locator('summary').click();
+        await expect(history.getByText('Mobile completion context')).toBeVisible();
+        await expect(history).toContainText('Completed Sun, Aug 16');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
         await context.close();
     });

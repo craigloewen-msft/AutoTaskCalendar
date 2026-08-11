@@ -2,7 +2,12 @@ const express = require('express');
 const router = express.Router();
 const { UserDetails, TaskDetails, ProjectDetails } = require('../models');
 const { returnFailure } = require('../utils/helpers');
-const { getTaskListFromUsername, completeTask, generateTaskEvents } = require('../controllers/taskController');
+const {
+    getTaskListFromUsername,
+    getProjectCompletions,
+    completeTask,
+    generateTaskEvents,
+} = require('../controllers/taskController');
 const { validateRecurrence, normaliseRecurrence, expandRecurrences } = require('../controllers/recurrence');
 const { SCHEDULING_HORIZON_DAYS } = require('../controllers/scheduling');
 const { parseDateOnly } = require('../utils/temporal');
@@ -240,18 +245,18 @@ function createTaskRoutes(config, authenticateToken) {
             const update = { ...task };
             delete update._id;
             delete update.seriesRecurrence;
+            // Completion and occurrence identity are server-owned, never editable fields.
+            delete update.userRef;
+            delete update.completed;
+            delete update.completedDate;
+            delete update.scheduledDate;
+            delete update.occurrenceDate;
+            delete update.seriesRef;
             if (parsedStart) update.startDate = parsedStart.date;
             if (parsedDue) update.dueDate = parsedDue.date;
 
-            // Per-occurrence state must never land on the template: it would make the
-            // template an occurrence of itself and break expansion.
+            // An occurrence's dates come from the rule, so they are not authored here.
             if (isOccurrence) {
-                delete update.seriesRef;
-                delete update.occurrenceDate;
-                delete update.completed;
-                delete update.completedDate;
-                delete update.scheduledDate;
-                // An occurrence's dates come from the rule, so they are not authored here.
                 delete update.dueDate;
                 delete update.startDate;
             }
@@ -278,6 +283,18 @@ function createTaskRoutes(config, authenticateToken) {
 
             if (!actualTask) {
                 return res.send(returnFailure('Task not found'));
+            }
+
+            // Existing pending occurrences keep the series' current project assignment.
+            if (task.projectRef !== undefined) {
+                await TaskDetails.updateMany(
+                    {
+                        userRef: user._id,
+                        seriesRef: targetId,
+                        $or: [{ completed: false }, { completed: null }],
+                    },
+                    { $set: { projectRef: update.projectRef } }
+                );
             }
 
             // Reflect a changed rule immediately, as on create.
@@ -396,6 +413,39 @@ function createTaskRoutes(config, authenticateToken) {
 
         const returnTaskList = await getTaskListFromUsername(req.user.id);
         return res.json({ success: true, taskList: returnTaskList });
+    });
+
+    router.get('/getProjectCompletions', authenticateToken, async (req, res) => {
+        try {
+            const user = await UserDetails.findOne({ username: req.user.id });
+
+            if (!req.user || !user) {
+                return res.send(returnFailure('Not logged in'));
+            }
+
+            const from = parseDateOnly(req.query.completedFrom);
+            const to = parseDateOnly(req.query.completedTo);
+            if (!from.provided || !to.provided) {
+                return res.send(returnFailure('completedFrom and completedTo are required'));
+            }
+            if (!from.valid || !to.valid) {
+                return res.send(returnFailure('Completion dates must use YYYY-MM-DD'));
+            }
+            if (from.value > to.value) {
+                return res.send(returnFailure('completedFrom must be on or before completedTo'));
+            }
+
+            const items = await getProjectCompletions(user, from.value, to.value);
+            return res.json({
+                success: true,
+                completedFrom: from.value,
+                completedTo: to.value,
+                items,
+            });
+        } catch (error) {
+            console.error(error);
+            return res.send(returnFailure('Completion history could not be loaded'));
+        }
     });
 
     router.get('/getUserTasks', authenticateToken, async (req, res) => {

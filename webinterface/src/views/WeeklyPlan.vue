@@ -25,6 +25,23 @@
         </div>
       </header>
 
+      <div
+        v-if="!loading && !loadError && roles.length && completionError"
+        class="completion-error"
+        role="status"
+        data-test="project-completions-error"
+      >
+        <span>Last week’s completions could not be loaded.</span>
+        <button
+          class="btn btn-sm btn-outline-secondary"
+          type="button"
+          :disabled="completionLoading"
+          @click="loadProjectCompletions"
+        >
+          {{ completionLoading ? "Retrying…" : "Retry" }}
+        </button>
+      </div>
+
       <div v-if="loading" class="loading-state" role="status">
         <span class="spinner-border text-primary" aria-hidden="true"></span>
         <span>Loading your weekly plan…</span>
@@ -42,7 +59,13 @@
         <router-link class="btn btn-primary" to="/compass">Set up Compass</router-link>
       </div>
 
-      <main v-else class="role-grid" data-test="weekly-hierarchy">
+      <main
+        v-else
+        ref="weeklyHierarchy"
+        class="role-grid"
+        data-test="weekly-hierarchy"
+        tabindex="-1"
+      >
         <article
           v-for="role in roles"
           :key="role._id"
@@ -137,6 +160,35 @@
                         <span>{{ formatDuration(Number(task.duration) || 0) }}</span>
                       </span>
                     </button>
+                  </li>
+                </ul>
+              </details>
+
+              <details
+                v-if="completionsForProject(project._id).length"
+                class="completed-last-week"
+                :data-test="`completed-last-week-${project._id}`"
+                :data-completed-from="previousWeek.startDate"
+                :data-completed-to="previousWeek.endDate"
+              >
+                <summary>
+                  <span class="completion-check" aria-hidden="true">✓</span>
+                  {{ completionsForProject(project._id).length }}
+                  {{ taskNoun(completionsForProject(project._id).length) }} completed last week ·
+                  {{ formattedPreviousWeekRange }}
+                </summary>
+                <ul class="completed-task-list">
+                  <li
+                    v-for="task in completionsForProject(project._id)"
+                    :key="task._id"
+                    :data-test="`completed-last-week-row-${task._id}`"
+                  >
+                    <span class="completed-task-title">
+                      <span class="completion-check" aria-hidden="true">✓</span>
+                      <span v-if="task.seriesRef" class="task-marker" title="Repeating task" aria-label="Repeating task">↻</span>
+                      <strong>{{ task.title }}</strong>
+                    </span>
+                    <span class="completed-task-date">{{ completionLabel(task) }}</span>
                   </li>
                 </ul>
               </details>
@@ -310,6 +362,7 @@ import { BContainer } from "bootstrap-vue-next";
 import TaskEditor from "../components/TaskEditor.vue";
 import { buildRoleColorMap } from "../utils/roleColors";
 import {
+  addCalendarDays,
   apiDateOnly,
   dateOnlyInTimeZone,
   formatCivilDate,
@@ -325,6 +378,10 @@ export default {
     return {
       roles: [],
       taskList: [],
+      projectCompletions: [],
+      completionError: "",
+      completionLoading: false,
+      completionRequestId: 0,
       selectedTask: null,
       lastTaskTrigger: null,
       forms: {},
@@ -349,6 +406,38 @@ export default {
       if (!this.week) return "";
       const options = { weekday: "short", month: "short", day: "numeric" };
       return `${formatCivilDate(this.week.startDate, options)} – ${formatCivilDate(this.week.endDate, options)}`;
+    },
+    previousWeek() {
+      const currentMonday = this.week?.startDate;
+      return {
+        startDate: addCalendarDays(currentMonday, -7),
+        endDate: addCalendarDays(currentMonday, -1),
+        nextStartDate: currentMonday,
+      };
+    },
+    formattedPreviousWeekRange() {
+      const { startDate, endDate } = this.previousWeek;
+      if (!startDate || !endDate) return "";
+      const sameYear = startDate.slice(0, 4) === endDate.slice(0, 4);
+      const startOptions = { month: "short", day: "numeric" };
+      if (!sameYear) startOptions.year = "numeric";
+      const endOptions = { month: "short", day: "numeric" };
+      if (!sameYear) endOptions.year = "numeric";
+      return `${formatCivilDate(startDate, startOptions)} – ${formatCivilDate(endDate, endOptions)}`;
+    },
+    projectCompletionsByProject() {
+      const grouped = {};
+      for (const task of this.projectCompletions) {
+        if (!grouped[task.projectRef]) grouped[task.projectRef] = [];
+        grouped[task.projectRef].push(task);
+      }
+      for (const tasks of Object.values(grouped)) {
+        tasks.sort((left, right) => {
+          return new Date(right.completedDate) - new Date(left.completedDate)
+            || String(left.title || "").localeCompare(String(right.title || ""));
+        });
+      }
+      return grouped;
     },
     weeklyTasks() {
       return this.sortTasks(this.taskList.filter((task) => this.isDueThisWeek(task)));
@@ -420,6 +509,9 @@ export default {
       this.roles = [];
       this.taskList = [];
       this.forms = {};
+      this.projectCompletions = [];
+      this.completionError = "";
+      this.loadProjectCompletions();
 
       const [compassResult, taskResult] = await Promise.allSettled([
         this.$http.get("/api/getCompass"),
@@ -445,6 +537,42 @@ export default {
 
       this.loading = false;
     },
+    async loadProjectCompletions() {
+      const { startDate, endDate } = this.previousWeek;
+      if (!startDate || !endDate) return;
+
+      const requestId = ++this.completionRequestId;
+      this.completionLoading = true;
+      this.projectCompletions = [];
+      const focusAfterRetry = !!this.completionError;
+
+      try {
+        const response = await this.$http.get("/api/getProjectCompletions", {
+          params: { completedFrom: startDate, completedTo: endDate },
+        });
+        if (requestId !== this.completionRequestId) return;
+        if (!response.data.success) {
+          this.completionError = response.data.log || "Completion history could not be loaded.";
+          return;
+        }
+        this.projectCompletions = response.data.items || [];
+        this.completionError = "";
+        if (focusAfterRetry) {
+          this.$nextTick(() => {
+            const target = this.$refs.weeklyHierarchy?.querySelector(
+              ".completed-last-week summary"
+            ) || this.$refs.weeklyHierarchy;
+            target?.focus();
+          });
+        }
+      } catch (error) {
+        if (requestId === this.completionRequestId) {
+          this.completionError = "Completion history could not be loaded.";
+        }
+      } finally {
+        if (requestId === this.completionRequestId) this.completionLoading = false;
+      }
+    },
     refreshTemporal() {
       const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
       const nextWeek = mondayWeekBounds(today);
@@ -459,9 +587,11 @@ export default {
           form.message = "";
         }
       }
+      return weekChanged;
     },
     handleVisibilityChange() {
-      if (document.visibilityState === "visible") this.refreshTemporal();
+      if (document.visibilityState !== "visible") return;
+      if (this.refreshTemporal()) this.loadProjectCompletions();
     },
     initializeForms() {
       const next = {};
@@ -496,6 +626,9 @@ export default {
         return task.projectRef === projectId && this.isDueThisWeek(task) === thisWeek;
       }));
     },
+    completionsForProject(projectId) {
+      return this.projectCompletionsByProject[projectId] || [];
+    },
     sortTasks(tasks) {
       return [...tasks].sort((left, right) => {
         const leftDate = apiDateOnly(left.dueDate) || "9999-12-31";
@@ -522,6 +655,17 @@ export default {
       if (task.isBacklog || !task.dueDate) return "Backlog";
       return formatCivilDate(task.dueDate, { weekday: "short", month: "short", day: "numeric" });
     },
+    completionLabel(task) {
+      const date = dateOnlyInTimeZone(
+        this.$store.state.user?.timeZone,
+        new Date(task.completedDate)
+      );
+      return `Completed ${formatCivilDate(date, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      })}`;
+    },
     compassDateRange(item) {
       const start = item.startDate
         ? formatCivilDate(item.startDate, { month: "short", year: "numeric" })
@@ -547,7 +691,7 @@ export default {
       this.closeTaskEditor();
     },
     async createTask(project) {
-      this.refreshTemporal();
+      if (this.refreshTemporal()) this.loadProjectCompletions();
       const form = this.forms[project._id];
       form.error = false;
       form.message = "";
@@ -702,6 +846,20 @@ export default {
   color: #8b949e;
 }
 
+.completion-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -12px 0 20px;
+  padding: 10px 12px;
+  border: 1px solid rgba(139, 148, 158, 0.24);
+  border-radius: 9px;
+  background: rgba(22, 27, 34, 0.72);
+  color: #9ca7b2;
+  font-size: 0.84rem;
+}
+
 .loading-state,
 .error-state,
 .empty-state {
@@ -723,6 +881,10 @@ export default {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
   gap: 22px;
   align-items: start;
+}
+
+.role-grid:focus {
+  outline: none;
 }
 
 .role-card {
@@ -907,6 +1069,68 @@ export default {
   cursor: pointer;
 }
 
+.completed-last-week {
+  margin-top: 12px;
+  color: #91a79c;
+  font-size: 0.8rem;
+}
+
+.completed-last-week summary {
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.completed-last-week summary:hover,
+.completed-last-week summary:focus-visible {
+  border-color: rgba(110, 231, 183, 0.32);
+  outline: none;
+  background: rgba(110, 231, 183, 0.06);
+  color: #b5c7bf;
+}
+
+.completion-check {
+  color: #6ee7b7;
+  font-weight: 700;
+}
+
+.completed-task-list {
+  display: grid;
+  gap: 5px;
+  margin: 7px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.completed-task-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-left: 2px solid rgba(110, 231, 183, 0.3);
+  border-radius: 3px 7px 7px 3px;
+  background: rgba(110, 231, 183, 0.035);
+  color: #aab8b1;
+}
+
+.completed-task-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.completed-task-title .completion-check {
+  margin-right: 6px;
+}
+
+.completed-task-date {
+  flex: 0 0 auto;
+  color: #74867d;
+  white-space: nowrap;
+}
+
 .quick-task-form {
   margin-top: 16px;
   padding-top: 14px;
@@ -1072,6 +1296,17 @@ export default {
   .goal-card {
     padding-left: 15px;
     padding-right: 15px;
+  }
+
+  .completion-error,
+  .completed-task-list li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .completed-task-date {
+    padding-left: 21px;
+    white-space: normal;
   }
 
   .goal-heading,

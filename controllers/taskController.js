@@ -1,6 +1,11 @@
 const { UserDetails, TaskDetails, EventDetails } = require('../models');
 const moment = require('moment');
-const { addDateOnlyDays, dateOnlyFromMarker, parseDateOnly } = require('../utils/temporal');
+const {
+    addDateOnlyDays,
+    dateOnlyFromMarker,
+    parseDateOnly,
+    startOfDateInZone,
+} = require('../utils/temporal');
 const mongoose = require('mongoose');
 const { generateTaskEvents } = require('./scheduling');
 const { effectiveRule } = require('./recurrence');
@@ -17,14 +22,29 @@ async function getTaskListFromUsername(inUsername) {
         options: { sort: { dueDate: 1, priority: 1 } },
     });
 
-    return attachSeriesRules(user.taskList);
+    return attachSeriesRules(user.taskList, user._id);
+}
+
+async function getProjectCompletions(user, completedFrom, completedTo) {
+    const start = startOfDateInZone(completedFrom, user.timeZone);
+    const exclusiveEnd = startOfDateInZone(addDateOnlyDays(completedTo, 1), user.timeZone);
+
+    return TaskDetails.find({
+        userRef: user._id,
+        completed: true,
+        completedDate: { $gte: start, $lt: exclusiveEnd },
+        projectRef: { $exists: true, $ne: null },
+    })
+        .select('_id title projectRef completedDate seriesRef')
+        .sort({ completedDate: -1 })
+        .lean();
 }
 
 /**
  * Occurrences do not carry the rule (their template owns it), so the editor would show
  * "Does not repeat" for a task the UI calls part of a series. Attach it for display.
  */
-async function attachSeriesRules(taskList) {
+async function attachSeriesRules(taskList, userId) {
     if (!taskList || taskList.length === 0) {
         return taskList;
     }
@@ -37,7 +57,10 @@ async function attachSeriesRules(taskList) {
         return taskList;
     }
 
-    const templates = await TaskDetails.find({ _id: { $in: seriesIds } }, 'recurrence');
+    const templates = await TaskDetails.find({
+        _id: { $in: seriesIds },
+        userRef: userId,
+    }, 'recurrence');
     const ruleById = new Map(templates.map((template) => {
         const plain = template.toObject ? template.toObject() : template;
         return [template._id.toString(), plain.recurrence];
@@ -105,6 +128,7 @@ const completeTask = async (task, user) => {
 
 module.exports = {
     getTaskListFromUsername,
+    getProjectCompletions,
     completeTask,
     generateTaskEvents
 };
