@@ -193,12 +193,16 @@ test.describe('recurrence rules', () => {
     test('validation accepts good rules and rejects bad ones', () => {
         expect(validateRecurrence(null)).toBeNull();
         expect(validateRecurrence({ freq: 'weekly', interval: 1, byWeekday: [0, 6] })).toBeNull();
+        expect(validateRecurrence({ freq: 'daily', unavailableBehavior: 'skip' })).toBeNull();
+        expect(validateRecurrence({ freq: 'daily', unavailableBehavior: 'next-available' })).toBeNull();
 
         expect(validateRecurrence({ freq: 'fortnightly' })).toContain('frequency');
         expect(validateRecurrence({ freq: 'daily', interval: 0 })).toContain('interval');
         expect(validateRecurrence({ freq: 'weekly', byWeekday: [9] })).toContain('byWeekday');
         expect(validateRecurrence({ freq: 'monthly', byMonthDay: [0] })).toContain('byMonthDay');
         expect(validateRecurrence({ freq: 'daily', endsAfter: 0 })).toContain('endsAfter');
+        expect(validateRecurrence({ freq: 'daily', unavailableBehavior: 'later' }))
+            .toContain('unavailableBehavior');
     });
 });
 
@@ -360,6 +364,7 @@ test.describe('recurrence expansion', () => {
 
         // The old string was promoted to a rule in place, and it now drives occurrences.
         expect(legacy.recurrence.freq).toBe('weekly');
+        expect(legacy.recurrence.unavailableBehavior).toBe('skip');
         expect((await occurrencesOf(legacy)).length).toBeGreaterThan(0);
     });
 
@@ -384,9 +389,58 @@ test.describe('recurrence expansion', () => {
         expect(await TaskDetails.findById(stale._id)).toBeNull();
     });
 
+    test('a next-available occurrence survives after its occurrence day', async ({ seed, api }) => {
+        const data = await seed();
+        await seed.clearTasks();
+
+        const template = await TaskDetails.create({
+            title: 'Deferred standup',
+            duration: 15,
+            userRef: data.primary.user._id,
+            startDate: moment.utc().subtract(7, 'days').startOf('day').toDate(),
+            dueDate: moment.utc().subtract(7, 'days').startOf('day').toDate(),
+            recurrence: {
+                freq: 'weekly',
+                interval: 1,
+                unavailableBehavior: 'next-available',
+            },
+        });
+        const deferred = await TaskDetails.create({
+            title: template.title,
+            duration: template.duration,
+            userRef: data.primary.user._id,
+            seriesRef: template._id,
+            occurrenceDate: moment.utc().subtract(1, 'day').startOf('day').toDate(),
+            dueDate: moment.utc().subtract(1, 'day').startOf('day').toDate(),
+            startDate: moment.utc().subtract(1, 'day').startOf('day').toDate(),
+            completed: false,
+        });
+
+        await schedule(api);
+
+        const kept = await TaskDetails.findById(deferred._id);
+        const { EventDetails } = require('../../models');
+        const event = await EventDetails.findOne({ taskRef: deferred._id });
+        expect(kept).not.toBeNull();
+        expect(kept.scheduledDate).not.toBeNull();
+        expect(event).not.toBeNull();
+
+        await TaskDetails.updateOne(
+            { _id: template._id },
+            { $set: { 'recurrence.unavailableBehavior': 'skip' } }
+        );
+        await schedule(api);
+        expect(await TaskDetails.findById(deferred._id)).toBeNull();
+    });
+
     test('a past COMPLETED occurrence survives pruning', async ({ seed, api }) => {
         const data = await seed();
         await schedule(api);
+
+        await TaskDetails.updateOne(
+            { _id: data.named.weekdaysSeries._id },
+            { $set: { 'recurrence.unavailableBehavior': 'next-available' } }
+        );
 
         const done = await TaskDetails.create({
             title: 'Standup last week',
@@ -444,6 +498,7 @@ test.describe('recurrence expansion', () => {
         expect(occurrence.seriesRecurrence).toBeTruthy();
         expect(occurrence.seriesRecurrence.freq).toBe('weekly');
         expect(occurrence.seriesRecurrence.byWeekday).toEqual([1, 2]);
+        expect(occurrence.seriesRecurrence.unavailableBehavior).toBe('skip');
     });
 
     test('serializes an attached series cutoff as a civil date', async ({ seed, api }) => {
@@ -458,6 +513,48 @@ test.describe('recurrence expansion', () => {
             (task) => task.seriesRef === data.named.weekdaysSeries._id.toString()
         );
         expect(occurrence.seriesRecurrence.endsOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    test('an old rule without a stored policy is reported as skip', async ({ seed, api }) => {
+        const data = await seed();
+        await schedule(api);
+        await TaskDetails.updateOne(
+            { _id: data.named.weekdaysSeries._id },
+            { $unset: { 'recurrence.unavailableBehavior': 1 } }
+        );
+
+        const list = await (await api.get('/api/getUserTasks')).json();
+        const occurrence = list.taskList.find(
+            (task) => task.seriesRef === data.named.weekdaysSeries._id.toString()
+        );
+        expect(occurrence.seriesRecurrence.unavailableBehavior).toBe('skip');
+    });
+
+    test('editing policy through an occurrence preserves its identity', async ({ seed, api }) => {
+        const data = await seed();
+        await schedule(api);
+        const [occurrence] = await occurrencesOf(data.named.weekdaysSeries);
+        const identity = occurrence.occurrenceDate.getTime();
+
+        const res = await api.post('/api/editTask', {
+            data: {
+                task: {
+                    _id: occurrence._id.toString(),
+                    recurrence: {
+                        freq: 'weekly',
+                        interval: 1,
+                        byWeekday: [1, 2],
+                        unavailableBehavior: 'next-available',
+                    },
+                },
+            },
+        });
+        expect((await res.json()).success).toBe(true);
+
+        const template = await TaskDetails.findById(data.named.weekdaysSeries._id);
+        const kept = await TaskDetails.findById(occurrence._id);
+        expect(template.recurrence.unavailableBehavior).toBe('next-available');
+        expect(kept.occurrenceDate.getTime()).toBe(identity);
     });
 
     test('editing an occurrence does not corrupt its template', async ({ seed, api }) => {
@@ -639,6 +736,33 @@ test.describe('recurrence validation through the API', () => {
         const created = await TaskDetails.findOne({ userRef: user._id, title: 'Repeating thing' });
         expect(created.recurrence.freq).toBe('weekly');
         expect(created.recurrence.byWeekday).toEqual([1, 2]);
+        expect(created.recurrence.unavailableBehavior).toBe('skip');
+    });
+
+    test('persists an explicit next-available policy', async ({ seed, api }) => {
+        await seed();
+
+        const res = await api.post('/api/createTask', {
+            data: {
+                ...base(),
+                title: 'Deferred repeating thing',
+                recurrence: {
+                    freq: 'daily',
+                    unavailableBehavior: 'next-available',
+                },
+            },
+        });
+        const body = await res.json();
+        expect(body.success).toBe(true);
+        const occurrence = body.taskList.find((task) => task.title === 'Deferred repeating thing');
+        expect(occurrence.seriesRecurrence.unavailableBehavior).toBe('next-available');
+
+        const user = await loadUser();
+        const created = await TaskDetails.findOne({
+            userRef: user._id,
+            title: 'Deferred repeating thing',
+        });
+        expect(created.recurrence.unavailableBehavior).toBe('next-available');
     });
 
     test('rejects an impossible recurrence cutoff', async ({ seed, api }) => {
@@ -672,6 +796,7 @@ test.describe('recurrence validation through the API', () => {
             { freq: 'daily', interval: 0 },
             { freq: 'weekly', byWeekday: [9] },
             { freq: 'monthly', byMonthDay: [0] },
+            { freq: 'daily', unavailableBehavior: 'later' },
         ];
 
         for (const recurrence of bad) {

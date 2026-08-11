@@ -61,6 +61,11 @@ const RecurrenceRule = new Schema({
     byMonthDay: [Number],    // 1..31, or -1 for the last day, for monthly
     endsOn: Date,            // null = never
     endsAfter: Number,       // occurrence count, null = never
+    unavailableBehavior: {
+        type: String,
+        enum: ['skip', 'next-available'],
+        default: 'skip',
+    },
 }, { _id: false });
 
 const TaskDetail = new Schema({

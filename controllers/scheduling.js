@@ -1,11 +1,16 @@
 const { TaskDetails, EventDetails } = require('../models');
-const { expandRecurrences } = require('./recurrence');
+const {
+    DEFAULT_UNAVAILABLE_BEHAVIOR,
+    expandRecurrences,
+    recurrenceUnavailableBehavior,
+} = require('./recurrence');
 const {
     dateOnlyInZone,
     addDateOnlyDays,
     zonedDateTime,
     todayInZone,
     taskEligibleInstant,
+    nextDateStartInZone,
 } = require('../utils/temporal');
 const momentTz = require('moment-timezone');
 
@@ -155,6 +160,35 @@ function getChunkDuration(task) {
 // ============================================================================
 // Task Selection
 // ============================================================================
+
+function unavailableBehaviorForTask(task, context) {
+    if (!task.seriesRef) return null;
+    return context.seriesBehaviorById.get(task.seriesRef.toString())
+        || DEFAULT_UNAVAILABLE_BEHAVIOR;
+}
+
+function occurrenceExpiresAt(task, context) {
+    if (unavailableBehaviorForTask(task, context) !== 'skip' || !task.occurrenceDate) {
+        return null;
+    }
+    return nextDateStartInZone(task.occurrenceDate, context.timeZone);
+}
+
+function removeExpiredOccurrences(context) {
+    let removed = 0;
+
+    for (let index = context.pendingTasks.length - 1; index >= 0; index--) {
+        const task = context.pendingTasks[index];
+        const expiresAt = occurrenceExpiresAt(task, context);
+        if (expiresAt && context.currentTime.getTime() >= expiresAt.getTime()) {
+            delete context.chunkInfo[task._id];
+            context.pendingTasks.splice(index, 1);
+            removed++;
+        }
+    }
+
+    return removed;
+}
 
 /**
  * Find the best task to schedule in the given time slot.
@@ -485,6 +519,24 @@ async function buildSchedulingContext(user) {
         incompleteTaskMap.set(task._id.toString(), task);
     });
 
+    const seriesIds = [
+        ...new Set(
+            allIncompleteTasks
+                .filter((task) => task.seriesRef)
+                .map((task) => task.seriesRef.toString())
+        ),
+    ];
+    const seriesTemplates = seriesIds.length > 0
+        ? await TaskDetails.find({
+            _id: { $in: seriesIds },
+            userRef: user._id,
+        }, 'recurrence repeat')
+        : [];
+    const seriesBehaviorById = new Map(seriesTemplates.map((template) => [
+        template._id.toString(),
+        recurrenceUnavailableBehavior(template.recurrence),
+    ]));
+
     // Get regular tasks (sorted by deadline) and backlog tasks (sorted by start date)
     const regularTasks = await TaskDetails.find({
         userRef: user._id,
@@ -512,6 +564,7 @@ async function buildSchedulingContext(user) {
     return {
         // Time tracking
         currentTime,
+        schedulingHorizon,
 
         // User settings
         userId: user._id,
@@ -525,6 +578,7 @@ async function buildSchedulingContext(user) {
         incompleteTaskMap,
         scheduledTaskIds: new Set(),
         chunkInfo: {},
+        seriesBehaviorById,
 
         // Events
         events,
@@ -550,6 +604,14 @@ async function generateTaskEvents(user) {
     // the time the scheduling loop sees them.
     await expandRecurrences(user, SCHEDULING_HORIZON_DAYS);
 
+    // Placement is rebuilt from scratch. Tasks that are no longer placeable must not retain
+    // a stale sidebar date from an earlier run.
+    await TaskDetails.updateMany({
+        userRef: user._id,
+        'recurrence.freq': { $exists: false },
+        $or: [{ completed: false }, { completed: null }],
+    }, { $set: { scheduledDate: null } });
+
     // Clear existing task events
     await EventDetails.deleteMany({
         userRef: user._id,
@@ -565,9 +627,17 @@ async function generateTaskEvents(user) {
     }
 
     // Main scheduling loop
-    while (context.pendingTasks.length > 0) {
+    while (
+        context.pendingTasks.length > 0
+        && context.currentTime.getTime() < context.schedulingHorizon.getTime()
+    ) {
         // Safety check for infinite loops
         if (checkForInfiniteLoop(context)) break;
+
+        if (removeExpiredOccurrences(context) > 0) {
+            trackProgress(context);
+            continue;
+        }
 
         // Skip past any overlapping events
         if (handleEventOverlap(context)) continue;
@@ -617,4 +687,5 @@ module.exports = {
     findBestTaskForSlot,
     getWorkingHoursForDay,
     isWorkingDay,
+    removeExpiredOccurrences,
 };

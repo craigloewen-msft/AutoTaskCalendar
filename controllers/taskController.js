@@ -37,10 +37,17 @@ async function attachSeriesRules(taskList) {
         return taskList;
     }
 
-    const templates = await TaskDetails.find({ _id: { $in: seriesIds } }, 'recurrence');
+    const userRefs = [
+        ...new Set(taskList.filter((task) => task.userRef).map((task) => task.userRef.toString())),
+    ];
+    const templates = await TaskDetails.find({
+        _id: { $in: seriesIds },
+        userRef: { $in: userRefs },
+    }, 'recurrence repeat');
     const ruleById = new Map(templates.map((template) => {
-        const plain = template.toObject ? template.toObject() : template;
-        return [template._id.toString(), plain.recurrence];
+        const rule = effectiveRule(template);
+        if (rule?.endsOn) rule.endsOn = dateOnlyFromMarker(rule.endsOn);
+        return [template._id.toString(), rule];
     }));
 
     return taskList.map((task) => {

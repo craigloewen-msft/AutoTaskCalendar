@@ -94,6 +94,9 @@ test.describe('weekly plan page', () => {
         await expect(editor).toBeVisible();
         await expect(editor.locator('#task-title')).toHaveValue('Edit this weekly task');
         await expect(editor.locator('#task-duration')).toHaveValue('40');
+        await editor.locator('#task-repeat').selectOption('weekly');
+        await expect(editor.locator('#repeat-unavailable-skip')).toBeChecked();
+        await editor.locator('#task-repeat').selectOption('');
 
         await editor.locator('#task-title').fill('Edited from Weekly Plan');
         await editor.locator('#task-duration').fill('55');

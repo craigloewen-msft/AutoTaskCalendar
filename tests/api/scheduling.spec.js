@@ -3,7 +3,11 @@ const moment = require('moment');
 
 const { test, expect, withDb } = require('../fixtures');
 const { EventDetails, TaskDetails, UserDetails } = require('../../models');
-const { getWorkingHoursForDay, isWorkingDay } = require('../../controllers/scheduling');
+const {
+    getWorkingHoursForDay,
+    isWorkingDay,
+    SCHEDULING_HORIZON_DAYS,
+} = require('../../controllers/scheduling');
 const { taskEligibleInstant } = require('../../utils/temporal');
 
 const MS_PER_MINUTE = 60 * 1000;
@@ -39,6 +43,41 @@ async function calendarEvents(user) {
 
 function dayName(date) {
     return date.toLocaleDateString('en-US', { weekday: 'long' });
+}
+
+function nextWorkingDate(user, minimumDays = 1) {
+    let day = moment.utc().add(minimumDays, 'days').startOf('day');
+    while (!user.workingDays.includes(day.format('dddd'))) {
+        day.add(1, 'day');
+    }
+    return day;
+}
+
+async function createAvailabilitySeries(user, title, occurrenceDay, unavailableBehavior, overrides = {}) {
+    return TaskDetails.create({
+        title,
+        duration: 30,
+        userRef: user._id,
+        startDate: occurrenceDay.toDate(),
+        dueDate: occurrenceDay.toDate(),
+        recurrence: {
+            freq: 'weekly',
+            interval: 1,
+            byWeekday: [occurrenceDay.day()],
+            unavailableBehavior,
+        },
+        ...overrides,
+    });
+}
+
+async function blockWorkingDay(user, occurrenceDay, title = 'Unavailable all day') {
+    return EventDetails.create({
+        title,
+        startDate: occurrenceDay.clone().startOf('day').toDate(),
+        endDate: occurrenceDay.clone().add(1, 'day').startOf('day').toDate(),
+        type: 'calendar',
+        userRef: user._id,
+    });
 }
 
 test.describe('scheduling', () => {
@@ -395,6 +434,132 @@ test.describe('scheduling', () => {
             // than sliding onto the other one.
             expect(day).toBe(dayName(occurrenceDays.get(event.taskRef.toString())));
         }
+    });
+
+    test('default recurring behavior skips a blocked occurrence and clears stale placement', async ({ seed, api }) => {
+        const data = await seed();
+        await seed.clearTasks();
+        const user = await loadUser();
+        const occurrenceDay = nextWorkingDate(user, 2);
+        const template = await createAvailabilitySeries(
+            user,
+            'Skip blocked occurrence',
+            occurrenceDay,
+            undefined
+        );
+
+        await schedule(api);
+        let target = await TaskDetails.findOne({
+            seriesRef: template._id,
+            occurrenceDate: occurrenceDay.toDate(),
+        });
+        expect(target.scheduledDate).not.toBeNull();
+
+        await blockWorkingDay(user, occurrenceDay);
+        await schedule(api);
+
+        target = await TaskDetails.findById(target._id);
+        const events = await taskEvents(user);
+        expect(target.scheduledDate).toBeNull();
+        expect(events.some((event) => event.taskRef?.equals(target._id))).toBe(false);
+    });
+
+    test('next-available recurring behavior carries a blocked occurrence later', async ({ seed, api }) => {
+        const data = await seed();
+        await seed.clearTasks();
+        const user = await loadUser();
+        const occurrenceDay = nextWorkingDate(user, 2);
+        const template = await createAvailabilitySeries(
+            user,
+            'Defer blocked occurrence',
+            occurrenceDay,
+            'next-available'
+        );
+        await blockWorkingDay(user, occurrenceDay);
+
+        await schedule(api);
+
+        const target = await TaskDetails.findOne({
+            seriesRef: template._id,
+            occurrenceDate: occurrenceDay.toDate(),
+        });
+        const event = (await taskEvents(user)).find((candidate) => candidate.taskRef?.equals(target._id));
+        const nextDayStart = occurrenceDay.clone().add(1, 'day').startOf('day');
+
+        expect(event).toBeTruthy();
+        expect(event.startDate.getTime()).toBeGreaterThanOrEqual(nextDayStart.valueOf());
+        expect(isWorkingDay(event.startDate, user.workingDays, user.timeZone)).toBe(true);
+        expect(target.occurrenceDate.getTime()).toBe(occurrenceDay.valueOf());
+    });
+
+    test('a skipped chunked occurrence never spills chunks into another day', async ({ seed, api }) => {
+        const data = await seed();
+        await seed.clearTasks();
+        const user = await loadUser();
+        const occurrenceDay = nextWorkingDate(user, 2);
+        const template = await createAvailabilitySeries(
+            user,
+            'Chunk only today',
+            occurrenceDay,
+            'skip',
+            {
+                duration: 120,
+                breakUpTask: true,
+                breakUpTaskChunkDuration: 30,
+            }
+        );
+        const workStart = occurrenceDay.clone().startOf('day').add(user.workingStartMinutes, 'minutes');
+        await EventDetails.create({
+            title: 'Busy after first chunk',
+            startDate: workStart.clone().add(30, 'minutes').toDate(),
+            endDate: occurrenceDay.clone().add(1, 'day').startOf('day').toDate(),
+            type: 'calendar',
+            userRef: user._id,
+        });
+
+        await schedule(api);
+
+        const target = await TaskDetails.findOne({
+            seriesRef: template._id,
+            occurrenceDate: occurrenceDay.toDate(),
+        });
+        const mine = (await taskEvents(user)).filter((event) => event.taskRef?.equals(target._id));
+        const nextDayStart = occurrenceDay.clone().add(1, 'day').startOf('day').valueOf();
+
+        expect(mine).toHaveLength(1);
+        expect(mine.every((event) => event.startDate.getTime() < nextDayStart)).toBe(true);
+        expect(target.scheduledDate).toBeNull();
+    });
+
+    test('next-available placement stops at the known calendar horizon', async ({ seed, api }) => {
+        expect(Number.isInteger(SCHEDULING_HORIZON_DAYS)).toBe(true);
+        const data = await seed();
+        await seed.clearTasks();
+        const user = await loadUser();
+        const occurrenceDay = moment.utc().add(SCHEDULING_HORIZON_DAYS, 'days').startOf('day');
+        const template = await createAvailabilitySeries(
+            user,
+            'Deferred beyond known calendar',
+            occurrenceDay,
+            'next-available'
+        );
+        await EventDetails.create({
+            title: 'Blocked through the horizon',
+            startDate: occurrenceDay.toDate(),
+            endDate: occurrenceDay.clone().add(2, 'days').toDate(),
+            type: 'calendar',
+            userRef: user._id,
+        });
+
+        await schedule(api);
+
+        const target = await TaskDetails.findOne({
+            seriesRef: template._id,
+            occurrenceDate: occurrenceDay.toDate(),
+        });
+        const mine = (await taskEvents(user)).filter((event) => event.taskRef?.equals(target._id));
+        expect(mine).toHaveLength(0);
+        expect(target.scheduledDate).toBeNull();
     });
 
     test('a daily series across the horizon does not trip the iteration guard', async ({ seed, api }) => {

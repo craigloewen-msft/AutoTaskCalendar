@@ -37,6 +37,7 @@ Stored in `recurrence` on the template (`models/index.js`):
 | `byMonthDay` | Days of the month, `1`-`31`, or `-1` for the last day (monthly) | `[1,-1]` |
 | `endsOn` | Stop after this date. `null` = never | |
 | `endsAfter` | Stop after N occurrences ever. `null` = never | |
+| `unavailableBehavior` | `'skip'` \| `'next-available'`; what to do when the occurrence day has no slot | `'skip'` |
 
 The shape deliberately mirrors iCalendar RRULE, so a future `.ics` import/export or Google
 Calendar recurring-event mapping is mechanical. There is no RRULE dependency.
@@ -53,6 +54,9 @@ at all.
 **`endsAfter` counts from the series start**, not from the current window, so it means
 "N occurrences ever".
 
+**Missing `unavailableBehavior` means `skip`.** This is the default for new rules, older rule
+documents, and promoted legacy `repeat` strings, so no data migration is required.
+
 ## The lifecycle
 
 `expandRecurrences(user, horizonDays)` runs at the top of `generateTaskEvents`, and also
@@ -64,11 +68,12 @@ On each run, per series:
 1. Generate the dates the rule produces between today and the horizon.
 2. Delete **future incomplete** occurrences the rule no longer produces (e.g. after an edit).
 3. Create occurrences for dates that have none. Existing documents keep their identity.
-4. Delete **past incomplete** occurrences across all series.
+4. Delete **past incomplete** occurrences for skip-policy series. Next-available occurrences
+   remain pending across runs until they can be placed or completed.
 
 Each occurrence inherits title, notes, duration, chunking, priority and dependencies from
-its template, and gets `dueDate` = end of its own day, which is what drives the scheduler's
-deadline ordering.
+its template, and gets `dueDate` = its canonical civil-date marker, which drives the
+scheduler's deadline ordering.
 
 ### Why the two extra fields
 
@@ -92,11 +97,10 @@ These sound alike but sit at opposite ends of the scheduler.
 | Before the first run | Already set | `null` |
 | Time part | Local midnight | The real start time, e.g. 11:45 |
 
-On the seeded dataset, **510 of 517 occurrences end up scheduled on a different day from
-their occurrence date**. The scheduler is best-effort on deadlines, so a full day pushes
-work later: a daily check-in *for* Mon 10 Aug can be *placed* Tue 11 Aug 11:00. Both facts
-are needed, because the sidebar groups by `scheduledDate` while reporting lateness against
-the due date derived from `occurrenceDate`.
+With `unavailableBehavior: 'next-available'`, the scheduler is best-effort on the occurrence
+day: a daily check-in *for* Mon 10 Aug can be *placed* Tue 11 Aug 11:00. With the default
+`'skip'` policy it is only eligible during Monday and remains unscheduled if no Monday slot
+exists. In both cases `occurrenceDate` remains Monday; only `scheduledDate` can move.
 
 Collapsing them would break expansion outright, not subtly:
 
@@ -128,24 +132,26 @@ expansion recreates it as a duplicate.
 | Situation | What happens |
 |---|---|
 | You complete an occurrence | That document is marked complete. The next one already exists. Two ticks = two records, each with its own date |
-| You miss an occurrence | Past incomplete occurrences are deleted, so chores never pile up |
+| You miss a skip-policy occurrence | The past incomplete occurrence is deleted, so chores do not pile up |
+| You miss a next-available occurrence | It remains pending and can be scheduled on a later run |
 | You edit anything on an occurrence | The edit applies to the **whole series** (v1). The modal says so |
 | You delete an occurrence | The whole series goes: template + incomplete occurrences. Completed ones stay |
-| You pick a non-working day | The occurrences are still created, and the UI warns you they will not be scheduled |
-| The day is already full | The block slips later, exactly like any overdue task. An occurrence is never scheduled **before** its date, but it is not pinned to it either |
+| You pick a non-working day | The occurrence is still created. Skip leaves it unscheduled; next-available moves it to a later working slot |
+| The day is already full | Skip leaves it unscheduled; next-available carries it forward, but never earlier than its occurrence date |
+| A breakable skip occurrence partly fits | Valid chunks stay on the occurrence day; remaining work does not spill overnight |
 
-That last row is the one that surprises people: `byWeekday` controls **when the task is
-due**, not a hard constraint on when the scheduler may place it.
+`byWeekday` controls which civil date the task belongs to. `unavailableBehavior` controls
+whether placement may continue after that date.
 
 ## Horizon
 
 `SCHEDULING_HORIZON_DAYS = 60` (`controllers/scheduling.js`) bounds **both** how far
 occurrences are materialised and how far ahead existing calendar events are loaded.
 
-**Keep these equal.** The scheduling loop itself has no time bound, so a shorter event
-window means anything placed past it is scheduled with no knowledge of the user's real
-calendar and will book straight over it. There is a spec pinning this
-(`never overlaps a calendar event beyond the old 14 day horizon`).
+**Keep these equal.** The scheduling loop stops at the same boundary through which existing
+events were loaded. A next-available occurrence that still has no slot remains pending for
+a later run as the rolling horizon advances; the scheduler never claims a slot beyond its
+known calendar window.
 
 The sidebar in `Calendar.vue` shows a shorter 14-day window (`SIDEBAR_WINDOW_DAYS`), since
 60 days of daily occurrences would bury the list. Backlog and unscheduled tasks are always
@@ -173,6 +179,7 @@ so nothing breaks mid-migration.
 A promoted legacy string has an **empty `byWeekday`**, which is why the "empty means the
 start day" rule above matters: without it, every legacy weekly task silently became a daily
 one the first time the scheduler ran.
+It also receives the default `unavailableBehavior: 'skip'`.
 
 ## Adding a new frequency
 

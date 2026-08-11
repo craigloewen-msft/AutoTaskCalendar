@@ -21,6 +21,8 @@ const {
 } = require('../utils/temporal');
 
 const FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'];
+const UNAVAILABLE_BEHAVIORS = ['skip', 'next-available'];
+const DEFAULT_UNAVAILABLE_BEHAVIOR = 'skip';
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // Ceiling on occurrences generated per series per run, so a runaway rule cannot exhaust
@@ -46,6 +48,14 @@ function validateRecurrence(rule) {
 
     if (!FREQUENCIES.includes(rule.freq)) {
         return `Recurrence frequency must be one of: ${FREQUENCIES.join(', ')}`;
+    }
+
+    if (
+        rule.unavailableBehavior !== undefined
+        && rule.unavailableBehavior !== null
+        && !UNAVAILABLE_BEHAVIORS.includes(rule.unavailableBehavior)
+    ) {
+        return `Recurrence unavailableBehavior must be one of: ${UNAVAILABLE_BEHAVIORS.join(', ')}`;
     }
 
     if (rule.interval !== undefined && rule.interval !== null) {
@@ -113,6 +123,7 @@ function normaliseRecurrence(rule) {
         byMonthDay: [],
         endsOn: rule.endsOn ? parseDateOnly(rule.endsOn).date : null,
         endsAfter: rule.endsAfter ? Number(rule.endsAfter) : null,
+        unavailableBehavior: recurrenceUnavailableBehavior(rule),
     };
 
     // Sorted and de-duplicated, so two equivalent rules always compare equal.
@@ -143,13 +154,26 @@ function normaliseLegacyRepeat(task) {
         byMonthDay: [],
         endsOn: null,
         endsAfter: null,
+        unavailableBehavior: DEFAULT_UNAVAILABLE_BEHAVIOR,
     };
+}
+
+function recurrenceUnavailableBehavior(rule) {
+    return UNAVAILABLE_BEHAVIORS.includes(rule?.unavailableBehavior)
+        ? rule.unavailableBehavior
+        : DEFAULT_UNAVAILABLE_BEHAVIOR;
 }
 
 /** The effective rule for a task: the modern field, else a translated legacy string. */
 function effectiveRule(task) {
     if (task && task.recurrence && task.recurrence.freq) {
-        return task.recurrence;
+        const rule = task.recurrence.toObject
+            ? task.recurrence.toObject()
+            : { ...task.recurrence };
+        return {
+            ...rule,
+            unavailableBehavior: recurrenceUnavailableBehavior(rule),
+        };
     }
     return normaliseLegacyRepeat(task);
 }
@@ -367,6 +391,7 @@ async function expandRecurrences(user, horizonDays) {
     const todayValue = todayInZone(user.timeZone);
     const today = civilDay(todayValue);
     const horizonEnd = civilDay(addDateOnlyDays(todayValue, horizonDays));
+    const deferredSeriesIds = [];
 
     // Any task carrying a rule is a template. Legacy `repeat` strings are promoted on the
     // fly, so old data starts behaving without a migration. Completed tasks are excluded:
@@ -388,6 +413,10 @@ async function expandRecurrences(user, horizonDays) {
         const rule = effectiveRule(template);
         if (!rule) continue;
 
+        if (recurrenceUnavailableBehavior(rule) === 'next-available') {
+            deferredSeriesIds.push(template._id);
+        }
+
         // Promote a legacy string in place: writing the rule is what makes it a template.
         if (!template.recurrence || !template.recurrence.freq) {
             template.recurrence = rule;
@@ -398,10 +427,10 @@ async function expandRecurrences(user, horizonDays) {
         await expandSeries(template, rule, today, horizonEnd);
     }
 
-    // Drop past incomplete occurrences across all series: chores never pile up.
+    // Skip-policy chores never pile up. Deferred occurrences remain eligible across runs.
     await TaskDetails.deleteMany({
         userRef: user._id,
-        seriesRef: { $ne: null },
+        seriesRef: { $ne: null, $nin: deferredSeriesIds },
         occurrenceDate: { $lt: today.toDate() },
         $or: [{ completed: false }, { completed: null }],
     });
@@ -497,12 +526,15 @@ async function expandSeries(template, rule, today, horizonEnd) {
 
 module.exports = {
     FREQUENCIES,
+    UNAVAILABLE_BEHAVIORS,
+    DEFAULT_UNAVAILABLE_BEHAVIOR,
     WEEKDAY_NAMES,
     MAX_OCCURRENCES_PER_SERIES,
     validateRecurrence,
     normaliseRecurrence,
     normaliseLegacyRepeat,
     effectiveRule,
+    recurrenceUnavailableBehavior,
     describeRecurrence,
     occurrenceDatesBetween,
     expandRecurrences,

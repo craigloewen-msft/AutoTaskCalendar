@@ -78,12 +78,39 @@
       </div>
 
       <div class="form-group">
+        <label>If this task cannot fit on its occurrence day</label>
+        <div class="availability-options">
+          <label class="radio-inline">
+            <input
+              type="radio"
+              id="repeat-unavailable-skip"
+              name="repeat-unavailable-behavior"
+              :checked="unavailableBehavior === 'skip'"
+              @change="update({ unavailableBehavior: 'skip' })"
+            />
+            Skip that occurrence
+          </label>
+          <label class="radio-inline">
+            <input
+              type="radio"
+              id="repeat-unavailable-next"
+              name="repeat-unavailable-behavior"
+              :checked="unavailableBehavior === 'next-available'"
+              @change="update({ unavailableBehavior: 'next-available' })"
+            />
+            Schedule it at the next available time
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
         <label>Ends</label>
         <div class="ends-options">
           <label class="radio-inline">
             <input
               type="radio"
               id="repeat-ends-never"
+              name="repeat-ends"
               :checked="endsMode === 'never'"
               @change="setEndsMode('never')"
             />
@@ -93,6 +120,7 @@
             <input
               type="radio"
               id="repeat-ends-on"
+              name="repeat-ends"
               :checked="endsMode === 'on'"
               @change="setEndsMode('on')"
             />
@@ -110,6 +138,7 @@
             <input
               type="radio"
               id="repeat-ends-after"
+              name="repeat-ends"
               :checked="endsMode === 'after'"
               @change="setEndsMode('after')"
             />
@@ -179,6 +208,11 @@ export default {
       if (!this.modelValue.endsOn) return "";
       return String(this.modelValue.endsOn).slice(0, 10);
     },
+    unavailableBehavior() {
+      return this.modelValue?.unavailableBehavior === "next-available"
+        ? "next-available"
+        : "skip";
+    },
     summary() {
       return describeRecurrence(this.modelValue);
     },
@@ -198,7 +232,10 @@ export default {
           : `${offenders.slice(0, -1).join(", ")} and ${offenders[offenders.length - 1]}`;
       const verb = offenders.length === 1 ? "is" : "are";
 
-      return `${list} ${verb} not among your working days, so those occurrences will not be scheduled. You can change your working days on your profile.`;
+      const outcome = this.unavailableBehavior === "next-available"
+        ? "will be scheduled at a later available time"
+        : "will be skipped rather than moved later";
+      return `${list} ${verb} not among your working days, so those occurrences ${outcome}. You can change your working days on your profile.`;
     },
   },
   methods: {
@@ -230,6 +267,7 @@ export default {
         byMonthDay: (this.modelValue && this.modelValue.byMonthDay) || [],
         endsOn: (this.modelValue && this.modelValue.endsOn) || null,
         endsAfter: (this.modelValue && this.modelValue.endsAfter) || null,
+        unavailableBehavior: this.unavailableBehavior,
       });
     },
     // Today, unless today is not a working day: defaulting to one would warn about a rule
@@ -338,6 +376,7 @@ function todayIso() {
 }
 
 .monthday-row,
+.availability-options,
 .ends-options {
   display: flex;
   flex-direction: column;

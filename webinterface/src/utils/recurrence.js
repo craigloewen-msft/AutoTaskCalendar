@@ -78,5 +78,6 @@ export function emptyRule(freq) {
     byMonthDay: [],
     endsOn: null,
     endsAfter: null,
+    unavailableBehavior: 'skip',
   };
 }
