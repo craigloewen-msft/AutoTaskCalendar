@@ -102,6 +102,19 @@ test.describe('compass page', () => {
         await expect(page.locator('.role-title', { hasText: 'Neighbour' })).toBeVisible();
     });
 
+    test('defaults a new project start date to today in the user timezone', async ({
+        nonUtcPage: page,
+    }) => {
+        await page.clock.setFixedTime(new Date('2024-03-01T00:30:00Z'));
+        await page.goto('/#/compass');
+
+        const goal = page.locator('.goal-block', { hasText: 'Ship v2 by June' });
+        await goal.locator('button:has-text("+ Project")').click();
+
+        await expect(page.locator('.drawer-title')).toHaveText('New project');
+        await expect(page.locator('#compass-start')).toHaveValue('2024-02-29');
+    });
+
     test('keeps Compass civil dates stable in a non-UTC browser', async ({ nonUtcPage: page }) => {
         await page.goto('/#/compass');
         await page.click('button:has-text("+ Role")');

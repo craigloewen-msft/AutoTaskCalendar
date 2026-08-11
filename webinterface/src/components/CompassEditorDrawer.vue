@@ -196,10 +196,7 @@ export default {
       this.isActive = !item.endDate;
     } else {
       this.form.parentId = this.parentId;
-      // Roles and goals need a start date, so default new ones to today.
-      if (this.level !== "project") {
-        this.form.startDate = dateOnlyInTimeZone(this.$store.state.user.timeZone);
-      }
+      this.form.startDate = dateOnlyInTimeZone(this.$store.state.user.timeZone);
     }
   },
   methods: {
