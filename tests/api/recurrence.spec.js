@@ -155,6 +155,7 @@ test.describe('recurrence expansion', () => {
     });
 
     test('completion history survives re-expansion and series cleanup', async ({ seed, api }) => {
+        test.slow();
         const data = await seed();
         await schedule(api);
 

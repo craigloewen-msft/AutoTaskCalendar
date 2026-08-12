@@ -103,7 +103,8 @@ Final verification: 199 tests passed with twelve workers in 109.282 seconds (1.8
 including explicit tenant-isolation, OAuth-origin, and instance-name coverage. That is
 3.02× faster and 66.9% less wall-clock time than the 329.928-second serial baseline. Twelve
 workers are 20.9% faster than four on the same checkout, while retaining the simpler native
-Playwright design.
+Playwright design. After rebasing onto local `main`'s pruned suite, all 55 remaining tests
+passed in 49.357 seconds at the same default.
 
 ## Non-goals
 
