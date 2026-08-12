@@ -9,51 +9,40 @@ const {
 const { migrateTemporalData, legacyTaskDate } = require('../../utils/temporalMigration');
 const moment = require('moment-timezone');
 
-
 test.describe('temporal primitives and migration', () => {
-    test('strictly separates civil dates from instants', () => {
+    test('strictly separates civil dates from instants and builds week bounds across DST', () => {
         expect(parseDateOnly('2024-02-29').valid).toBe(true);
         expect(parseDateOnly('2024-02-31').valid).toBe(false);
         expect(parseDateOnly('2024-01-01T00:00:00Z').valid).toBe(false);
         expect(parseInstant('2024-01-01').valid).toBe(false);
         expect(parseInstant('2024-01-01T12:00:00').valid).toBe(false);
         expect(parseInstant('2024-01-01T00:00:00Z').valid).toBe(true);
+
+        const localBounds = localWeekBounds('2024-03-10', 'America/New_York');
+        expect(localBounds.start.toISOString()).toBe('2024-03-10T05:00:00.000Z');
+        expect(localBounds.end.toISOString()).toBe('2024-03-17T04:00:00.000Z');
+
+        const mondayBounds = mondayWeekBounds('2024-03-10', 'America/New_York');
+        expect(mondayBounds.startDate).toBe('2024-03-04');
+        expect(mondayBounds.endDate).toBe('2024-03-10');
+        expect(mondayBounds.nextStartDate).toBe('2024-03-11');
+        expect(mondayBounds.start.toISOString()).toBe('2024-03-04T05:00:00.000Z');
+        expect(mondayBounds.end.toISOString()).toBe('2024-03-11T04:00:00.000Z');
+
+        const yearBoundary = mondayWeekBounds('2025-01-01', 'UTC');
+        expect(yearBoundary.startDate).toBe('2024-12-30');
+        expect(yearBoundary.endDate).toBe('2025-01-05');
+        expect(yearBoundary.nextStartDate).toBe('2025-01-06');
+
+        const sundayDefault = localWeekBounds('2025-01-01', 'UTC');
+        expect(sundayDefault.startDate).toBe('2024-12-29');
+        expect(sundayDefault.endDate).toBe('2025-01-04');
     });
 
-    test('builds local week bounds across DST', () => {
-        const bounds = localWeekBounds('2024-03-10', 'America/New_York');
-        expect(bounds.start.toISOString()).toBe('2024-03-10T05:00:00.000Z');
-        expect(bounds.end.toISOString()).toBe('2024-03-17T04:00:00.000Z');
-    });
+    test('recovers legacy local dates and migrates a legacy account through login', async ({ seed, apiAnon }) => {
+        expect(legacyTaskDate(new Date('2024-03-11T04:59:59.000Z'), 'America/New_York', { due: true }))
+            .toBe('2024-03-10');
 
-    test('builds Monday week bounds across DST', () => {
-        const bounds = mondayWeekBounds('2024-03-10', 'America/New_York');
-        expect(bounds.startDate).toBe('2024-03-04');
-        expect(bounds.endDate).toBe('2024-03-10');
-        expect(bounds.nextStartDate).toBe('2024-03-11');
-        expect(bounds.start.toISOString()).toBe('2024-03-04T05:00:00.000Z');
-        expect(bounds.end.toISOString()).toBe('2024-03-11T04:00:00.000Z');
-    });
-
-    test('builds Monday week bounds across a year boundary', () => {
-        const bounds = mondayWeekBounds('2025-01-01', 'UTC');
-        expect(bounds.startDate).toBe('2024-12-30');
-        expect(bounds.endDate).toBe('2025-01-05');
-        expect(bounds.nextStartDate).toBe('2025-01-06');
-    });
-
-    test('keeps Sunday as the default local week start', () => {
-        const bounds = localWeekBounds('2025-01-01', 'UTC');
-        expect(bounds.startDate).toBe('2024-12-29');
-        expect(bounds.endDate).toBe('2025-01-04');
-    });
-
-    test('recovers the selected day from the old fixed-ms due timestamp', () => {
-        const oldDue = new Date('2024-03-11T04:59:59.000Z');
-        expect(legacyTaskDate(oldDue, 'America/New_York', { due: true })).toBe('2024-03-10');
-    });
-
-    test('migrates a legacy account through first login', async ({ seed, apiAnon }) => {
         const data = await seed();
         await withDb(() => UserDetails.updateOne(
             { _id: data.primary.user._id },
@@ -79,6 +68,7 @@ test.describe('temporal primitives and migration', () => {
             },
         });
         const body = await response.json();
+
         expect(body.success).toBe(true);
         expect(body.user.timeZone).toBe('America/New_York');
         expect(body.user.workingStartTime).toBe('09:30');
@@ -151,6 +141,7 @@ test.describe('temporal primitives and migration', () => {
 
             const templateAfter = await TaskDetails.findById(data.named.weekdaysSeries._id);
             expect(templateAfter.recurrence.endsOn.toISOString().slice(0, 10)).toBe(cutoffDate);
+
             const roleAfter = await RoleDetails.findOne({ title: 'Legacy local date' });
             expect(roleAfter.startDate.toISOString()).toBe('2024-03-10T00:00:00.000Z');
             expect(await TaskDetails.countDocuments({
