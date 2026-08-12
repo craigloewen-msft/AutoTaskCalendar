@@ -51,7 +51,7 @@ The goal is confidence per test, not coverage theater.
 ## Running the tests
 
 ```bash
-npm test                                     # whole suite, four workers
+npm test                                     # whole suite, twelve workers
 npm test -- tests/api                        # API tests only
 npm test -- tests/api/tasks.spec.js          # one file
 npm test -- -g "completes a task"            # one test by name, seconds
@@ -59,7 +59,7 @@ npm test -- --workers=1                      # force serial execution
 npm test -- --ui                             # watch, step, time-travel
 ```
 
-Everything after `--` goes straight to Playwright. The configuration uses four workers by
+Everything after `--` goes straight to Playwright. The configuration uses twelve workers by
 default; `--workers=<n>` overrides it exactly as documented by Playwright.
 
 **Iterating on one thing? Do not run the whole suite.** File filters and `-g` still take
@@ -74,14 +74,11 @@ beforehand.
 
 Tests never touch the database you develop against. Each `npm test` invocation gets one
 run-specific database, API port, session cookie, artifact directory, and Express server.
-Four Playwright workers share that app stack.
+Twelve Playwright workers share that app stack.
 
 ```mermaid
 flowchart LR
-  A["Playwright worker 1"] --> E["one Express server"]
-  B["Playwright worker 2"] --> E
-  C["Playwright worker 3"] --> E
-  D["Playwright worker 4"] --> E
+  A["Playwright workers 1–12"] --> E["one Express server"]
   E --> F[("one test-run database")]
 ```
 
@@ -91,7 +88,7 @@ authenticated user's ID, so workers can schedule, mutate, and delete their own d
 touching another test. The fixture removes that tenant after the test; the runner drops the
 entire run database when Playwright exits.
 
-This is why native `--workers=4` is safe here. The suite drives one **built** bundle served
+This is why native `--workers=12` is safe here. The suite drives one **built** bundle served
 by one Express process, which is both simple and close to production. You can leave
 `npm run dev` running or start two test commands on the same branch without collisions.
 

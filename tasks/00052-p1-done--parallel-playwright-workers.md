@@ -10,7 +10,7 @@ port collisions, missing artifacts, or confusing output.
 After validating an isolated-shard implementation, the suite moved to the simpler native
 Playwright model requested during review:
 
-- one Playwright process with `workers: 4`;
+- one Playwright process with `workers: 12`;
 - one Express server and one run-specific database;
 - unique users for every test;
 - tenant-scoped seeding and teardown instead of whole-database wipes;
@@ -93,17 +93,17 @@ Keep test-only orchestration helpers side-effect free so these specs do not recu
 The first implementation used isolated Playwright shards. It passed all 206 tests in
 133.793 seconds versus 329.928 seconds serial, but created unnecessary orchestration.
 
-The final implementation uses Playwright's native `workers: 4` with one Express server and
+The final implementation uses Playwright's native `workers: 12` with one Express server and
 one run-specific database. Every test seeds uniquely named users and removes only its own
 tenant, so workers never wipe one another's state. The runner drops the complete database
 on exit. This removed the shard planner, multiple app processes, blob report merging, and
 custom argument rules.
 
-Final verification: 199 tests passed in 138.071 seconds (2.3 minutes), including explicit
-tenant-isolation, OAuth-origin, and instance-name coverage. That is 2.39× faster and 58.2%
-less wall-clock time than the 329.928-second serial baseline. The native-worker version is
-about 3% slower than isolated shards, in exchange for roughly 900 fewer lines and standard
-Playwright behavior.
+Final verification: 199 tests passed with twelve workers in 109.282 seconds (1.8 minutes),
+including explicit tenant-isolation, OAuth-origin, and instance-name coverage. That is
+3.02× faster and 66.9% less wall-clock time than the 329.928-second serial baseline. Twelve
+workers are 20.9% faster than four on the same checkout, while retaining the simpler native
+Playwright design.
 
 ## Non-goals
 
