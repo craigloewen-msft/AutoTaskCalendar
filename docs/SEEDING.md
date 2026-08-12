@@ -5,7 +5,7 @@ development (`npm run seed`) and the test suite (the `seed` fixture), so the dat
 debug by hand is exactly the data the tests run against.
 
 Task/Compass dates are canonical civil-date markers; events remain instants. Seeded users
-include an IANA timezone and minute-precision working hours. See `docs/DATE_AND_TIME.md`.
+include an IANA timezone and minute-precision working hours.
 
 The dataset holds everything worth testing. If a shape is worth testing, it belongs in
 the dataset — a single thing to understand and a single thing to keep correct.

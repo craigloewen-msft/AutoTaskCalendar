@@ -1,4 +1,4 @@
-const { test, expect } = require('../fixtures');
+const { test, expect, withDb } = require('../fixtures');
 const { transformGoogleEventData } = require('../../controllers/eventController');
 const { EventDetails } = require('../../models');
 
@@ -101,6 +101,21 @@ test.describe('events', () => {
         const deletedBody = await deleted.json();
         expect(deletedBody.success).toBe(true);
         expect(deletedBody.eventList.map((event) => event._id)).not.toContain(data.named.clientCall._id.toString());
+
+        const foreignEvent = await withDb(() => EventDetails.findOne({
+            userRef: data.other.user._id,
+        }));
+        const foreignUpdate = await api.post('/api/updateEvent', {
+            data: { eventId: foreignEvent._id.toString(), title: 'Hijacked event' },
+        });
+        const foreignDelete = await api.post('/api/deleteEvent', {
+            data: { eventId: foreignEvent._id.toString() },
+        });
+        const unchangedForeignEvent = await withDb(() => EventDetails.findById(foreignEvent._id));
+
+        expect((await foreignUpdate.json()).success).toBe(false);
+        expect((await foreignDelete.json()).success).toBe(false);
+        expect(unchangedForeignEvent.title).toBe(foreignEvent.title);
 
         const timed = transformGoogleEventData({
             start: { dateTime: '2024-03-10T09:00:00', timeZone: 'America/New_York' },
