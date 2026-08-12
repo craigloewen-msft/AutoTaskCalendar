@@ -617,13 +617,28 @@ export default {
     startedProjects(goal) {
       return (goal.projectList || []).filter((project) => !!project.startDate);
     },
+    weeklyPlanDate(task) {
+      if (task?.seriesRef) {
+        if (!task.scheduledDate) return "";
+        return dateOnlyInTimeZone(
+          this.$store.state.user?.timeZone,
+          new Date(task.scheduledDate)
+        );
+      }
+      return apiDateOnly(task?.dueDate);
+    },
+    isWeeklyPlanTask(task) {
+      return !task?.seriesRef || !!this.weeklyPlanDate(task);
+    },
     isDueThisWeek(task) {
-      const dueDate = apiDateOnly(task.dueDate);
-      return !!dueDate && dueDate >= this.week.startDate && dueDate <= this.week.endDate;
+      const planDate = this.weeklyPlanDate(task);
+      return !!planDate && planDate >= this.week.startDate && planDate <= this.week.endDate;
     },
     tasksForProject(projectId, thisWeek) {
       return this.sortTasks(this.taskList.filter((task) => {
-        return task.projectRef === projectId && this.isDueThisWeek(task) === thisWeek;
+        return this.isWeeklyPlanTask(task)
+          && task.projectRef === projectId
+          && this.isDueThisWeek(task) === thisWeek;
       }));
     },
     completionsForProject(projectId) {
@@ -631,8 +646,8 @@ export default {
     },
     sortTasks(tasks) {
       return [...tasks].sort((left, right) => {
-        const leftDate = apiDateOnly(left.dueDate) || "9999-12-31";
-        const rightDate = apiDateOnly(right.dueDate) || "9999-12-31";
+        const leftDate = this.weeklyPlanDate(left) || "9999-12-31";
+        const rightDate = this.weeklyPlanDate(right) || "9999-12-31";
         return leftDate.localeCompare(rightDate)
           || (Number(left.priority ?? 100) - Number(right.priority ?? 100))
           || String(left.title || "").localeCompare(String(right.title || ""));
@@ -652,8 +667,12 @@ export default {
       return count === 1 ? "task" : "tasks";
     },
     dueLabel(task) {
-      if (task.isBacklog || !task.dueDate) return "Backlog";
-      return formatCivilDate(task.dueDate, { weekday: "short", month: "short", day: "numeric" });
+      if (!task.seriesRef && (task.isBacklog || !task.dueDate)) return "Backlog";
+      return formatCivilDate(this.weeklyPlanDate(task), {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      });
     },
     completionLabel(task) {
       const date = dateOnlyInTimeZone(
