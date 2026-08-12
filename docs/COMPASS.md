@@ -220,8 +220,8 @@ through finished goals the same way it pages through finished tasks.
 - `title` is required everywhere. `startDate` is required on roles and goals, optional on
   projects.
 - `endDate`, when present, must be on or after `startDate`.
-- Dates are strict inclusive civil dates (`YYYY-MM-DD`), not instants. See
-  `docs/DATE_AND_TIME.md`; an item remains live through its selected end day.
+- Dates are strict inclusive civil dates (`YYYY-MM-DD`), not instants. An item remains live
+  through its selected end day.
 - `roleRef` / `goalRef` / `projectRef` must exist **and belong to the caller**. This is the
   cross-tenant boundary; `findOwned()` in the controller is the single chokepoint, and it
   has explicit test coverage.

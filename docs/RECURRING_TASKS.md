@@ -173,7 +173,6 @@ eligible to schedule. The generator itself walks UTC calendar fields so identity
 when the server timezone or DST changes.
 
 Never advance calendar days with fixed milliseconds. Use the helpers in `utils/temporal.js`.
-See `docs/DATE_AND_TIME.md` for the full contract.
 
 ## Legacy `repeat` strings
 

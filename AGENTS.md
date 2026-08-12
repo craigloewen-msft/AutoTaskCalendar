@@ -61,7 +61,7 @@ dataset.
 - `scripts/` — `dev.js` (dev stack), `db.js` (MongoDB container), `test.js` (test stack).
 - `docs/` — one file per broad concept, each a standalone instruction manual.
   `docs/COMPASS.md` covers roles/goals/projects; `docs/WEEKLY_PLAN.md` covers the weekly
-  review and task-creation workflow.
+  review workflow; `docs/REFACTOR_OVERVIEW.md` indexes the approved architecture plan.
 
 ## Documenting your work
 
@@ -73,6 +73,6 @@ short index and put the depth in `docs/`. See `docs/TEST_CREDENTIALS.md` for the
 
 - `config.js` (gitignored) overrides `defaultconfig.js`; production reads env vars instead.
 - API errors return HTTP 200 with `{success: false}` via `returnFailure()`.
-- Distinguish instants, civil dates, and wall times; follow `docs/DATE_AND_TIME.md`.
+- Distinguish instants, civil dates, and wall times; use the temporal helpers and feature manuals.
 - Never implement timezone conversion with numeric offsets or advance calendar days by milliseconds.
 - Keep code comments to one or two sentences.
