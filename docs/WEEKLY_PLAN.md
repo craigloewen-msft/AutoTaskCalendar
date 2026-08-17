@@ -107,7 +107,7 @@ Every started project has a compact form:
 
 - **Task title** — required.
 - **Minutes** — a positive duration, default 30.
-- **Due date** — constrained to the displayed Monday–Sunday range, default Sunday.
+- **Due date** — constrained to the displayed Monday–Sunday range, default Friday.
 - **Project** — shown by the surrounding project card and sent as `projectRef`.
 
 The task's start date defaults to today in the user's saved timezone. Submitting calls the

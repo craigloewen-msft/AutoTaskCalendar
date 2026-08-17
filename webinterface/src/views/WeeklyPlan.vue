@@ -582,7 +582,7 @@ export default {
 
       if (weekChanged) {
         for (const form of Object.values(this.forms)) {
-          form.dueDate = nextWeek.endDate;
+          form.dueDate = this.quickTaskDueDate(nextWeek);
           form.error = false;
           form.message = "";
         }
@@ -604,11 +604,14 @@ export default {
       }
       this.forms = next;
     },
+    quickTaskDueDate(week = this.week) {
+      return week?.startDate ? addCalendarDays(week.startDate, 4) : "";
+    },
     blankForm() {
       return {
         title: "",
         duration: 30,
-        dueDate: this.week?.endDate || "",
+        dueDate: this.quickTaskDueDate(),
         saving: false,
         error: false,
         message: "",
@@ -757,7 +760,7 @@ export default {
         this.taskList = response.data.taskList || [];
         form.title = "";
         form.duration = 30;
-        form.dueDate = this.week.endDate;
+        form.dueDate = this.quickTaskDueDate();
         form.message = "Task added to this week.";
       } catch (error) {
         form.error = true;

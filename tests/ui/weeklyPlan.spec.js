@@ -136,12 +136,13 @@ test.describe('weekly plan page', () => {
     }) => {
         const data = await seed();
         const week = currentWeek();
+        const friday = addDateOnlyDays(week.startDate, 4);
 
         await openPlan(page);
 
         const projectId = String(data.named.migrationProject._id);
         const form = page.locator(`[data-test="quick-task-${projectId}"]`);
-        await expect(form.locator('input[type=date]')).toHaveValue(week.endDate);
+        await expect(form.locator('input[type=date]')).toHaveValue(friday);
         await form.locator('input[type=text]').fill('Plan migration rehearsal');
         await form.locator('input[type=number]').fill('35');
         await form.locator('input[type=date]').fill(week.startDate);
@@ -150,6 +151,7 @@ test.describe('weekly plan page', () => {
         await expect(page.locator(`[data-test="quick-status-${projectId}"]`)).toContainText(
             'Task added to this week'
         );
+        await expect(form.locator('input[type=date]')).toHaveValue(friday);
         const project = page.locator(`[data-project-id="${data.named.migrationProject._id}"]`);
         await expect(project.locator(`[data-test="week-tasks-${projectId}"]`)).toContainText(
             'Plan migration rehearsal'
