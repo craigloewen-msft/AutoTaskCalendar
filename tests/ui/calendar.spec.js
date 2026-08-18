@@ -71,10 +71,15 @@ test.describe('calendar page', () => {
         );
         const isolatedChip = page.locator(`[data-test="slip-impact-chip-${isolatedTask._id}"]`);
         await expect(chip).toHaveText('+1 day → 2 late');
-        for (const safeChip of [lastCapacityChip, isolatedChip]) {
-            await expect(safeChip).toHaveText('+1 day → safe');
-            await expect(safeChip).toHaveClass(/safe/);
-        }
+        const titleBox = await page
+            .locator(`[data-test="task-item-${firstTask._id}"] .task-primary-row`)
+            .boundingBox();
+        const chipBox = await chip.boundingBox();
+        expect(titleBox).not.toBeNull();
+        expect(chipBox).not.toBeNull();
+        expect(chipBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+        await expect(lastCapacityChip).toHaveCount(0);
+        await expect(isolatedChip).toHaveCount(0);
         await testInfo.attach('one-day-slip-at-a-glance', {
             body: await page.locator('.task-controls').screenshot(),
             contentType: 'image/png',
@@ -132,7 +137,9 @@ test.describe('calendar page', () => {
             end: '10:00',
         });
 
-        await chip.click();
+        await chip.focus();
+        await expect(chip).toBeFocused();
+        await page.keyboard.press('Enter');
         const panel = page.locator('[data-test=slip-forecast-panel]');
         await expect(panel).toBeVisible();
         await expect(panel).toContainText('Let “Friday launch 01” slip one day');
@@ -164,24 +171,31 @@ test.describe('calendar page', () => {
             contentType: 'image/png',
         });
 
-        await lastCapacityChip.click();
-        await expect(panel).toContainText('Let “Friday launch 10” slip one day');
-        await expect(summary).toContainText('0 downstream tasks move later');
-        await expect(summary).toContainText('0 newly miss deadlines');
-        await expect(impacts).toHaveCount(0);
-        await expect(panel).not.toContainText(isolatedTask.title);
+        await withDb(() => TaskDetails.updateOne(
+            { _id: lastCapacityTask._id },
+            { $set: { 'slipForecast.movedCount': 1 } }
+        ));
+        await page.reload();
+        await expect(lastCapacityChip).toHaveText('+1 day → safe');
 
-        await isolatedChip.click();
-        await expect(panel).toContainText('Let “Isolated Friday task” slip one day');
-        await expect(summary).toContainText('0 downstream tasks move later');
-        await expect(summary).toContainText('0 newly miss deadlines');
-        await expect(impacts).toHaveCount(0);
-
+        await withDb(() => TaskDetails.updateOne(
+            { _id: lastCapacityTask._id },
+            { $set: { 'slipForecast.movedCount': 0 } }
+        ));
         await page.reload();
         await expect(page.locator(`[data-test="slip-impact-chip-${firstTask._id}"]`)).toHaveText(
             '+1 day → 2 late'
         );
+        await expect(lastCapacityChip).toHaveCount(0);
+        await expect(isolatedChip).toHaveCount(0);
         expect(await snapshot()).toEqual(before);
+
+        await page.locator(`[data-test="slip-impact-chip-${firstTask._id}"]`).click();
+        await expect(panel).toBeVisible();
+        await page.locator(`[data-test="task-item-${firstTask._id}"]`).click();
+        await page.getByRole('button', { name: 'Complete', exact: true }).click();
+        await expect(panel).toHaveCount(0);
+        await expect(page.locator(`[data-test="task-item-${firstTask._id}"]`)).toHaveCount(0);
     });
 
     test('creates and completes tasks through the shared editor', async ({ seed, loggedInPage: page }) => {
@@ -272,6 +286,7 @@ test.describe('calendar page', () => {
         const unscheduled = page.locator('.task-item', { hasText: 'Task that needs time' });
         await expect(unscheduled).toBeVisible();
         await expect(unscheduled.locator('.unscheduled-badge')).toHaveText('NEEDS TIME');
+        await expect(unscheduled.locator('.slip-impact-row')).toHaveCount(0);
     });
 
     test('keeps a recurring occurrence when quick completion fails', async ({
