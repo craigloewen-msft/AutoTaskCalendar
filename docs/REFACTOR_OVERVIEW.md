@@ -16,10 +16,11 @@ itself.
 - Task `00055` secured account and Google integration boundaries: one server-side browser session,
   actor-scoped account reads, invalidating logout, protected provider credentials, and session-bound
   one-use OAuth state with focused security specs.
+- Task `00059` made Google Calendar listing and sync truthful and bounded: one access-token refresh,
+  one provider retry, preserved refresh credentials, and safe failures instead of false success.
 
 ## Do first: prevent incorrect or partially published data
 
-- Make Google sync return truthful failures and bound token refresh and retry.
 - Validate scheduler-critical values and calculate a complete schedule before replacing the last
   good projection.
 - Enforce one recurrence occurrence per series and date, including under concurrent expansion.
