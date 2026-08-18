@@ -138,6 +138,8 @@ async function main() {
         AUTOTASKCALENDAR_MONGO_URL: instance.mongoUrl,
         AUTOTASKCALENDAR_BASE_URL: `http://127.0.0.1:${instance.apiPort}`,
         AUTOTASKCALENDAR_TEST_ORCHESTRATED: '1',
+        AUTOTASKCALENDAR_GOOGLE_OAUTH_CLIENT_ID: 'playwright-client-id',
+        AUTOTASKCALENDAR_GOOGLE_OAUTH_CLIENT_SECRET: 'playwright-client-secret',
         AUTOTASKCALENDAR_TEST_OUTPUT_DIR: path.join(runRoot, 'test-results'),
         PLAYWRIGHT_HTML_OPEN: 'never',
         PLAYWRIGHT_HTML_OUTPUT_DIR: path.join(runRoot, 'playwright-report'),

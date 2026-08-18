@@ -59,7 +59,6 @@ export default {
             // Success login
             this.$store
               .dispatch("login", {
-                token: response.data.token,
                 user: response.data.user,
               })
               .then(() => {
@@ -77,7 +76,6 @@ export default {
             console.log("Failure to login", response);
             this.failuretext = response.data.log;
           }
-          // Add in JWT
         })
         .catch((errors) => {
           console.log("Cannot login");

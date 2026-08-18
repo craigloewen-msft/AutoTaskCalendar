@@ -19,13 +19,13 @@ const {
  * Every mutation responds with the same payload as getCompass, so the UI never has to
  * re-fetch by hand.
  */
-function createCompassRoutes(config, authenticateToken) {
+function createCompassRoutes(config, authenticateSession) {
 
     // Resolves the caller, runs the handler, and turns CompassErrors into returnFailure().
     function handle(work) {
         return async (req, res) => {
             try {
-                const user = await UserDetails.findOne({ username: req.user.id });
+                const user = await UserDetails.findOne({ username: req.user.username });
 
                 if (!req.user || !user) {
                     return res.send(returnFailure('Not logged in'));
@@ -46,12 +46,12 @@ function createCompassRoutes(config, authenticateToken) {
         };
     }
 
-    router.get('/getCompass', authenticateToken, handle(async () => {}));
+    router.get('/getCompass', authenticateSession, handle(async () => {}));
 
     // Ended items are excluded from getCompass, so detail about them is paged through here.
-    router.get('/getCompassArchive', authenticateToken, async (req, res) => {
+    router.get('/getCompassArchive', authenticateSession, async (req, res) => {
         try {
-            const user = await UserDetails.findOne({ username: req.user.id });
+            const user = await UserDetails.findOne({ username: req.user.username });
 
             if (!req.user || !user) {
                 return res.send(returnFailure('Not logged in'));
@@ -72,20 +72,20 @@ function createCompassRoutes(config, authenticateToken) {
     for (const level of ['Role', 'Goal', 'Project']) {
         const key = level.toLowerCase();
 
-        router.post(`/create${level}`, authenticateToken, handle(async (req, user) => {
+        router.post(`/create${level}`, authenticateSession, handle(async (req, user) => {
             await createItem(key, req.body, user);
         }));
 
-        router.post(`/edit${level}`, authenticateToken, handle(async (req, user) => {
+        router.post(`/edit${level}`, authenticateSession, handle(async (req, user) => {
             await editItem(key, req.body, user);
         }));
 
-        router.post(`/delete${level}`, authenticateToken, handle(async (req, user) => {
+        router.post(`/delete${level}`, authenticateSession, handle(async (req, user) => {
             await deleteItem(key, req.body, user, req.body.cascade === true);
         }));
     }
 
-    router.post('/setTaskProject', authenticateToken, handle(async (req, user) => {
+    router.post('/setTaskProject', authenticateSession, handle(async (req, user) => {
         await setTaskProject(req.body.taskId, req.body.projectId, user);
         await invalidateOneDaySlipForecasts(user._id);
     }));

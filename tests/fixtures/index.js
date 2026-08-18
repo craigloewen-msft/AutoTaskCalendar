@@ -51,25 +51,19 @@ function testNamespace(testInfo) {
  */
 
 /**
- * Log in over the real API and return a request context that carries the JWT, exactly
- * like the front end does.
+ * Log in over the real API and retain its authenticated session cookie.
  */
 async function createAuthedContext(playwright, username, password) {
     const anon = await playwright.request.newContext({ baseURL });
     const response = await anon.post('/api/login', { data: { username, password } });
     const body = await response.json();
-    await anon.dispose();
 
     if (!body.success) {
+        await anon.dispose();
         throw new Error(`Could not log in as "${username}": ${body.log || 'unknown error'}`);
     }
 
-    const context = await playwright.request.newContext({
-        baseURL,
-        extraHTTPHeaders: { Authorization: body.token },
-    });
-
-    return { context, token: body.token, user: body.user };
+    return { context: anon, user: body.user };
 }
 
 const test = base.test.extend({
@@ -82,6 +76,7 @@ const test = base.test.extend({
         const namespace = testNamespace(testInfo);
 
         const seed = async (options = {}) => {
+            if (lastResult && Object.keys(options).length === 0) return lastResult;
             if (!seedInFlight) {
                 seedInFlight = withDb(() => runSeed({
                     ...options,
@@ -151,7 +146,7 @@ const test = base.test.extend({
         await page.fill('input[name="username"]', data.primary.username);
         await page.fill('input[name="password"]', data.primary.password);
         await page.click('button:has-text("Sign in")');
-        await page.waitForFunction(() => !!localStorage.getItem('token'));
+        await page.waitForURL(/#\/user\//);
         await use(page);
         await context.close();
     },
@@ -189,8 +184,7 @@ const test = base.test.extend({
     /**
      * A browser page already logged in as this test's primary user.
      *
-     * This drives the real login form rather than planting localStorage, because the app
-     * only installs the axios Authorization header during the login dispatch.
+     * This drives the real login form so the browser receives a real server session.
      */
     loggedInPage: async ({ page, seed }, use) => {
         const data = seed.last() || await seed();
@@ -200,8 +194,8 @@ const test = base.test.extend({
         await page.fill('input[name="password"]', data.primary.password);
         await page.click('button:has-text("Sign in")');
 
-        // The app redirects home once the store has the token.
-        await page.waitForFunction(() => !!localStorage.getItem('token'));
+        // The app redirects once the server session is established.
+        await page.waitForURL(/#\/user\//);
 
         await use(page);
     },

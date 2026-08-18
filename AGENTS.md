@@ -62,7 +62,7 @@ dataset.
 - `docs/` — one file per broad concept, each a standalone instruction manual.
   `docs/COMPASS.md` covers roles/goals/projects; `docs/WEEKLY_PLAN.md` covers the weekly
   review workflow; `docs/TASK_SLIP_FORECAST.md` covers one-day impact previews;
-  `docs/REFACTOR_OVERVIEW.md` indexes the approved architecture plan.
+  `docs/REFACTOR_OVERVIEW.md` is the small risk-driven refactor roadmap.
 
 ## Documenting your work
 

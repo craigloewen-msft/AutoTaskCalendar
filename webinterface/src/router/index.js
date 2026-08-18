@@ -80,44 +80,17 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to) => {
+  await store.dispatch('initializeSession')
 
-  let loginCheckPromise = null;
-
-  if (store.getters.isLoggedIn) {
-    let lastLoginDate = store.state.lastLoginDate;
-    let expireLoginDate = new Date(lastLoginDate);
-    expireLoginDate = new Date(expireLoginDate.setDate(expireLoginDate.getDate() + 14));
-    if (new Date() > expireLoginDate) {
-      //Logout
-      store.dispatch("logout");
-    }
+  if (to.matched.some(record => record.meta.requiresAuth) && !store.getters.isLoggedIn) {
+    return { path: '/login', query: { next: to.fullPath } }
   }
-
-  if (loginCheckPromise) {
-    await loginCheckPromise;
+  if (to.matched.some(record => record.meta.guestonly) && store.getters.isLoggedIn) {
+    return { name: 'Home' }
   }
-
-  if (to.matched.some(record => record.meta.requiresAuth)) {
-    if (!store.getters.isLoggedIn) {
-      next({
-        path: '/login',
-        params: { nextUrl: to.fullPath }
-      })
-    } else {
-      next()
-    }
-  } else if (to.matched.some(record => record.meta.guestonly)) {
-    if (!store.getters.isLoggedIn) {
-      next()
-    }
-    else {
-      next({ name: 'Home' })
-    }
-  } else {
-    next()
-  }
-});
+  return true
+})
 
 
 export default router

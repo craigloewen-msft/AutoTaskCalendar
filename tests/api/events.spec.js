@@ -1,6 +1,17 @@
+const { createHash } = require('crypto');
 const { test, expect, withDb } = require('../fixtures');
 const { transformGoogleEventData } = require('../../controllers/eventController');
-const { EventDetails } = require('../../models');
+const { EventDetails, GoogleOAuthStateDetails, UserDetails } = require('../../models');
+const { migrateGoogleCredentials } = require('../../utils/googleCredentialMigration');
+const { decryptGoogleCredential, writeGoogleCredentials } = require('../../utils/googleCredentials');
+
+function stateFrom(authUrl) {
+    return new URL(authUrl).searchParams.get('state');
+}
+
+function stateDigest(state) {
+    return createHash('sha256').update(state).digest('hex');
+}
 
 test.describe('events', () => {
     test('createEvent validates inputs and persists a calendar event', async ({ seed, api }) => {
@@ -74,15 +85,110 @@ test.describe('events', () => {
         expect(badDate.log).not.toContain('Cast to date');
     });
 
-    test('uses the running Express origin for OAuth callback redirects', async ({ apiAnon }) => {
-        const response = await apiAnon.get('/api/connectGoogleCallback?error=denied', {
-            maxRedirects: 0,
-        });
+    test('OAuth state is session-bound and does not expose account selection', async ({ seed, api, apiAnon, loginAs }) => {
+        const data = await seed();
+        const other = await loginAs(data.other.username, data.other.password);
+        const connected = await (await api.get('/api/connectGoogle')).json();
+        const state = stateFrom(connected.authUrl);
 
-        expect(response.status()).toBe(302);
-        expect(response.headers().location).toBe(
+        expect(state).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        expect(connected.authUrl).not.toContain(data.primary.user._id.toString());
+
+        const anonymous = await apiAnon.get(
+            `/api/connectGoogleCallback?state=${state}&error=denied`,
+            { maxRedirects: 0 }
+        );
+        const borrowed = await other.get(
+            `/api/connectGoogleCallback?state=${state}&error=denied`,
+            { maxRedirects: 0 }
+        );
+        expect(anonymous.headers().location).toContain('error=invalid_state');
+        expect(borrowed.headers().location).toContain('error=invalid_state');
+
+        const owner = await api.get(
+            `/api/connectGoogleCallback?state=${state}&error=denied`,
+            { maxRedirects: 0 }
+        );
+        expect(owner.headers().location).toBe(
             `${process.env.AUTOTASKCALENDAR_BASE_URL}?error=oauth_error`
         );
+
+        const replay = await api.get(
+            `/api/connectGoogleCallback?state=${state}&error=denied`,
+            { maxRedirects: 0 }
+        );
+        const objectIdState = await api.get(
+            `/api/connectGoogleCallback?state=${data.other.user._id}&error=denied`,
+            { maxRedirects: 0 }
+        );
+        expect(replay.headers().location).toContain('error=invalid_state');
+        expect(objectIdState.headers().location).toContain('error=invalid_state');
+    });
+
+    test('OAuth state expires and concurrent callbacks consume it once', async ({ seed, api }) => {
+        await seed();
+        const first = await (await api.get('/api/connectGoogle')).json();
+        const expiredState = stateFrom(first.authUrl);
+        await withDb(() => GoogleOAuthStateDetails.updateOne(
+            { stateDigest: stateDigest(expiredState) },
+            { $set: { expiresAt: new Date(Date.now() - 1000) } }
+        ));
+
+        const expired = await api.get(
+            `/api/connectGoogleCallback?state=${expiredState}`,
+            { maxRedirects: 0 }
+        );
+        expect(expired.headers().location).toContain('error=invalid_state');
+
+        const second = await (await api.get('/api/connectGoogle')).json();
+        const state = stateFrom(second.authUrl);
+        const callbacks = await Promise.all([
+            api.get(`/api/connectGoogleCallback?state=${state}`, { maxRedirects: 0 }),
+            api.get(`/api/connectGoogleCallback?state=${state}`, { maxRedirects: 0 }),
+        ]);
+        const locations = callbacks.map((response) => response.headers().location).sort();
+        expect(locations.filter((location) => location.includes('error=missing_code'))).toHaveLength(1);
+        expect(locations.filter((location) => location.includes('error=invalid_state'))).toHaveLength(1);
+    });
+
+    test('migrates Google credentials to authenticated ciphertext and rejects tampering', async ({ seed }) => {
+        const data = await seed();
+        const accessToken = 'access-token-plaintext';
+        const refreshToken = 'refresh-token-plaintext';
+        await withDb(() => UserDetails.collection.updateOne(
+            { _id: data.primary.user._id },
+            { $set: { googleAccessToken: accessToken, googleRefreshToken: refreshToken } }
+        ));
+
+        await withDb(() => UserDetails.collection.updateOne(
+            { _id: data.other.user._id },
+            { $set: { googleRefreshToken: 'partial-refresh-token' } }
+        ));
+        await withDb(() => migrateGoogleCredentials({ secret: 'mysecret' }));
+        const raw = await withDb(() => UserDetails.collection.findOne({ _id: data.primary.user._id }));
+        const partial = await withDb(() => UserDetails.collection.findOne({ _id: data.other.user._id }));
+
+        expect(raw.googleAccessToken).toBeUndefined();
+        expect(raw.googleRefreshToken).toBeUndefined();
+        expect(raw.googleAccessTokenEncrypted).not.toContain(accessToken);
+        expect(raw.googleRefreshTokenEncrypted).not.toContain(refreshToken);
+        expect(decryptGoogleCredential(raw.googleAccessTokenEncrypted, 'mysecret')).toBe(accessToken);
+        expect(decryptGoogleCredential(raw.googleRefreshTokenEncrypted, 'mysecret')).toBe(refreshToken);
+        expect(partial.googleAccessTokenEncrypted).toBeUndefined();
+        expect(partial.googleRefreshToken).toBeUndefined();
+        expect(decryptGoogleCredential(partial.googleRefreshTokenEncrypted, 'mysecret'))
+            .toBe('partial-refresh-token');
+        const partialUser = await withDb(() => UserDetails.findById(data.other.user._id));
+        writeGoogleCredentials(partialUser, { secret: 'mysecret' }, { refreshToken: null });
+        expect(partialUser.googleRefreshTokenEncrypted).toBe(partial.googleRefreshTokenEncrypted);
+
+        const envelopeParts = raw.googleAccessTokenEncrypted.split('.');
+        envelopeParts[2] = `${envelopeParts[2][0] === 'A' ? 'B' : 'A'}${envelopeParts[2].slice(1)}`;
+        expect(() => decryptGoogleCredential(envelopeParts.join('.'), 'mysecret')).toThrow('Could not decrypt');
+
+        await withDb(() => migrateGoogleCredentials({ secret: 'mysecret' }));
+        const rerun = await withDb(() => UserDetails.collection.findOne({ _id: data.primary.user._id }));
+        expect(rerun.googleAccessTokenEncrypted).toBe(raw.googleAccessTokenEncrypted);
     });
 
     test('update, delete, and Google event transforms preserve intended event semantics', async ({ seed, api }) => {

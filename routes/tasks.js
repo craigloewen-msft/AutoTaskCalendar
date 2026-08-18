@@ -14,6 +14,7 @@ const {
     invalidateOneDaySlipForecasts,
 } = require('../controllers/scheduling');
 const { parseDateOnly } = require('../utils/temporal');
+const { createCompletedTaskReport } = require('../controllers/completedTaskExport');
 
 function parseTaskDate(value, label, { required = false } = {}) {
     const parsed = parseDateOnly(value);
@@ -74,10 +75,10 @@ async function hasCircularDependency(taskId, dependsOn, userId) {
     return false;
 }
 
-function createTaskRoutes(config, authenticateToken) {
+function createTaskRoutes(config, authenticateSession) {
 
-    router.post('/createTask', authenticateToken, async (req, res) => {
-        let user = await UserDetails.findOne({ username: req.user.id });
+    router.post('/createTask', authenticateSession, async (req, res) => {
+        let user = await UserDetails.findOne({ username: req.user.username });
 
         if (!req.user || !user) {
             return res.send(returnFailure('Not logged in'));
@@ -165,7 +166,7 @@ function createTaskRoutes(config, authenticateToken) {
             }
 
             // Return the updated task list
-            const returnTaskList = await getTaskListFromUsername(req.user.id);
+            const returnTaskList = await getTaskListFromUsername(req.user.username);
 
             return res.json({ success: true, taskList: returnTaskList });
         } catch (error) {
@@ -174,8 +175,8 @@ function createTaskRoutes(config, authenticateToken) {
         }
     });
 
-    router.post('/editTask', authenticateToken, async (req, res) => {
-        let user = await UserDetails.findOne({ username: req.user.id });
+    router.post('/editTask', authenticateSession, async (req, res) => {
+        let user = await UserDetails.findOne({ username: req.user.username });
 
         if (!req.user || !user) {
             return res.send(returnFailure('Not logged in'));
@@ -311,8 +312,8 @@ function createTaskRoutes(config, authenticateToken) {
         }
     });
 
-    router.post('/deleteTask', authenticateToken, async (req, res) => {
-        let user = await UserDetails.findOne({ username: req.user.id });
+    router.post('/deleteTask', authenticateSession, async (req, res) => {
+        let user = await UserDetails.findOne({ username: req.user.username });
 
         if (!req.user || !user) {
             return res.send(returnFailure('Not logged in'));
@@ -348,15 +349,15 @@ function createTaskRoutes(config, authenticateToken) {
             await invalidateOneDaySlipForecasts(user._id);
 
             // Return the updated task list
-            const returnTaskList = await getTaskListFromUsername(req.user.id);
+            const returnTaskList = await getTaskListFromUsername(req.user.username);
             return res.json({ success: true, taskList: returnTaskList });
         } catch (err) {
             res.send(returnFailure('Error deleting task'));
         }
     });
 
-    router.post('/completeTask', authenticateToken, async (req, res) => {
-        let user = await UserDetails.findOne({ username: req.user.id });
+    router.post('/completeTask', authenticateSession, async (req, res) => {
+        let user = await UserDetails.findOne({ username: req.user.username });
 
         if (!req.user || !user) {
             return res.send(returnFailure('Not logged in'));
@@ -378,15 +379,15 @@ function createTaskRoutes(config, authenticateToken) {
             await invalidateOneDaySlipForecasts(user._id);
 
             // Return the updated task list
-            const returnTaskList = await getTaskListFromUsername(req.user.id);
+            const returnTaskList = await getTaskListFromUsername(req.user.username);
             return res.json({ success: true, taskList: returnTaskList });
         } catch (err) {
             return res.send(returnFailure('Error completing task'));
         }
     });
 
-    router.post('/completeTaskChunk', authenticateToken, async (req, res) => {
-        let user = await UserDetails.findOne({ username: req.user.id });
+    router.post('/completeTaskChunk', authenticateSession, async (req, res) => {
+        let user = await UserDetails.findOne({ username: req.user.username });
 
         if (!req.user || !user) {
             return res.send(returnFailure('Not logged in'));
@@ -418,13 +419,48 @@ function createTaskRoutes(config, authenticateToken) {
         }
 
         await invalidateOneDaySlipForecasts(user._id);
-        const returnTaskList = await getTaskListFromUsername(req.user.id);
+        const returnTaskList = await getTaskListFromUsername(req.user.username);
         return res.json({ success: true, taskList: returnTaskList });
     });
 
-    router.get('/getProjectCompletions', authenticateToken, async (req, res) => {
+    router.get('/exportCompletedTasks', authenticateSession, async (req, res) => {
         try {
-            const user = await UserDetails.findOne({ username: req.user.id });
+            const user = await UserDetails.findOne({ username: req.user.username });
+
+            if (!req.user || !user) {
+                return res.send(returnFailure('Not logged in'));
+            }
+
+            const from = parseDateOnly(req.query.completedFrom);
+            const to = parseDateOnly(req.query.completedTo);
+            if (!from.provided || !to.provided) {
+                return res.send(returnFailure('completedFrom and completedTo are required'));
+            }
+            if (!from.valid || !to.valid) {
+                return res.send(returnFailure('Completion dates must use YYYY-MM-DD'));
+            }
+            if (from.value > to.value) {
+                return res.send(returnFailure('completedFrom must be on or before completedTo'));
+            }
+
+            const report = await createCompletedTaskReport(user, from.value, to.value);
+            const filename = `completed-tasks-${from.value}-to-${to.value}.md`;
+            res.set({
+                'Content-Type': 'text/markdown; charset=utf-8',
+                'Content-Disposition': `attachment; filename="${filename}"`,
+                'Cache-Control': 'no-store',
+                Pragma: 'no-cache',
+            });
+            return res.send(report);
+        } catch (error) {
+            console.error(error);
+            return res.send(returnFailure('Completed task export could not be created'));
+        }
+    });
+
+    router.get('/getProjectCompletions', authenticateSession, async (req, res) => {
+        try {
+            const user = await UserDetails.findOne({ username: req.user.username });
 
             if (!req.user || !user) {
                 return res.send(returnFailure('Not logged in'));
@@ -455,14 +491,14 @@ function createTaskRoutes(config, authenticateToken) {
         }
     });
 
-    router.get('/getUserTasks', authenticateToken, async (req, res) => {
+    router.get('/getUserTasks', authenticateSession, async (req, res) => {
         try {
-            let user = await UserDetails.findOne({ username: req.user.id });
+            let user = await UserDetails.findOne({ username: req.user.username });
 
             if (!req.user || !user) {
                 return res.send(returnFailure('Not logged in'));
             }
-            const returnTaskList = await getTaskListFromUsername(req.user.id);
+            const returnTaskList = await getTaskListFromUsername(req.user.username);
             return res.json({ success: true, taskList: returnTaskList });
         } catch (error) {
             console.error(error);
@@ -471,8 +507,8 @@ function createTaskRoutes(config, authenticateToken) {
     });
 
 
-    router.post('/setFollowUp', authenticateToken, async (req, res) => {
-        let user = await UserDetails.findOne({ username: req.user.id });
+    router.post('/setFollowUp', authenticateSession, async (req, res) => {
+        let user = await UserDetails.findOne({ username: req.user.username });
 
         if (!req.user || !user) {
             return res.send(returnFailure('Not logged in'));
@@ -520,7 +556,7 @@ function createTaskRoutes(config, authenticateToken) {
             let saveResult = await task.save();
             await invalidateOneDaySlipForecasts(user._id);
             // Return the updated task list
-            const returnTaskList = await getTaskListFromUsername(req.user.id);
+            const returnTaskList = await getTaskListFromUsername(req.user.username);
 
             return res.json({ success: true, taskList: returnTaskList });
         } catch (error) {
@@ -529,9 +565,9 @@ function createTaskRoutes(config, authenticateToken) {
         }
     });
 
-    router.get('/scheduletasks', authenticateToken, async (req, res) => {
+    router.get('/scheduletasks', authenticateSession, async (req, res) => {
         try {
-            let user = await UserDetails.findOne({ username: req.user.id });
+            let user = await UserDetails.findOne({ username: req.user.username });
 
             if (!req.user || !user) {
                 return res.send(returnFailure('Not logged in'));

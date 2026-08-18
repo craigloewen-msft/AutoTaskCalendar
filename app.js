@@ -6,8 +6,9 @@ const express = require('express');
 const passport = require('passport');
 
 // Custom requires
-const { UserDetails, TaskDetails, EventDetails } = require('./models');
-const { authenticateToken } = require('./middleware/auth');
+const { UserDetails, TaskDetails, EventDetails, GoogleOAuthStateDetails } = require('./models');
+const { authenticateSession, requireSameOrigin } = require('./middleware/auth');
+const { migrateGoogleCredentials } = require('./utils/googleCredentialMigration');
 const instance = require('./instance');
 
 // Get config
@@ -29,6 +30,7 @@ if (process.env.NODE_ENV == 'production') {
     config.googleOAuthClientID = process.env.googleOAuthClientID;
     config.googleOAuthClientSecret = process.env.googleOAuthClientSecret;
     config.appUrl = process.env.appUrl;
+    app.set('trust proxy', 1);
     // Azure App Service and most PaaS hosts inject the port to bind on.
     hostPort = parseInt(process.env.PORT, 10) || 8080;
     sessionCookieName = 'connect.sid';
@@ -37,10 +39,20 @@ if (process.env.NODE_ENV == 'production') {
     mongooseConnectionString = instance.mongoUrl;
     config.appUrl = process.env.AUTOTASKCALENDAR_BASE_URL
         || `http://localhost:${instance.webPort}`;
+    config.googleOAuthClientID = process.env.AUTOTASKCALENDAR_GOOGLE_OAUTH_CLIENT_ID
+        || config.googleOAuthClientID;
+    config.googleOAuthClientSecret = process.env.AUTOTASKCALENDAR_GOOGLE_OAUTH_CLIENT_SECRET
+        || config.googleOAuthClientSecret;
 }
 
-// Set up Mongoose connection.
-mongoose.connect(mongooseConnectionString);
+const sessionCookieOptions = {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+};
+config.sessionCookieName = sessionCookieName;
+config.sessionCookieOptions = sessionCookieOptions;
 
 // App set up
 app.use(express.json());
@@ -49,7 +61,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(session({
     store: MongoStore.create({
         mongoUrl: mongooseConnectionString,
-        ttl: 24 * 60 * 60 * 1000,
+        ttl: 14 * 24 * 60 * 60,
         autoRemove: 'interval',
         autoRemoveInterval: 60 * 24 * 7 // Once a week
     }),
@@ -57,9 +69,10 @@ app.use(session({
     name: sessionCookieName,
     secret: config.sessionSecret,
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     cookie: {
-        maxAge: 1000 * 60 * 60 * 24 * 7 * 2 // 2 weeks
+        ...sessionCookieOptions,
+        maxAge: 1000 * 60 * 60 * 24 * 7 * 2
     }
 }));
 
@@ -72,38 +85,53 @@ passport.serializeUser(UserDetails.serializeUser());
 passport.deserializeUser(UserDetails.deserializeUser());
 
 // Import and use routes
-const authRoutes = require('./routes/auth')(config, authenticateToken(config));
-const taskRoutes = require('./routes/tasks')(config, authenticateToken(config));
-const eventRoutes = require('./routes/events')(config, authenticateToken(config));
-const compassRoutes = require('./routes/compass')(config, authenticateToken(config));
+const authRoutes = require('./routes/auth')(
+    config,
+    authenticateSession(config),
+    requireSameOrigin(config)
+);
+const taskRoutes = require('./routes/tasks')(config, authenticateSession(config));
+const eventRoutes = require('./routes/events')(config, authenticateSession(config));
+const compassRoutes = require('./routes/compass')(config, authenticateSession(config));
 
 app.use('/api', authRoutes);
 app.use('/api', taskRoutes);
 app.use('/api', eventRoutes);
 app.use('/api', compassRoutes);
 
-// Listen only once routes and auth are registered, so no request can hit a half-built app.
-const server = app.listen(hostPort, '0.0.0.0', () => {
-    if (process.env.NODE_ENV == 'production') {
-        console.log(`App listening on port ${hostPort} on all interfaces`);
-    } else {
-        console.log(
-            `App listening on port ${hostPort} (instance "${instance.name}", db "${instance.dbName}")`
-        );
-    }
-});
+async function start() {
+    await mongoose.connect(mongooseConnectionString);
+    await migrateGoogleCredentials(config);
+    await GoogleOAuthStateDetails.init();
 
-// EADDRINUSE alone does not say which instance owns the port, which is the useful part.
-server.on('error', (error) => {
-    if (error.code === 'EADDRINUSE') {
-        console.error(
-            `\nPort ${hostPort} is already in use, so instance "${instance.name}" cannot start.\n` +
-            'Another instance almost certainly owns it. Start the stack with `npm run dev`, ' +
-            'which probes for free ports at startup, or pin one with ' +
-            'AUTOTASKCALENDAR_API_PORT.\n'
-        );
-    } else {
-        console.error(`Server failed to start: ${error.message}`);
-    }
+    // Listen only after credential migration, so plaintext is never served.
+    const server = app.listen(hostPort, '0.0.0.0', () => {
+        if (process.env.NODE_ENV == 'production') {
+            console.log(`App listening on port ${hostPort} on all interfaces`);
+        } else {
+            console.log(
+                `App listening on port ${hostPort} (instance "${instance.name}", db "${instance.dbName}")`
+            );
+        }
+    });
+
+    // EADDRINUSE alone does not say which instance owns the port, which is the useful part.
+    server.on('error', (error) => {
+        if (error.code === 'EADDRINUSE') {
+            console.error(
+                `\nPort ${hostPort} is already in use, so instance "${instance.name}" cannot start.\n` +
+                'Another instance almost certainly owns it. Start the stack with `npm run dev`, ' +
+                'which probes for free ports at startup, or pin one with ' +
+                'AUTOTASKCALENDAR_API_PORT.\n'
+            );
+        } else {
+            console.error(`Server failed to start: ${error.message}`);
+        }
+        process.exit(1);
+    });
+}
+
+start().catch((error) => {
+    console.error(`Server failed to start: ${error.message}`);
     process.exit(1);
 });

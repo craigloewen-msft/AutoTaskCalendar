@@ -82,7 +82,6 @@ export default {
             // // Success login
             this.$store
               .dispatch("register", {
-                token: response.data.token,
                 user: response.data.user,
               })
               .then(() => {
@@ -100,7 +99,6 @@ export default {
             console.log("Failure to register", response);
             this.failuretext = response.data.log;
           }
-          // Add in JWT
         })
         .catch((errors) => {
           console.log("Cannot register");

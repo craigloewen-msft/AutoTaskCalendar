@@ -202,7 +202,7 @@ test.describe('weekly plan page', () => {
         await page.fill('input[name="username"]', data.primary.username);
         await page.fill('input[name="password"]', data.primary.password);
         await page.click('button:has-text("Sign in")');
-        await page.waitForFunction(() => !!localStorage.getItem('token'));
+        await page.waitForURL(/#\/user\//);
         await page.clock.install({ time: fixedNow });
         await openPlan(page);
 

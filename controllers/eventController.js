@@ -1,6 +1,7 @@
 const { UserDetails, EventDetails } = require('../models');
 const { google } = require('googleapis');
 const moment = require('moment-timezone');
+const { readGoogleCredentials, writeGoogleCredentials } = require('../utils/googleCredentials');
 const {
   parseInstant,
   parseDateOnly,
@@ -127,10 +128,8 @@ async function refreshGoogleCalendarAccessToken(inUser, config) {
     throw new Error('Google OAuth credentials not configured');
   }
 
-  if (!inUser.googleRefreshToken) {
-    console.error('[Google OAuth] ERROR: Cannot refresh token - no refresh token stored for user');
-    throw new Error('No refresh token available');
-  }
+  const credentials = readGoogleCredentials(inUser, config);
+  if (!credentials.refreshToken) throw new Error('No refresh token available');
 
   // Refresh Google Calendar access token
   const oauth2Client = new google.auth.OAuth2(
@@ -138,34 +137,33 @@ async function refreshGoogleCalendarAccessToken(inUser, config) {
     config.googleOAuthClientSecret,
   );
   oauth2Client.setCredentials({
-    refresh_token: inUser.googleRefreshToken
+    refresh_token: credentials.refreshToken
   });
 
   try {
     const tokens = await oauth2Client.refreshAccessToken();
-    inUser.googleAccessToken = tokens.credentials.access_token;
+    writeGoogleCredentials(inUser, config, {
+      accessToken: tokens.credentials.access_token,
+      refreshToken: tokens.credentials.refresh_token,
+    });
     await inUser.save();
     return true;
   } catch (err) {
-    console.error('[Google OAuth] ERROR: Failed to refresh access token');
-    console.error('[Google OAuth] Error message:', err.message);
-    console.error('[Google OAuth] Error details:', JSON.stringify(err.response?.data || {}, null, 2));
+    console.error('[Google OAuth] Access token refresh failed');
     throw err;
   }
 }
 
 async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod, config, calendarTimeZones = {}) {
   try {
-    // Check if user has a Google Calendar access token
-    if (!inUser.googleAccessToken) {
-      return false;
-    }
+    const credentials = readGoogleCredentials(inUser, config);
+    if (!credentials.accessToken) return false;
 
     // Sync Google Calendar events to events database
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({
-      access_token: inUser.googleAccessToken,
-      refresh_token: inUser.googleRefreshToken
+      access_token: credentials.accessToken,
+      refresh_token: credentials.refreshToken
     });
 
     const calendar = google.calendar({ version: "v3", auth: oauth2Client });
@@ -237,7 +235,7 @@ async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod, config, c
     return true;
 
   } catch (err) {
-    console.error(err);
+    console.error('[Google OAuth] Calendar sync failed');
 
     if (err.code == 401) {
       await refreshGoogleCalendarAccessToken(inUser, config);

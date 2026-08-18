@@ -1,82 +1,87 @@
 import { createStore } from 'vuex'
 import axios from 'axios'
 
+for (const key of ['token', 'user', 'lastLoginDate']) localStorage.removeItem(key)
+axios.defaults.withCredentials = true
+
+let sessionCheckPromise = null
+
 export default createStore({
     state: {
         status: '',
-        token: localStorage.getItem('token') || '',
-        user: JSON.parse(localStorage.getItem('user')) || {},
-        lastLoginDate: localStorage.getItem('lastLoginDate') || null
+        user: {},
+        sessionChecked: false,
     },
     mutations: {
         auth_request(state) {
-            state.status = "Loading..."
+            state.status = 'Loading...'
         },
-        auth_success(state, authdata) {
-            state.status = "Success";
-            state.token = authdata.token;
-            state.user = authdata.user;
-            state.lastLoginDate = new Date();
+        auth_success(state, user) {
+            state.status = 'Success'
+            state.user = user
+            state.sessionChecked = true
         },
         auth_error(state) {
-            state.status = "Error";
+            state.status = 'Error'
+            state.user = {}
+            state.sessionChecked = true
         },
         logout(state) {
-            state.status = "";
-            state.token = "";
-            state.lastLoginDate = null;
+            state.status = ''
+            state.user = {}
+            state.sessionChecked = true
         },
-        refresh_user_info(state, refresheduser) {
-            state.user = refresheduser;
-        }
-
+        refresh_user_info(state, refreshedUser) {
+            state.user = refreshedUser
+        },
     },
     actions: {
-
-        login({ commit }, logindata) {
-            return new Promise((resolve, reject) => {
-                commit('auth_request');
-                localStorage.setItem('token', logindata.token);
-                localStorage.setItem('user', JSON.stringify(logindata.user));
-                localStorage.setItem('lastLoginDate', new Date());
-
-                axios.defaults.headers.common['Authorization'] = logindata.token;
-                commit('auth_success', { token: logindata.token, user: logindata.user });
-                resolve("Success!");
-            })
+        initializeSession({ commit, state }) {
+            if (state.sessionChecked) return Promise.resolve(state.user)
+            if (!sessionCheckPromise) {
+                sessionCheckPromise = axios.get('/api/user')
+                    .then((response) => {
+                        if (!response.data.success) throw new Error('No active session')
+                        commit('auth_success', response.data.user)
+                        return response.data.user
+                    })
+                    .catch(() => {
+                        commit('auth_error')
+                        return null
+                    })
+                    .finally(() => {
+                        sessionCheckPromise = null
+                    })
+            }
+            return sessionCheckPromise
         },
-        register({ commit }, registerdata) {
-            return new Promise((resolve, reject) => {
-                commit('auth_request');
-                localStorage.setItem('token', registerdata.token);
-                localStorage.setItem('user', JSON.stringify(registerdata.user));
-                localStorage.setItem('lastLoginDate', new Date());
-
-                axios.defaults.headers.common['Authorization'] = registerdata.token;
-                commit('auth_success', { token: registerdata.token, user: registerdata.user });
-                resolve("Succses!");
-            })
+        login({ commit }, loginData) {
+            commit('auth_success', loginData.user)
+            return Promise.resolve('Success!')
         },
-        logout({ commit }) {
-            return new Promise((resolve, reject) => {
-                commit('logout');
-                localStorage.removeItem('token')
-                localStorage.removeItem('user');
-                localStorage.removeItem('lastLoginDate');
-                delete axios.defaults.headers.common['Authorization'];
-                resolve();
-            })
+        register({ commit }, registerData) {
+            commit('auth_success', registerData.user)
+            return Promise.resolve('Success!')
         },
-        refreshUserInfo({ commit }, refresheduser) {
-            return new Promise((resolve, reject) => {
-                localStorage.setItem('user',JSON.stringify(refresheduser));
-                commit('refresh_user_info', refresheduser);
-            });
+        async logout({ commit, getters }) {
+            try {
+                if (getters.isLoggedIn) await axios.post('/api/logout')
+            } catch (error) {
+                // Local logout must still finish after an expired server session.
+            } finally {
+                commit('logout')
+            }
         },
-
+        clearSession({ commit }) {
+            commit('logout')
+        },
+        refreshUserInfo({ commit }, refreshedUser) {
+            commit('refresh_user_info', refreshedUser)
+            return Promise.resolve()
+        },
     },
     getters: {
-        isLoggedIn: state => !!state.token,
+        isLoggedIn: state => !!state.user.username,
         authStatus: state => state.status,
-    }
+    },
 })
