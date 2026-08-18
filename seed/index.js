@@ -182,8 +182,8 @@ function makeBuilder(anchor, namespace) {
 /**
  * Build the dataset, replacing either the whole instance or one namespaced tenant.
  *
- * Returns `{ anchor, users, tasks, events, roles, goals, projects, primary, other, named,
- * counts }` — everything the dataset created, so tests can assert without re-querying.
+ * Returns `{ anchor, users, tasks, events, roles, goals, projects, primary, other, recurring,
+ * slip, named, counts }` — everything created, so tests can assert without re-querying.
  */
 async function executeSeed({ mongoUrl, anchor, disconnect = false, namespace = null } = {}) {
     const url = resolveMongoUrl(mongoUrl);

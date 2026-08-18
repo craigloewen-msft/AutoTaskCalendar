@@ -3,6 +3,7 @@
 const momentTz = require('moment-timezone');
 const {
     addDateOnlyDays,
+    dateOnlyFromMarker,
     dateOnlyInZone,
     nextDateStartInZone,
     taskEligibleInstant,
@@ -87,17 +88,74 @@ function getChunkDuration(task) {
     return task.breakUpTask ? task.breakUpTaskChunkDuration * MS_PER_MINUTE : 0;
 }
 
+function priorityRank(task) {
+    const priority = Number(task?.priority ?? 100);
+    return Number.isFinite(priority) ? priority : 100;
+}
+
+function dateRank(value) {
+    if (!value) return Number.POSITIVE_INFINITY;
+    const time = new Date(value).getTime();
+    return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time;
+}
+
+function compareTaskSchedulingKeys(left, right) {
+    const backlogOrder = Number(!!left?.isBacklog) - Number(!!right?.isBacklog);
+    if (backlogOrder) return backlogOrder;
+
+    // Backlog stays below dated work and keeps its historical start-date ordering.
+    if (left?.isBacklog && right?.isBacklog) {
+        const startOrder = dateRank(left.startDate) - dateRank(right.startDate);
+        if (startOrder) return startOrder;
+    }
+
+    const leftDueDate = dateOnlyFromMarker(left?.dueDate);
+    const rightDueDate = dateOnlyFromMarker(right?.dueDate);
+    if (leftDueDate !== rightDueDate) {
+        if (!leftDueDate) return 1;
+        if (!rightDueDate) return -1;
+        return leftDueDate.localeCompare(rightDueDate);
+    }
+
+    return priorityRank(left) - priorityRank(right);
+}
+
+function compareCandidatesForScheduling(left, right) {
+    const taskOrder = compareTaskSchedulingKeys(left.task, right.task);
+    if (taskOrder) return taskOrder;
+
+    const fullPlacementOrder = Number(!left.canFitFully) - Number(!right.canFitFully);
+    if (fullPlacementOrder) return fullPlacementOrder;
+
+    return taskId(left.task).localeCompare(taskId(right.task));
+}
+
 function whenUnschedulableBehaviorForTask(task, context) {
     if (!task.seriesRef) return null;
     return context.seriesWhenUnschedulableBehaviorById.get(task.seriesRef.toString())
         || DEFAULT_WHEN_UNSCHEDULABLE_BEHAVIOR;
 }
 
+function taskTemporalMetadata(task, context) {
+    const cache = context.taskTemporalCache || new Map();
+    context.taskTemporalCache = cache;
+    let metadata = cache.get(task);
+    if (metadata?.timeZone === context.timeZone) return metadata;
+
+    metadata = {
+        timeZone: context.timeZone,
+        eligibleAt: taskEligibleInstant(task.startDate, context.timeZone),
+        expiresAt: whenUnschedulableBehaviorForTask(task, context) === 'skip'
+            && task.occurrenceDate
+            ? nextDateStartInZone(task.occurrenceDate, context.timeZone)
+            : null,
+    };
+    cache.set(task, metadata);
+    return metadata;
+}
+
 function occurrenceExpiresAt(task, context) {
-    if (whenUnschedulableBehaviorForTask(task, context) !== 'skip' || !task.occurrenceDate) {
-        return null;
-    }
-    return nextDateStartInZone(task.occurrenceDate, context.timeZone);
+    return taskTemporalMetadata(task, context).expiresAt;
 }
 
 function removeExpiredOccurrences(context) {
@@ -117,38 +175,26 @@ function removeExpiredOccurrences(context) {
 
 function findBestTaskForSlot(context, availableTime) {
     const { pendingTasks, chunkInfo, incompleteTaskMap, scheduledTaskIds, currentTime } = context;
-    let full = null;
-    let chunkable = null;
+    let best = null;
 
     for (let index = 0; index < pendingTasks.length; index++) {
         const task = pendingTasks[index];
         if (!areDependenciesMet(task, incompleteTaskMap, scheduledTaskIds)) continue;
 
-        const eligibleAt = taskEligibleInstant(task.startDate, context.timeZone);
+        const eligibleAt = taskTemporalMetadata(task, context).eligibleAt;
         if (!eligibleAt || currentTime.getTime() < eligibleAt.getTime()) continue;
 
-        const remainingDuration = getRemainingDuration(task, chunkInfo);
-        const chunkDuration = getChunkDuration(task);
-        if (!full && availableTime >= remainingDuration) {
-            full = { task, index, canFitFully: true };
+        const canFitFully = availableTime >= getRemainingDuration(task, chunkInfo);
+        const canFitChunk = task.breakUpTask && availableTime >= getChunkDuration(task);
+        if (!canFitFully && !canFitChunk) continue;
+
+        const candidate = { task, index, canFitFully };
+        if (!best || compareCandidatesForScheduling(candidate, best) < 0) {
+            best = candidate;
         }
-        if (!chunkable && task.breakUpTask && availableTime >= chunkDuration) {
-            chunkable = { task, index, canFitFully: false };
-        }
-        if (full && chunkable) break;
     }
 
-    if (!full) return chunkable;
-    if (!chunkable) return full;
-
-    const fullPriority = full.task.priority ?? 100;
-    const chunkPriority = chunkable.task.priority ?? 100;
-    if (chunkable.task.dueDate < full.task.dueDate
-        || (chunkable.task.dueDate.getTime() === full.task.dueDate.getTime()
-            && chunkPriority < fullPriority)) {
-        return chunkable;
-    }
-    return full;
+    return best;
 }
 
 function placementFor(task, startDate, duration, chunkNumber = null) {
@@ -262,6 +308,7 @@ function planTaskPlacements({
     currentTime = new Date(),
     schedulingHorizon,
     seriesWhenUnschedulableBehaviorById = new Map(),
+    taskTemporalCache = new Map(),
 }) {
     const pendingTasks = [...tasks];
     const context = {
@@ -277,6 +324,7 @@ function planTaskPlacements({
         scheduledDates: new Map(),
         chunkInfo: {},
         seriesWhenUnschedulableBehaviorById,
+        taskTemporalCache,
         events: events
             .map((event) => ({
                 ...event,

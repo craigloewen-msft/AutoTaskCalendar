@@ -28,6 +28,7 @@ Log in with:
 | `testuser` | `testpassword` |
 | `otheruser` | `testpassword` |
 | `recurruser` | `testpassword` |
+| `slipuser` | `testpassword` |
 
 `otheruser` exists only to prove their data never leaks into `testuser`'s views.
 `recurruser` is the recurring-task scenario: three one-off tasks plus a single
@@ -35,6 +36,11 @@ weekly-on-Monday series. `testuser` carries hundreds of occurrences, which makes
 duplicate impossible to spot, so use `recurruser` when you need to check repeating
 behaviour by eye — the calendar should show exactly one "Weekly Monday standup" per
 Monday and nothing else.
+
+`slipuser` is the blocked-slot forecast scenario. Its next complete workweek contains ten Friday-due
+3½-hour tasks and five fixed 09:00–10:00 events. Together they consume all 40 working hours.
+The following week is empty except for one isolated Friday task, making it easy to distinguish
+genuine downstream deadline damage from a selected task merely making itself late.
 
 ## What the dataset contains
 
@@ -53,6 +59,9 @@ All of it belongs to `testuser` unless noted:
   See `docs/RECURRING_TASKS.md`.
 - **A minimal recurring scenario** on `recurruser` — `data.named.mondaySeries` (weekly on
   Mondays) plus three one-off tasks, small enough to audit by hand.
+- **A mixed-capacity slip scenario** on `slipuser` — ten Friday-due tasks plus one fixed
+  event each workday exactly fill the next workweek; the following week contains only one
+  isolated Friday task. Tests access it through `data.slip`.
 - **70 completed tasks** spread over 90 days, kept as completion history and to prove the
   scheduler never schedules a completed task.
 - **Edge cases** — a zero-duration task, one longer than the working day, one overdue by a
@@ -123,6 +132,8 @@ const data = await seed();
 data.primary.user       // primary user's mongoose document
 data.primary.username   // unique username for this test
 data.other.user         // the second user
+data.slip.capacityTasks // the ten capacity-tight tasks
+data.slip.isolatedTask  // the following week's isolated task
 data.named.research     // named tasks, by key
 data.named.engineerRole // Compass roles, goals, and projects are named too
 data.counts.completed   // 70 — prefer these over hard-coded numbers

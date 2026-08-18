@@ -1,8 +1,9 @@
 const { test, expect, withDb } = require('../fixtures');
-const { EventDetails, TaskDetails, UserDetails } = require('../../models');
+const { EventDetails, TaskDetails } = require('../../models');
 const {
     addDateOnlyDays,
-    mondayWeekBounds,
+    dateOnlyFromMarker,
+    dateOnlyInZone,
     parseDateOnly,
     todayInZone,
     zonedDateTime,
@@ -38,171 +39,279 @@ async function createQuickCompleteFixture(data) {
     });
 }
 
+function placementSummaries(events) {
+    const summaries = new Map();
+    for (const event of events) {
+        const current = summaries.get(event.taskId) || {
+            first: event.startDate,
+            last: event.endDate,
+        };
+        if (event.startDate < current.first) current.first = event.startDate;
+        if (event.endDate > current.last) current.last = event.endDate;
+        summaries.set(event.taskId, current);
+    }
+    return summaries;
+}
+
+function isLate(summary, dueDate) {
+    return !summary || dateOnlyInZone(summary.last, 'UTC') > dateOnlyFromMarker(dueDate);
+}
+
 test.describe('calendar page', () => {
-    test('shows the deadline cascade if one of ten Friday tasks slips a day', async ({
+    test('shows only downstream deadline risk in the mixed-capacity calendar', async ({
         seed,
-        loggedInPage: page,
+        page,
     }, testInfo) => {
-        const data = seed.last();
-        const week = mondayWeekBounds(todayInZone('UTC'), 'UTC');
-        const monday = week.nextStartDate;
-        const friday = addDateOnlyDays(monday, 4);
-        const followingMonday = addDateOnlyDays(monday, 7);
-        const bufferedTuesday = addDateOnlyDays(monday, 8);
-        const bufferedFriday = addDateOnlyDays(monday, 11);
+        const data = await seed();
+        const { capacityTasks, capacityEvents, isolatedTask, project, dates } = data.slip;
+        const { capacityMonday, capacityFriday, recoveryMonday, recoveryFriday } = dates;
 
-        const tasks = await withDb(async () => {
-            await Promise.all([
-                TaskDetails.deleteMany({ userRef: data.primary.user._id }),
-                EventDetails.deleteMany({ userRef: data.primary.user._id }),
-                UserDetails.updateOne({ _id: data.primary.user._id }, {
-                    $set: {
-                        timeZone: 'UTC',
-                        workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-                        workingStartMinutes: 9 * 60,
-                        workingEndMinutes: 17 * 60,
-                    },
-                }),
-            ]);
-            const common = {
-                completed: false,
-                isBacklog: false,
-                breakUpTask: false,
-                dependsOn: [],
-                projectRef: data.named.migrationProject._id,
-                userRef: data.primary.user._id,
-            };
-            const launchTasks = Array.from({ length: 10 }, (_, index) => ({
-                ...common,
-                title: `Friday launch ${String(index + 1).padStart(2, '0')}`,
-                duration: 4 * 60,
-                startDate: parseDateOnly(monday).date,
-                dueDate: parseDateOnly(friday).date,
-                priority: index + 1,
-            }));
-            const bufferedTasks = Array.from({ length: 2 }, (_, index) => ({
-                ...common,
-                title: `Buffered follow-up ${String(index + 1).padStart(2, '0')}`,
-                duration: 60,
-                startDate: parseDateOnly(bufferedTuesday).date,
-                dueDate: parseDateOnly(bufferedFriday).date,
-                priority: 100 + index,
-            }));
-            return TaskDetails.insertMany([...launchTasks, ...bufferedTasks]);
-        });
-
+        await page.goto('/#/login');
+        await page.fill('input[name="username"]', data.slip.username);
+        await page.fill('input[name="password"]', data.slip.password);
+        await page.click('button:has-text("Sign in")');
+        await page.waitForURL(/#\/user\//);
         await page.setViewportSize({ width: 1440, height: 1600 });
-        await page.clock.install({ time: new Date(`${monday}T08:00:00.000Z`) });
+        await page.clock.install({ time: new Date(`${capacityMonday}T08:00:00.000Z`) });
+
         await page.goto('/#/weekly-plan');
         const overview = page.locator('[data-test=weekly-overview]');
         await expect(overview).toContainText('10 tasks');
-        await expect(overview).toContainText('40h due this week');
-        await expect(page.locator(`[data-test="week-tasks-${data.named.migrationProject._id}"] li`)).toHaveCount(10);
+        await expect(overview).toContainText('35h due this week');
+        await expect(page.locator(`[data-test="week-tasks-${project._id}"] li`)).toHaveCount(10);
 
         await page.goto('/#/calendar');
         await page.getByRole('button', { name: 'Schedule tasks' }).click();
 
-        const launchTasks = tasks.slice(0, 10);
-        const bufferedTasks = tasks.slice(10);
-        const firstTask = launchTasks[0];
+        const firstTask = capacityTasks[0];
+        const lastCapacityTask = capacityTasks.at(-1);
         const chip = page.locator(`[data-test="slip-impact-chip-${firstTask._id}"]`);
-        await expect(chip).toHaveText('+1 day → 2 late');
-        for (const task of bufferedTasks) {
-            const safeChip = page.locator(`[data-test="slip-impact-chip-${task._id}"]`);
-            await expect(safeChip).toHaveText('+1 day → safe');
-            await expect(safeChip).toHaveClass(/safe/);
-        }
-        const baselineRows = page.locator('.task-controls');
-        await testInfo.attach('one-day-slip-at-a-glance', {
-            body: await baselineRows.screenshot(),
+        const lastCapacityChip = page.locator(
+            `[data-test="slip-impact-chip-${lastCapacityTask._id}"]`
+        );
+        const isolatedChip = page.locator(`[data-test="slip-impact-chip-${isolatedTask._id}"]`);
+        await expect(chip).toHaveText('slot blocked → 1 late');
+        const titleBox = await page
+            .locator(`[data-test="task-item-${firstTask._id}"] .task-primary-row`)
+            .boundingBox();
+        const chipBox = await chip.boundingBox();
+        expect(titleBox).not.toBeNull();
+        expect(chipBox).not.toBeNull();
+        expect(chipBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+        await expect(lastCapacityChip).toHaveCount(0);
+        await expect(isolatedChip).toHaveCount(0);
+        await testInfo.attach('blocked-slot-at-a-glance', {
+            body: await page.locator('.task-controls').screenshot(),
             contentType: 'image/png',
         });
 
-        const before = await withDb(async () => {
-            const taskEvents = await EventDetails.find({
-                userRef: data.primary.user._id,
-                type: { $in: ['task', 'task-chunk'] },
-            }).sort({ startDate: 1 });
+        const snapshot = async () => withDb(async () => {
+            const events = await EventDetails.find({ userRef: data.slip.user._id })
+                .sort({ startDate: 1, title: 1 });
+            const tasks = await TaskDetails.find({ userRef: data.slip.user._id }).sort({ priority: 1 });
             return {
-                tasks: (await TaskDetails.find({ userRef: data.primary.user._id }).sort({ priority: 1 }))
-                    .map((task) => [
-                        task._id.toString(),
-                        task.scheduledDate?.toISOString(),
-                        task.slipForecast?.calculatedAt?.toISOString(),
-                    ].join(':')),
-                events: taskEvents.map(
-                    (event) => `${event._id}:${event.taskRef}:${event.startDate.toISOString()}:${event.endDate.toISOString()}`
+                tasks: tasks.map((task) => [
+                    task._id.toString(),
+                    task.scheduledDate?.toISOString(),
+                    task.slipForecast?.calculatedAt?.toISOString(),
+                ].join(':')),
+                events: events.map(
+                    (event) => `${event._id}:${event.taskRef || ''}:${event.startDate.toISOString()}:${event.endDate.toISOString()}`
                 ),
-                eventDates: taskEvents.map((event) => event.startDate.toISOString().slice(0, 10)),
+                fixedEvents: events.filter((event) => event.type === 'calendar').map((event) => ({
+                    id: event._id.toString(),
+                    date: event.startDate.toISOString().slice(0, 10),
+                    start: event.startDate.toISOString().slice(11, 16),
+                    end: event.endDate.toISOString().slice(11, 16),
+                })),
+                taskEvents: events.filter((event) => event.type.includes('task')).map((event) => ({
+                    taskId: event.taskRef.toString(),
+                    startDate: event.startDate.toISOString(),
+                    endDate: event.endDate.toISOString(),
+                    date: event.startDate.toISOString().slice(0, 10),
+                    start: event.startDate.toISOString().slice(11, 16),
+                    end: event.endDate.toISOString().slice(11, 16),
+                })),
             };
         });
-        expect(before.events).toHaveLength(12);
-        expect(before.tasks.filter((task) => !task.endsWith(':'))).toHaveLength(12);
-        expect(before.eventDates).toEqual([
+        const before = await snapshot();
+        expect(before.taskEvents).toHaveLength(11);
+        expect(before.tasks.filter((task) => !task.endsWith(':'))).toHaveLength(11);
+        expect(before.fixedEvents).toEqual(capacityEvents.map((event, index) => ({
+            id: event._id.toString(),
+            date: addDateOnlyDays(capacityMonday, index),
+            start: '09:00',
+            end: '10:00',
+        })));
+        expect(before.taskEvents.map((event) => event.date)).toEqual([
             ...Array.from({ length: 5 }, (_, index) => {
-                return [addDateOnlyDays(monday, index), addDateOnlyDays(monday, index)];
+                return [addDateOnlyDays(capacityMonday, index), addDateOnlyDays(capacityMonday, index)];
             }).flat(),
-            bufferedTuesday,
-            bufferedTuesday,
+            recoveryFriday,
         ]);
+        expect(before.taskEvents.slice(0, 10).map(({ start, end }) => `${start}-${end}`)).toEqual(
+            Array.from({ length: 5 }, () => ['10:00-13:30', '13:30-17:00']).flat()
+        );
+        expect(before.taskEvents.at(-1)).toMatchObject({
+            taskId: isolatedTask._id.toString(),
+            date: recoveryFriday,
+            start: '09:00',
+            end: '10:00',
+        });
 
-        await chip.click();
+        await chip.focus();
+        await expect(chip).toBeFocused();
+        await page.keyboard.press('Enter');
         const panel = page.locator('[data-test=slip-forecast-panel]');
         await expect(panel).toBeVisible();
-        await expect(panel).toContainText('Let “Friday launch 01” slip one day');
+        await expect(chip).toHaveAttribute('aria-expanded', 'true');
+        await expect(page.getByRole('button', { name: 'Close blocked-slot forecast' })).toBeVisible();
+        await expect(panel).toContainText('“Friday launch 01” misses its planned slot');
         const summary = panel.locator('[data-test=slip-forecast-summary]');
-        await expect(summary).toContainText('10 tasks move later');
-        await expect(summary).toContainText('2 newly miss deadlines');
+        await expect(summary).toContainText('9 downstream tasks move later');
+        await expect(summary).toContainText('1 newly misses its deadline');
         const impacts = panel.locator('[data-test^=slip-impact-]');
-        await expect(impacts).toHaveCount(10);
+        await expect(impacts).toHaveCount(9);
+        await expect(panel.locator(`[data-test="slip-impact-${firstTask._id}"]`)).toHaveCount(0);
 
-        for (const task of launchTasks.slice(8)) {
-            const impact = panel.locator(`[data-test="slip-impact-${task._id}"]`);
-            await expect(impact).toHaveAttribute('data-baseline-date', friday);
-            await expect(impact).toHaveAttribute('data-forecast-date', followingMonday);
-            await expect(impact).toContainText('Late');
-            await expect(page.locator('.task-item', { hasText: task.title })).toHaveClass(
-                /forecast-newly-late-task/
-            );
-        }
-        await expect(page.locator('.task-item', { hasText: firstTask.title })).toHaveClass(
-            /forecast-selected-task/
+        const penultimateImpact = panel.locator(
+            `[data-test="slip-impact-${capacityTasks.at(-2)._id}"]`
         );
-        for (const task of bufferedTasks) {
-            await expect(panel).not.toContainText(task.title);
-            await expect(page.locator('.task-item', { hasText: task.title })).not.toHaveClass(
-                /forecast-moved-task/
-            );
-        }
-        await testInfo.attach('one-day-slip-expanded-cascade', {
+        await expect(penultimateImpact).toHaveAttribute('data-baseline-date', capacityFriday);
+        await expect(penultimateImpact).toHaveAttribute('data-forecast-date', capacityFriday);
+        await expect(penultimateImpact).not.toContainText('Late');
+
+        const finalImpact = panel.locator(`[data-test="slip-impact-${lastCapacityTask._id}"]`);
+        await expect(finalImpact).toHaveAttribute('data-baseline-date', capacityFriday);
+        await expect(finalImpact).toHaveAttribute('data-forecast-date', recoveryMonday);
+        await expect(finalImpact).toContainText('Late');
+        await expect(page.locator('.task-item', { hasText: lastCapacityTask.title })).toHaveClass(
+            /forecast-newly-late-task/
+        );
+        const selectedTask = page.locator('.task-item', { hasText: firstTask.title });
+        await expect(selectedTask).toHaveClass(/forecast-selected-task/);
+        await expect(selectedTask).not.toHaveClass(/forecast-moved-task/);
+        await expect(panel).not.toContainText(isolatedTask.title);
+        await expect(page.locator('.task-item', { hasText: isolatedTask.title })).not.toHaveClass(
+            /forecast-moved-task/
+        );
+        await testInfo.attach('blocked-slot-expanded-cascade', {
             body: await panel.screenshot(),
             contentType: 'image/png',
         });
 
+        await withDb(() => TaskDetails.updateOne(
+            { _id: lastCapacityTask._id },
+            { $set: { 'slipForecast.movedCount': 1 } }
+        ));
+        await page.reload();
+        await expect(lastCapacityChip).toHaveText('slot blocked → safe');
+
+        await withDb(() => TaskDetails.updateOne(
+            { _id: lastCapacityTask._id },
+            { $set: { 'slipForecast.movedCount': 0 } }
+        ));
         await page.reload();
         await expect(page.locator(`[data-test="slip-impact-chip-${firstTask._id}"]`)).toHaveText(
-            '+1 day → 2 late'
+            'slot blocked → 1 late'
         );
+        await expect(lastCapacityChip).toHaveCount(0);
+        await expect(isolatedChip).toHaveCount(0);
+        expect(await snapshot()).toEqual(before);
 
-        const after = await withDb(async () => {
-            const taskEvents = await EventDetails.find({
-                userRef: data.primary.user._id,
-                type: { $in: ['task', 'task-chunk'] },
-            }).sort({ startDate: 1 });
+        const oracle = await withDb(async () => {
+            const task = await TaskDetails.findById(firstTask._id);
             return {
-                tasks: (await TaskDetails.find({ userRef: data.primary.user._id }).sort({ priority: 1 }))
-                    .map((task) => [
-                        task._id.toString(),
-                        task.scheduledDate?.toISOString(),
-                        task.slipForecast?.calculatedAt?.toISOString(),
-                    ].join(':')),
-                events: taskEvents.map(
-                    (event) => `${event._id}:${event.taskRef}:${event.startDate.toISOString()}:${event.endDate.toISOString()}`
-                ),
-                eventDates: taskEvents.map((event) => event.startDate.toISOString().slice(0, 10)),
+                affected: task.slipForecast.affected.map((impact) => ({
+                    taskId: impact.taskId.toString(),
+                    baselineStart: impact.baselineStart.toISOString(),
+                    baselineEnd: impact.baselineEnd.toISOString(),
+                    forecastStart: impact.forecastStart?.toISOString() || null,
+                    forecastEnd: impact.forecastEnd?.toISOString() || null,
+                    newlyLate: impact.newlyLate,
+                })),
+                movedCount: task.slipForecast.movedCount,
+                newlyLateCount: task.slipForecast.newlyLateCount,
             };
         });
-        expect(after).toEqual(before);
+        expect(oracle.movedCount).toBe(9);
+        expect(oracle.newlyLateCount).toBe(1);
+        expect(oracle.affected.map(({ taskId }) => taskId)).not.toContain(firstTask._id.toString());
+
+        const baselinePlacements = placementSummaries(before.taskEvents);
+        const selectedSlot = before.taskEvents.find(
+            (event) => event.taskId === firstTask._id.toString()
+        );
+        const blockerResponse = await page.request.post('/api/createEvent', {
+            data: {
+                title: 'Unexpected blocked task slot',
+                startDate: selectedSlot.startDate,
+                endDate: selectedSlot.endDate,
+            },
+        });
+        const blockerResult = await blockerResponse.json();
+        expect(blockerResult.success).toBe(true);
+        expect(new Date(blockerResult.event.startDate).toISOString()).toBe(selectedSlot.startDate);
+        expect(new Date(blockerResult.event.endDate).toISOString()).toBe(selectedSlot.endDate);
+
+        await Promise.all([
+            page.waitForResponse((response) => response.url().includes('/api/scheduletasks')),
+            page.getByRole('button', { name: 'Schedule tasks' }).click(),
+        ]);
+        const actual = await snapshot();
+        const actualPlacements = placementSummaries(actual.taskEvents);
+        const blockerStart = new Date(selectedSlot.startDate).getTime();
+        const blockerEnd = new Date(selectedSlot.endDate).getTime();
+        for (const event of actual.taskEvents) {
+            const overlaps = new Date(event.startDate).getTime() < blockerEnd
+                && new Date(event.endDate).getTime() > blockerStart;
+            expect(overlaps, `${event.taskId} overlaps the blocked slot`).toBe(false);
+        }
+
+        const actualMovedIds = [...baselinePlacements.keys()]
+            .filter((taskId) => taskId !== firstTask._id.toString())
+            .filter((taskId) => {
+                const baseline = baselinePlacements.get(taskId);
+                const rescheduled = actualPlacements.get(taskId);
+                return !rescheduled
+                    || rescheduled.first !== baseline.first
+                    || rescheduled.last !== baseline.last;
+            })
+            .sort();
+        expect(actualMovedIds).toEqual(oracle.affected.map(({ taskId }) => taskId).sort());
+
+        for (const impact of oracle.affected) {
+            const rescheduled = actualPlacements.get(impact.taskId);
+            expect(rescheduled?.first || null).toBe(impact.forecastStart);
+            expect(rescheduled?.last || null).toBe(impact.forecastEnd);
+        }
+
+        const taskById = new Map(capacityTasks.map((task) => [task._id.toString(), task]));
+        const actualNewlyLateIds = actualMovedIds.filter((taskId) => {
+            const task = taskById.get(taskId);
+            return task
+                && !isLate(baselinePlacements.get(taskId), task.dueDate)
+                && isLate(actualPlacements.get(taskId), task.dueDate);
+        }).sort();
+        const forecastNewlyLateIds = oracle.affected
+            .filter((impact) => impact.newlyLate)
+            .map((impact) => impact.taskId)
+            .sort();
+        expect(actualNewlyLateIds).toEqual(forecastNewlyLateIds);
+        expect(actualNewlyLateIds).toEqual([lastCapacityTask._id.toString()]);
+
+        const baselineSelected = baselinePlacements.get(firstTask._id.toString());
+        const baselineSecond = baselinePlacements.get(capacityTasks[1]._id.toString());
+        const actualSelected = actualPlacements.get(firstTask._id.toString());
+        expect(actualSelected.first).not.toBe(baselineSelected.first);
+        expect(actualSelected).toEqual(baselineSecond);
+        expect(actual.fixedEvents).toContainEqual({
+            id: blockerResult.event._id,
+            date: capacityMonday,
+            start: '10:00',
+            end: '13:30',
+        });
+        expect(oracle.affected.map(({ taskId }) => taskId)).not.toContain(firstTask._id.toString());
     });
 
     test('creates and completes tasks through the shared editor', async ({ seed, loggedInPage: page }) => {
@@ -305,7 +414,8 @@ test.describe('calendar page', () => {
         const data = await seed();
         await seed.clearTasks();
         const today = todayInZone('UTC');
-        const later = addDateOnlyDays(today, 20);
+        const later = addDateOnlyDays(today, 22);
+        await page.clock.install({ time: new Date(`${today}T12:00:00.000Z`) });
 
         await withDb(async () => {
             const series = await TaskDetails.create({
@@ -339,6 +449,30 @@ test.describe('calendar page', () => {
                     userRef: data.primary.user._id,
                 },
                 {
+                    title: 'Scheduled recurring occurrence',
+                    duration: 30,
+                    startDate: parseDateOnly(today).date,
+                    dueDate: parseDateOnly(today).date,
+                    scheduledDate: zonedDateTime(today, 11 * 60, 'UTC'),
+                    completed: false,
+                    isBacklog: false,
+                    seriesRef: series._id,
+                    occurrenceDate: parseDateOnly(today).date,
+                    userRef: data.primary.user._id,
+                },
+                {
+                    title: 'Unscheduled recurring occurrence',
+                    duration: 30,
+                    startDate: parseDateOnly(today).date,
+                    dueDate: parseDateOnly(today).date,
+                    scheduledDate: null,
+                    completed: false,
+                    isBacklog: false,
+                    seriesRef: series._id,
+                    occurrenceDate: parseDateOnly(addDateOnlyDays(today, 1)).date,
+                    userRef: data.primary.user._id,
+                },
+                {
                     title: 'Later recurring occurrence',
                     duration: 30,
                     startDate: parseDateOnly(later).date,
@@ -356,11 +490,14 @@ test.describe('calendar page', () => {
         await page.goto('/#/calendar');
 
         await expect(page.locator('.task-item', { hasText: 'Later one-off task' })).toBeVisible();
+        await expect(page.locator('.task-item', { hasText: 'Scheduled recurring occurrence' })).toBeVisible();
+        await expect(page.locator('.task-item', { hasText: 'Unscheduled recurring occurrence' })).toHaveCount(0);
         await expect(page.locator('.task-item', { hasText: 'Later recurring occurrence' })).toHaveCount(0);
         await expect(page.locator('.task-date-header').first()).toHaveText('Unscheduled');
         const unscheduled = page.locator('.task-item', { hasText: 'Task that needs time' });
         await expect(unscheduled).toBeVisible();
         await expect(unscheduled.locator('.unscheduled-badge')).toHaveText('NEEDS TIME');
+        await expect(unscheduled.locator('.slip-impact-row')).toHaveCount(0);
     });
 
     test('keeps a recurring occurrence when quick completion fails', async ({
@@ -431,6 +568,9 @@ test.describe('calendar page', () => {
         await page.getByRole('button', { name: 'Add task', exact: true }).click();
 
         const recurringTask = page.locator('.task-item', { hasText: 'Mon and Tue only' }).first();
+        await expect(recurringTask).toHaveCount(0);
+
+        await page.getByRole('button', { name: 'Schedule tasks' }).click();
         await expect(recurringTask).toBeVisible();
         await expect(recurringTask.locator('.recurring-icon')).toBeVisible();
     });

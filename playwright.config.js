@@ -13,9 +13,9 @@ module.exports = defineConfig({
     // Waits for the database to be genuinely ready, so the first test of a run does not
     // eat the container's cold start.
     globalSetup: require.resolve('./tests/global-setup.js'),
-    // Tests isolate their users, so workers can share one app server and database.
+    // Tests isolate their users, but hosted CI needs headroom for the shared app and database.
     fullyParallel: true,
-    workers: 12,
+    workers: isCI ? 4 : 12,
     outputDir: process.env.AUTOTASKCALENDAR_TEST_OUTPUT_DIR || 'test-results',
     forbidOnly: isCI,
     retries: isCI ? 2 : 0,

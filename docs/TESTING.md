@@ -51,7 +51,7 @@ The goal is confidence per test, not coverage theater.
 ## Running the tests
 
 ```bash
-npm test                                     # whole suite, twelve workers
+npm test                                     # whole suite, twelve local workers; four in CI
 npm test -- tests/api                        # API tests only
 npm test -- tests/api/tasks.spec.js          # one file
 npm test -- -g "completes a task"            # one test by name, seconds
@@ -59,26 +59,28 @@ npm test -- --workers=1                      # force serial execution
 npm test -- --ui                             # watch, step, time-travel
 ```
 
-Everything after `--` goes straight to Playwright. The configuration uses twelve workers by
-default; `--workers=<n>` overrides it exactly as documented by Playwright.
+Everything after `--` goes straight to Playwright. The configuration uses twelve workers
+locally and four on hosted CI; `--workers=<n>` overrides either value exactly as documented
+by Playwright.
 
 **Iterating on one thing? Do not run the whole suite.** File filters and `-g` still take
 seconds; save the full run for just before you commit.
 
 `npm test` handles the setup itself: it starts the database, downloads the Chromium
 browser the first time, rebuilds the web bundle whenever `webinterface/src` is newer than
-`dist/`, then starts the app and runs the suite. There is nothing to install or export
-beforehand.
+`dist/`, then starts the app and runs the suite. This is also the CI contract; workflows do
+not need a separate MongoDB service. There is nothing to install or export beforehand.
 
 ## How isolation works
 
 Tests never touch the database you develop against. Each `npm test` invocation gets one
 run-specific database, API port, session cookie, artifact directory, and Express server.
-Twelve Playwright workers share that app stack.
+Twelve local Playwright workers share that app stack; hosted CI uses four to leave headroom
+for the shared Express and MongoDB processes.
 
 ```mermaid
 flowchart LR
-  A["Playwright workers 1–12"] --> E["one Express server"]
+  A["Parallel Playwright workers"] --> E["one Express server"]
   E --> F[("one test-run database")]
 ```
 
@@ -88,8 +90,8 @@ authenticated user's ID, so workers can schedule, mutate, and delete their own d
 touching another test. The fixture removes that tenant after the test; the runner drops the
 entire run database when Playwright exits.
 
-This is why native `--workers=12` is safe here. The suite drives one **built** bundle served
-by one Express process, which is both simple and close to production. You can leave
+This is why parallel workers are safe here. The suite drives one **built** bundle served by
+one Express process, which is both simple and close to production. You can leave
 `npm run dev` running or start two test commands on the same branch without collisions.
 
 ## Writing a test

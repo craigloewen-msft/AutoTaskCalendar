@@ -3,7 +3,7 @@
 Playwright suite covering the API and the Vue UI.
 
 ```bash
-npm test                    # everything, twelve workers
+npm test                    # everything, twelve local workers; four in CI
 npm test -- tests/api       # API only
 npm test -- -g "a name"     # one test, seconds
 npm test -- --workers=1     # force serial execution

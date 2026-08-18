@@ -6,6 +6,12 @@ const {
     occurrenceDatesBetween,
     validateRecurrence,
 } = require('../../controllers/recurrence');
+const {
+    mondayWeekBounds,
+    parseDateOnly,
+    todayInZone,
+    zonedDateTime,
+} = require('../../utils/temporal');
 
 async function schedule(api) {
     const res = await api.get('/api/scheduletasks');
@@ -307,22 +313,105 @@ test.describe('recurrence expansion', () => {
 });
 
 test.describe('scheduling a recurring series', () => {
-    test('scheduler places a weekly Monday series once per Monday', async ({ seed, loginAs }) => {
+    test('same-day priority work does not become late behind a daily skip occurrence', async ({ seed, loginAs }) => {
         const data = await seed();
+        const userId = data.recurring.user._id;
+        const monday = mondayWeekBounds(todayInZone('UTC'), 'UTC').nextStartDate;
+
+        const { important, dailySeries, mondaySeries } = await withDb(async () => {
+            await Promise.all([
+                TaskDetails.deleteMany({ userRef: userId }),
+                EventDetails.deleteMany({ userRef: userId }),
+                UserDetails.updateOne({ _id: userId }, {
+                    $set: {
+                        timeZone: 'UTC',
+                        workingDays: ['Monday', 'Tuesday', 'Wednesday'],
+                        workingStartMinutes: 9 * 60,
+                        workingEndMinutes: 12 * 60,
+                    },
+                }),
+            ]);
+
+            const series = await TaskDetails.create({
+                title: 'Low-priority daily skip',
+                duration: 60,
+                priority: 200,
+                startDate: parseDateOnly(monday).date,
+                dueDate: parseDateOnly(monday).date,
+                completed: false,
+                isBacklog: false,
+                recurrence: {
+                    freq: 'daily',
+                    interval: 1,
+                    whenUnschedulableBehavior: 'skip',
+                },
+                userRef: userId,
+            });
+            const priorityTask = await TaskDetails.create({
+                title: 'Priority-1 task',
+                duration: 180,
+                priority: 1,
+                startDate: parseDateOnly(monday).date,
+                // Older tasks may retain a time while occurrences use canonical midnight.
+                dueDate: new Date(`${monday}T23:59:59.999Z`),
+                completed: false,
+                isBacklog: false,
+                userRef: userId,
+            });
+            const weeklySeries = await TaskDetails.create({
+                title: 'Weekly Monday standup',
+                duration: 45,
+                priority: 300,
+                startDate: parseDateOnly(monday).date,
+                dueDate: parseDateOnly(monday).date,
+                completed: false,
+                isBacklog: false,
+                recurrence: {
+                    freq: 'weekly',
+                    interval: 1,
+                    byWeekday: [1],
+                    whenUnschedulableBehavior: 'skip',
+                },
+                userRef: userId,
+            });
+            return {
+                important: priorityTask,
+                dailySeries: series,
+                mondaySeries: weeklySeries,
+            };
+        });
         const recurruserApi = await loginAs(data.recurring.username);
 
         const scheduled = await recurruserApi.get('/api/scheduletasks');
         expect((await scheduled.json()).success).toBe(true);
 
-        const user = await withDb(() => UserDetails.findById(data.recurring.user._id));
-        const events = await withDb(() => EventDetails.find({
-            userRef: user._id,
-            title: data.named.mondaySeries.title,
-        }));
-        expect(events.length).toBeGreaterThan(0);
+        const { priorityEvent, mondayOccurrence, occurrenceEvent, weeklyEvents } = await withDb(async () => {
+            const occurrence = await TaskDetails.findOne({
+                seriesRef: dailySeries._id,
+                occurrenceDate: parseDateOnly(monday).date,
+            });
+            return {
+                priorityEvent: await EventDetails.findOne({ taskRef: important._id }),
+                mondayOccurrence: occurrence,
+                occurrenceEvent: occurrence
+                    ? await EventDetails.findOne({ taskRef: occurrence._id })
+                    : null,
+                weeklyEvents: await EventDetails.find({
+                    userRef: userId,
+                    title: mondaySeries.title,
+                }),
+            };
+        });
 
-        const eventDays = events.map((event) => moment.utc(event.startDate).format('YYYY-MM-DD'));
-        expect(eventDays.every((day) => moment.utc(day, 'YYYY-MM-DD').day() === 1)).toBe(true);
-        expect(new Set(eventDays).size).toBe(eventDays.length);
+        expect(mondayOccurrence).not.toBeNull();
+        expect(priorityEvent.startDate).toEqual(zonedDateTime(monday, 9 * 60, 'UTC'));
+        expect(priorityEvent.endDate).toEqual(zonedDateTime(monday, 12 * 60, 'UTC'));
+        expect(occurrenceEvent).toBeNull();
+        expect(mondayOccurrence.scheduledDate).toBeNull();
+
+        const weeklyEventDays = weeklyEvents.map((event) => moment.utc(event.startDate).format('YYYY-MM-DD'));
+        expect(weeklyEventDays.length).toBeGreaterThan(0);
+        expect(weeklyEventDays.every((day) => moment.utc(day, 'YYYY-MM-DD').day() === 1)).toBe(true);
+        expect(new Set(weeklyEventDays).size).toBe(weeklyEventDays.length);
     });
 });
