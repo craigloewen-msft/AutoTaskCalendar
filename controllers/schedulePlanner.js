@@ -136,11 +136,26 @@ function whenUnschedulableBehaviorForTask(task, context) {
         || DEFAULT_WHEN_UNSCHEDULABLE_BEHAVIOR;
 }
 
+function taskTemporalMetadata(task, context) {
+    const cache = context.taskTemporalCache || new Map();
+    context.taskTemporalCache = cache;
+    let metadata = cache.get(task);
+    if (metadata?.timeZone === context.timeZone) return metadata;
+
+    metadata = {
+        timeZone: context.timeZone,
+        eligibleAt: taskEligibleInstant(task.startDate, context.timeZone),
+        expiresAt: whenUnschedulableBehaviorForTask(task, context) === 'skip'
+            && task.occurrenceDate
+            ? nextDateStartInZone(task.occurrenceDate, context.timeZone)
+            : null,
+    };
+    cache.set(task, metadata);
+    return metadata;
+}
+
 function occurrenceExpiresAt(task, context) {
-    if (whenUnschedulableBehaviorForTask(task, context) !== 'skip' || !task.occurrenceDate) {
-        return null;
-    }
-    return nextDateStartInZone(task.occurrenceDate, context.timeZone);
+    return taskTemporalMetadata(task, context).expiresAt;
 }
 
 function removeExpiredOccurrences(context) {
@@ -166,7 +181,7 @@ function findBestTaskForSlot(context, availableTime) {
         const task = pendingTasks[index];
         if (!areDependenciesMet(task, incompleteTaskMap, scheduledTaskIds)) continue;
 
-        const eligibleAt = taskEligibleInstant(task.startDate, context.timeZone);
+        const eligibleAt = taskTemporalMetadata(task, context).eligibleAt;
         if (!eligibleAt || currentTime.getTime() < eligibleAt.getTime()) continue;
 
         const canFitFully = availableTime >= getRemainingDuration(task, chunkInfo);
@@ -293,6 +308,7 @@ function planTaskPlacements({
     currentTime = new Date(),
     schedulingHorizon,
     seriesWhenUnschedulableBehaviorById = new Map(),
+    taskTemporalCache = new Map(),
 }) {
     const pendingTasks = [...tasks];
     const context = {
@@ -308,6 +324,7 @@ function planTaskPlacements({
         scheduledDates: new Map(),
         chunkInfo: {},
         seriesWhenUnschedulableBehaviorById,
+        taskTemporalCache,
         events: events
             .map((event) => ({
                 ...event,

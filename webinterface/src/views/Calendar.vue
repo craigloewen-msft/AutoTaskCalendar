@@ -39,12 +39,12 @@
               <div class="slip-forecast-heading">
                 <div>
                   <span class="what-if-label">What if?</span>
-                  <h4 id="slip-forecast-title">Let “{{ selectedSlipForecastTitle }}” slip one day</h4>
+                  <h4 id="slip-forecast-title">“{{ selectedSlipForecastTitle }}” misses its planned slot</h4>
                 </div>
                 <button
                   class="forecast-close"
                   type="button"
-                  aria-label="Close one-day slip forecast"
+                  aria-label="Close blocked-slot forecast"
                   @click="closeSlipForecast"
                 >
                   ×
@@ -57,12 +57,15 @@
                 </strong>
                 <span>·</span>
                 <strong :class="{ danger: selectedSlipForecast.newlyLateCount }">
-                  {{ selectedSlipForecast.newlyLateCount }} newly miss deadlines
+                  {{ selectedSlipForecast.newlyLateCount }}
+                  {{ selectedSlipForecast.newlyLateCount === 1
+                    ? "newly misses its deadline"
+                    : "newly miss deadlines" }}
                 </strong>
               </p>
               <p class="forecast-assumption">
-                Work before this task stays fixed. This task and everything after it restart
-                at the same time tomorrow. Nothing is saved.
+                Another event fills this task's planned time, then all incomplete tasks are
+                scheduled again. Nothing is saved.
               </p>
               <ol class="forecast-cascade">
                 <li
@@ -153,7 +156,7 @@
                       :aria-label="slipForecastAriaLabel(task)"
                       @click.stop="toggleSlipForecast(task)"
                     >
-                      <span aria-hidden="true">+1 day →</span>
+                      <span aria-hidden="true">slot blocked →</span>
                       {{ slipForecastFor(task).newlyLateCount ? `${slipForecastFor(task).newlyLateCount} late` : "safe" }}
                     </button>
                   </span>
@@ -528,7 +531,7 @@ export default {
       const result = forecast.newlyLateCount
         ? `${forecast.newlyLateCount} downstream ${forecast.newlyLateCount === 1 ? "deadline is" : "deadlines are"} newly missed`
         : "no downstream deadlines are newly missed";
-      return `If ${task.title} slips one day: ${result}. Show cascade.`;
+      return `If another event blocks ${task.title}'s planned time: ${result}. Show cascade.`;
     },
     deadlineGapLabel(task) {
       const days = this.getTaskDaysBetweenDeadlineAndSchedule(task);

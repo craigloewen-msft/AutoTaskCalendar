@@ -10,7 +10,6 @@ const {
     addDateOnlyDays,
     dateOnlyFromMarker,
     dateOnlyInZone,
-    sameWallTimeNextDay,
     zonedDateTime,
 } = require('../utils/temporal');
 const {
@@ -140,7 +139,7 @@ async function generateTaskEvents(user) {
         console.error('Task scheduling loop limit reached. Remaining tasks:', plan.unscheduledTaskIds.length);
     }
     await persistPlan(plan, user);
-    await cacheOneDaySlipForecasts(user);
+    await cacheBlockedSlotForecasts(user, input.currentTime);
 }
 
 function placementSummary(events) {
@@ -184,11 +183,15 @@ function serializeImpact(task, baseline, forecast, timeZone) {
         taskId: task._id.toString(),
         title: task.title,
         baselineStart: baseline.first.toISOString(),
+        baselineEnd: baseline.last.toISOString(),
         forecastStart: forecast?.first?.toISOString() || null,
+        forecastEnd: forecast?.last?.toISOString() || null,
         baselineDate,
         forecastDate,
         dueDate: dateOnlyFromMarker(task.dueDate),
-        moved: !forecast || forecast.first.getTime() !== baseline.first.getTime(),
+        moved: !forecast
+            || forecast.first.getTime() !== baseline.first.getTime()
+            || forecast.last.getTime() !== baseline.last.getTime(),
         newlyLate: !finishesAfterDue(baseline, task, timeZone)
             && finishesAfterDue(forecast, task, timeZone),
         unscheduled: !forecast,
@@ -199,69 +202,52 @@ function yieldToEventLoop() {
     return new Promise((resolve) => setImmediate(resolve));
 }
 
-async function calculateOneDaySlipForecasts(user, requestedTaskIds) {
+async function calculateBlockedSlotForecasts(user, requestedTaskIds, scheduleStart) {
     if (!requestedTaskIds.length) return { impacts: {} };
     const ids = requestedTaskIds.map(String);
-    const requestedIds = new Set(ids);
+    const currentTime = new Date(scheduleStart);
+    const horizon = schedulingHorizon(user, currentTime);
 
-    const [tasks, baselineEvents] = await Promise.all([
+    const [tasks, baselineEvents, conflicts] = await Promise.all([
         loadSchedulingTasks(user._id),
         EventDetails.find({
             userRef: user._id,
             type: { $in: ['task', 'task-chunk'] },
         }).sort({ startDate: 1 }).lean(),
+        EventDetails.find({
+            userRef: user._id,
+            type: { $nin: ['task', 'task-chunk'] },
+            startDate: { $lte: horizon },
+            endDate: { $gte: currentTime },
+        }).sort({ startDate: 1 }).lean(),
     ]);
     const taskById = new Map(tasks.map((task) => [task._id.toString(), task]));
     const baselineByTask = placementSummary(baselineEvents);
-
-    const firstStart = baselineEvents[0]?.startDate || new Date();
-    const lastStart = baselineEvents[baselineEvents.length - 1]?.startDate || firstStart;
-    const conflictHorizon = schedulingHorizon(user, lastStart);
-    const conflicts = await EventDetails.find({
-        userRef: user._id,
-        type: { $nin: ['task', 'task-chunk'] },
-        startDate: { $lte: conflictHorizon },
-        endDate: { $gte: firstStart },
-    }).sort({ startDate: 1 }).lean();
+    const baselineTaskIds = [...baselineByTask.keys()];
     const behaviorMap = await seriesBehaviorMap(tasks, user._id);
+    const taskTemporalCache = new Map();
     const impacts = {};
 
     for (const selectedId of ids) {
-        const selectedStart = baselineByTask.get(selectedId).first;
-        const forecastStart = sameWallTimeNextDay(selectedStart, user.timeZone);
-        const suffix = tasks.filter((task) => {
-            const id = task._id.toString();
-            const baseline = baselineByTask.get(id);
-            return requestedIds.has(id)
-                && baseline
-                && baseline.first.getTime() >= selectedStart.getTime();
-        });
-        const suffixIds = new Set(suffix.map((task) => task._id.toString()));
-        const fixedPrefixEvents = baselineEvents.filter((event) => {
-            const baseline = baselineByTask.get(event.taskRef?.toString());
-            return baseline
-                && baseline.first.getTime() < selectedStart.getTime()
-                && event.endDate >= forecastStart;
-        });
-        const relevantConflicts = [
-            ...conflicts.filter((event) => event.endDate >= forecastStart),
-            ...fixedPrefixEvents,
-        ];
+        const selectedBlockers = baselineEvents
+            .filter((event) => event.taskRef?.toString() === selectedId)
+            .map((event) => ({
+                startDate: event.startDate,
+                endDate: event.endDate,
+                type: 'calendar',
+            }));
         const plan = planTaskPlacements({
-            tasks: suffix,
-            events: relevantConflicts,
+            tasks,
+            events: [...conflicts, ...selectedBlockers],
             user,
-            currentTime: forecastStart,
-            schedulingHorizon: schedulingHorizon(user, forecastStart),
+            currentTime,
+            schedulingHorizon: horizon,
             seriesWhenUnschedulableBehaviorById: behaviorMap,
+            taskTemporalCache,
         });
         const forecastByTask = plannedPlacementSummary(plan.placements);
-        const affected = baselineEvents
-            .map((event) => event.taskRef?.toString())
-            .filter((id, index, all) => id
-                && id !== selectedId
-                && all.indexOf(id) === index
-                && suffixIds.has(id))
+        const affected = baselineTaskIds
+            .filter((id) => id !== selectedId && taskById.has(id))
             .map((id) => serializeImpact(
                 taskById.get(id),
                 baselineByTask.get(id),
@@ -282,9 +268,9 @@ async function calculateOneDaySlipForecasts(user, requestedTaskIds) {
     return { impacts };
 }
 
-async function cacheOneDaySlipForecasts(user, now = new Date()) {
+async function cacheBlockedSlotForecasts(user, scheduleStart = new Date()) {
     const windowEnd = zonedDateTime(
-        addDateOnlyDays(dateOnlyInZone(now, user.timeZone), FORECAST_WINDOW_DAYS + 1),
+        addDateOnlyDays(dateOnlyInZone(scheduleStart, user.timeZone), FORECAST_WINDOW_DAYS + 1),
         0,
         user.timeZone
     );
@@ -296,7 +282,7 @@ async function cacheOneDaySlipForecasts(user, now = new Date()) {
         ],
     }).sort({ scheduledDate: 1 }).limit(MAX_FORECAST_TASKS);
     const ids = candidates.map((task) => task._id.toString());
-    const { impacts } = await calculateOneDaySlipForecasts(user, ids);
+    const { impacts } = await calculateBlockedSlotForecasts(user, ids, scheduleStart);
     const calculatedAt = new Date();
     const writes = ids.map((taskId) => ({
         updateOne: {

@@ -37,7 +37,7 @@ duplicate impossible to spot, so use `recurruser` when you need to check repeati
 behaviour by eye — the calendar should show exactly one "Weekly Monday standup" per
 Monday and nothing else.
 
-`slipuser` is the one-day slip scenario. Its next complete workweek contains ten Friday-due
+`slipuser` is the blocked-slot forecast scenario. Its next complete workweek contains ten Friday-due
 3½-hour tasks and five fixed 09:00–10:00 events. Together they consume all 40 working hours.
 The following week is empty except for one isolated Friday task, making it easy to distinguish
 genuine downstream deadline damage from a selected task merely making itself late.
