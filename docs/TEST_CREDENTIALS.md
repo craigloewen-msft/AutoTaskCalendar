@@ -23,9 +23,11 @@ After running the seed script, you can login with:
 Seeding also creates:
 
 - `otheruser` / `testpassword`, whose data proves tenant isolation;
-- `recurruser` / `testpassword`, with a minimal weekly recurrence; and
+- `recurruser` / `testpassword`, with a minimal weekly recurrence;
 - `slipuser` / `testpassword`, with a full mixed-capacity week and a spacious following week
-  for checking blocked-slot reschedule forecasts.
+  for checking blocked-slot reschedule forecasts; and
+- `boundaryuser` / `testpassword`, with a two-day schedule that distinguishes unplaced work
+  from tasks whose completions actually cross their due dates.
 
 ## What's Included
 
@@ -52,6 +54,12 @@ The dataset creates:
    - One fixed 09:00–10:00 event on each workday
    - Exactly 40 hours of combined work and event time in that week
    - One isolated Friday task in the otherwise-empty following week
+
+6. **Late-definition boundary on `boundaryuser`:**
+   - One six-hour selected task and five two-hour follow-ups, all due Friday
+   - The tasks exactly fill Monday and Tuesday
+   - One event blocks Wednesday through the 60-day scheduling horizon
+   - Blocking the selected Monday slot moves four downstream tasks, leaves three unplaced, and makes zero tasks late
 
 ## Using the Test Credentials
 

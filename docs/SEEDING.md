@@ -29,6 +29,7 @@ Log in with:
 | `otheruser` | `testpassword` |
 | `recurruser` | `testpassword` |
 | `slipuser` | `testpassword` |
+| `boundaryuser` | `testpassword` |
 
 `otheruser` exists only to prove their data never leaks into `testuser`'s views.
 `recurruser` is the recurring-task scenario: three one-off tasks plus a single
@@ -41,6 +42,8 @@ Monday and nothing else.
 3½-hour tasks and five fixed 09:00–10:00 events. Together they consume all 40 working hours.
 The following week is empty except for one isolated Friday task, making it easy to distinguish
 genuine downstream deadline damage from a selected task merely making itself late.
+
+`boundaryuser` is the late-definition boundary scenario. One six-hour selected task and five two-hour follow-ups exactly fill Monday and Tuesday; a long calendar event removes capacity from Wednesday through the scheduler horizon. Blocking the selected slot leaves three follow-ups unplaced, but none scheduled after their shared Friday due date, so the forecast must show four moved and zero late.
 
 ## What the dataset contains
 
@@ -62,6 +65,7 @@ All of it belongs to `testuser` unless noted:
 - **A mixed-capacity slip scenario** on `slipuser` — ten Friday-due tasks plus one fixed
   event each workday exactly fill the next workweek; the following week contains only one
   isolated Friday task. Tests access it through `data.slip`.
+- **A due-date boundary scenario** on `boundaryuser` — six tasks exactly fill Monday and Tuesday while a long event removes later capacity. Blocking the selected slot makes three tasks unplaced without putting any completion after Friday. Tests access it through `data.slipBoundary`.
 - **70 completed tasks** spread over 90 days, kept as completion history and to prove the
   scheduler never schedules a completed task.
 - **Edge cases** — a zero-duration task, one longer than the working day, one overdue by a
@@ -134,6 +138,7 @@ data.primary.username   // unique username for this test
 data.other.user         // the second user
 data.slip.capacityTasks // the ten capacity-tight tasks
 data.slip.isolatedTask  // the following week's isolated task
+data.slipBoundary.tasks // the six late-definition boundary tasks
 data.named.research     // named tasks, by key
 data.named.engineerRole // Compass roles, goals, and projects are named too
 data.counts.completed   // 70 — prefer these over hard-coded numbers

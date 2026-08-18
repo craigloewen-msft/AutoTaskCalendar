@@ -30,19 +30,16 @@ Only synthetic conflicts and planner results exist during the calculation. The f
 
 ## How movement and deadline risk are counted
 
-A task is on time when its final task event completes on or before its civil due date. For downstream work only, a **newly missed deadline** is a task that is on time in the generated baseline but either:
+A task is on time when its final task event completes on or before its civil due date. For downstream work only, a **newly missed deadline** is a task that is on time in the generated baseline and whose final completion moves to a civil day after its due date in the hypothetical rerun.
 
-- completes after its due date in the hypothetical rerun; or
-- cannot be placed within the scheduler's horizon.
-
-A task is moved when its first placement or final completion changes, or when it becomes unplaceable. Comparing both ends ensures a chunked task is reported when a later chunk moves even if its first chunk does not.
+A task is moved when its first placement or final completion changes, or when it becomes unplaceable. Comparing both ends ensures a chunked task is reported when a later chunk moves even if its first chunk does not. An unplaceable task remains in the cascade as **Unscheduled**, but it is not marked or counted as late because it has no completion after its due date.
 
 Existing late work may move later and appears in the cascade, but it is not counted as newly late. Due dates and completion days are compared as civil dates in the user's saved IANA timezone.
 
 The panel reports:
 
 - **downstream tasks move later** — non-selected tasks whose placement changes or disappears;
-- **newly miss deadlines** — the subset that crosses from on time to late or unplaceable.
+- **newly miss deadlines** — the subset whose final completion crosses from on time to after its due date.
 
 The selected task remains in the scheduler queue and consumes capacity in its new placement. Its own movement and deadline state are excluded from both totals because they are the premise rather than a downstream effect. A single isolated task therefore has no visible control when blocking its slot harms no other task.
 
@@ -79,3 +76,11 @@ The shared `slipuser` seed has ten 3½-hour tasks, all starting Monday and due F
 Blocking the first task's Monday 10:00–13:30 placement leaves Monday 13:30–17:00 available. The selected task moves there, each later task shifts one slot, and the final Friday task moves to the following Monday. The forecast therefore reports nine downstream tasks moving and **one** newly late task.
 
 `tests/ui/calendar.spec.js` creates an actual calendar event over that exact slot, runs **Schedule Tasks** again, and compares the real generated placements and newly-late set with the cached forecast. It also verifies that merely opening and reloading the preview changes no task or event data.
+
+## Verify the unplaced-is-not-late example
+
+The shared `boundaryuser` seed has one six-hour selected task followed by five two-hour tasks, all eligible Monday and due Friday. They exactly fill Monday and Tuesday. A long ordinary event removes all capacity from Wednesday through the scheduler horizon.
+
+Blocking the selected task's Monday 09:00–15:00 placement leaves one downstream task unchanged, moves the selected task and one downstream task to Tuesday, and leaves the final three downstream tasks unplaced. The forecast therefore reports four downstream tasks moving and **zero** late tasks. Its panel keeps all three missing placements visible as **Unscheduled** without a **Late** marker.
+
+`tests/ui/calendar.spec.js` creates an actual event over that exact selected slot, runs **Schedule Tasks** again, and verifies the real placements and unplaced set match the cached forecast. It also independently verifies that no placed task completes after Friday.

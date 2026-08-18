@@ -78,3 +78,9 @@ Update `docs/SEEDING.md` and `docs/TEST_CREDENTIALS.md` with the small reproduct
 - With that same dataset after the fix, the cached forecast and an actual blocked-slot reschedule agree on placements, unplaced tasks, and an empty late set.
 - The existing packed-week scenario still reports exactly one task whose completion genuinely crosses its due date.
 - Focused regressions and the full test suite pass.
+
+## Implementation result
+
+The new boundary regression failed before the production fix with `Expected: 0, Received: 3`; the forecast panel marked three unplaced follow-ups as late. After changing the deadline predicate, the same dataset reports four moved, three Unscheduled, and zero late. Creating the real blocking event and rescheduling produces the same placements and unplaced set as the cached forecast.
+
+The existing packed-week scenario remains the positive control: a task that actually moves from its Friday due date to recovery Monday is still counted as one late task. The focused controls and full 74-test suite pass. Screenshots were captured for the incorrect forecast, baseline schedule, fixed forecast, and actual post-block reschedule calendar.

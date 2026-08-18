@@ -169,11 +169,11 @@ function plannedPlacementSummary(placements) {
     return byTask;
 }
 
-function finishesAfterDue(summary, task, timeZone) {
-    if (!summary) return true;
+function isPlacedAfterDue(summary, task, timeZone) {
+    if (!summary) return false;
     const completionDate = dateOnlyInZone(summary.last, timeZone);
     const dueDate = dateOnlyFromMarker(task.dueDate);
-    return !dueDate || completionDate > dueDate;
+    return !!completionDate && !!dueDate && completionDate > dueDate;
 }
 
 function serializeImpact(task, baseline, forecast, timeZone) {
@@ -192,8 +192,8 @@ function serializeImpact(task, baseline, forecast, timeZone) {
         moved: !forecast
             || forecast.first.getTime() !== baseline.first.getTime()
             || forecast.last.getTime() !== baseline.last.getTime(),
-        newlyLate: !finishesAfterDue(baseline, task, timeZone)
-            && finishesAfterDue(forecast, task, timeZone),
+        newlyLate: !isPlacedAfterDue(baseline, task, timeZone)
+            && isPlacedAfterDue(forecast, task, timeZone),
         unscheduled: !forecast,
     };
 }

@@ -54,7 +54,7 @@ function placementSummaries(events) {
 }
 
 function isLate(summary, dueDate) {
-    return !summary || dateOnlyInZone(summary.last, 'UTC') > dateOnlyFromMarker(dueDate);
+    return !!summary && dateOnlyInZone(summary.last, 'UTC') > dateOnlyFromMarker(dueDate);
 }
 
 test.describe('calendar page', () => {
@@ -173,6 +173,16 @@ test.describe('calendar page', () => {
         const impacts = panel.locator('[data-test^=slip-impact-]');
         await expect(impacts).toHaveCount(9);
         await expect(panel.locator(`[data-test="slip-impact-${firstTask._id}"]`)).toHaveCount(0);
+
+        const nextDayOnTimeImpact = panel.locator(
+            `[data-test="slip-impact-${capacityTasks[1]._id}"]`
+        );
+        await expect(nextDayOnTimeImpact).toHaveAttribute('data-baseline-date', capacityMonday);
+        await expect(nextDayOnTimeImpact).toHaveAttribute(
+            'data-forecast-date',
+            addDateOnlyDays(capacityMonday, 1)
+        );
+        await expect(nextDayOnTimeImpact).not.toContainText('Late');
 
         const penultimateImpact = panel.locator(
             `[data-test="slip-impact-${capacityTasks.at(-2)._id}"]`
@@ -312,6 +322,191 @@ test.describe('calendar page', () => {
             end: '13:30',
         });
         expect(oracle.affected.map(({ taskId }) => taskId)).not.toContain(firstTask._id.toString());
+    });
+
+    test('counts only downstream tasks scheduled past their due dates as late', async ({
+        seed,
+        page,
+    }, testInfo) => {
+        const data = await seed();
+        const {
+            tasks,
+            selectedTask,
+            downstreamTasks,
+            dates,
+        } = data.slipBoundary;
+
+        await page.goto('/#/login');
+        await page.fill('input[name="username"]', data.slipBoundary.username);
+        await page.fill('input[name="password"]', data.slipBoundary.password);
+        await page.click('button:has-text("Sign in")');
+        await page.waitForURL(/#\/user\//);
+        await page.setViewportSize({ width: 1440, height: 1600 });
+        await page.clock.install({ time: new Date(`${dates.monday}T08:00:00.000Z`) });
+        await page.goto('/#/calendar');
+        await Promise.all([
+            page.waitForResponse((response) => response.url().includes('/api/scheduletasks')),
+            page.getByRole('button', { name: 'Schedule tasks' }).click(),
+        ]);
+
+        const snapshot = async () => withDb(async () => {
+            const events = await EventDetails.find({
+                userRef: data.slipBoundary.user._id,
+                type: { $in: ['task', 'task-chunk'] },
+            }).sort({ startDate: 1 });
+            return events.map((event) => ({
+                taskId: event.taskRef.toString(),
+                startDate: event.startDate.toISOString(),
+                endDate: event.endDate.toISOString(),
+                date: dateOnlyInZone(event.startDate, 'UTC'),
+                start: event.startDate.toISOString().slice(11, 16),
+                end: event.endDate.toISOString().slice(11, 16),
+            }));
+        });
+
+        const baselineEvents = await snapshot();
+        expect(baselineEvents.map(({ taskId }) => taskId)).toEqual(
+            tasks.map((task) => task._id.toString())
+        );
+        expect(baselineEvents.map(({ date }) => date)).toEqual([
+            dates.monday,
+            dates.monday,
+            dates.tuesday,
+            dates.tuesday,
+            dates.tuesday,
+            dates.tuesday,
+        ]);
+        expect(baselineEvents.map(({ start, end }) => `${start}-${end}`)).toEqual([
+            '09:00-15:00',
+            '15:00-17:00',
+            '09:00-11:00',
+            '11:00-13:00',
+            '13:00-15:00',
+            '15:00-17:00',
+        ]);
+
+        await expect(page.locator(`[data-test="task-item-${selectedTask._id}"]`)).toBeVisible();
+        await testInfo.attach('due-boundary-baseline-calendar', {
+            body: await page.locator('.calendar-page').screenshot(),
+            contentType: 'image/png',
+        });
+
+        const chip = page.locator(`[data-test="slip-impact-chip-${selectedTask._id}"]`);
+        await expect(chip).toBeVisible();
+        await chip.click();
+        const panel = page.locator('[data-test=slip-forecast-panel]');
+        await expect(panel).toBeVisible();
+        await testInfo.attach('due-boundary-blocked-slot-forecast', {
+            body: await page.locator('.calendar-page').screenshot(),
+            contentType: 'image/png',
+        });
+
+        const oracle = await withDb(async () => {
+            const task = await TaskDetails.findById(selectedTask._id);
+            return {
+                affected: task.slipForecast.affected.map((impact) => ({
+                    taskId: impact.taskId.toString(),
+                    forecastStart: impact.forecastStart?.toISOString() || null,
+                    forecastEnd: impact.forecastEnd?.toISOString() || null,
+                    newlyLate: impact.newlyLate,
+                    unscheduled: impact.unscheduled,
+                })),
+                movedCount: task.slipForecast.movedCount,
+                newlyLateCount: task.slipForecast.newlyLateCount,
+            };
+        });
+        const expectedMovedIds = downstreamTasks.slice(1).map((task) => task._id.toString());
+        const expectedUnscheduledIds = downstreamTasks.slice(2).map((task) => task._id.toString());
+
+        expect(oracle.movedCount).toBe(4);
+        expect(oracle.newlyLateCount).toBe(0);
+        expect(oracle.affected.map(({ taskId }) => taskId)).toEqual(expectedMovedIds);
+        expect(
+            oracle.affected.filter(({ unscheduled }) => unscheduled).map(({ taskId }) => taskId)
+        ).toEqual(expectedUnscheduledIds);
+        expect(oracle.affected.filter(({ newlyLate }) => newlyLate)).toEqual([]);
+        await expect(chip).toHaveText('slot blocked → safe');
+        await expect(panel.locator('[data-test=slip-forecast-summary]')).toContainText(
+            '4 downstream tasks move later'
+        );
+        await expect(panel.locator('[data-test=slip-forecast-summary]')).toContainText(
+            '0 newly miss deadlines'
+        );
+
+        const unscheduledRows = expectedUnscheduledIds.map(
+            (taskId) => panel.locator(`[data-test="slip-impact-${taskId}"]`)
+        );
+        for (const row of unscheduledRows) {
+            await expect(row).toHaveAttribute('data-forecast-date', 'unscheduled');
+            await expect(row).toContainText('Unscheduled');
+            await expect(row).not.toContainText('Late');
+        }
+        const placedImpact = panel.locator(
+            `[data-test="slip-impact-${downstreamTasks[1]._id}"]`
+        );
+        await expect(placedImpact).toHaveAttribute('data-baseline-date', dates.tuesday);
+        await expect(placedImpact).toHaveAttribute('data-forecast-date', dates.tuesday);
+        await expect(placedImpact).not.toContainText('Late');
+
+        const baselinePlacements = placementSummaries(baselineEvents);
+        const selectedSlot = baselinePlacements.get(selectedTask._id.toString());
+        const blockerResponse = await page.request.post('/api/createEvent', {
+            data: {
+                title: 'Blocked selected task slot',
+                startDate: selectedSlot.first,
+                endDate: selectedSlot.last,
+            },
+        });
+        expect((await blockerResponse.json()).success).toBe(true);
+
+        await Promise.all([
+            page.waitForResponse((response) => response.url().includes('/api/scheduletasks')),
+            page.getByRole('button', { name: 'Schedule tasks' }).click(),
+        ]);
+        const actualEvents = await snapshot();
+        await expect(page.locator('.task-list')).toContainText('NEEDS TIME');
+        await testInfo.attach('due-boundary-after-block-reschedule-calendar', {
+            body: await page.locator('.calendar-page').screenshot(),
+            contentType: 'image/png',
+        });
+
+        const actualPlacements = placementSummaries(actualEvents);
+        const actualMovedIds = [...baselinePlacements.keys()]
+            .filter((taskId) => taskId !== selectedTask._id.toString())
+            .filter((taskId) => {
+                const baseline = baselinePlacements.get(taskId);
+                const actual = actualPlacements.get(taskId);
+                return !actual || actual.first !== baseline.first || actual.last !== baseline.last;
+            });
+        expect(actualMovedIds).toEqual(expectedMovedIds);
+        expect(actualMovedIds).toEqual(oracle.affected.map(({ taskId }) => taskId));
+
+        for (const impact of oracle.affected) {
+            const actual = actualPlacements.get(impact.taskId);
+            expect(actual?.first || null).toBe(impact.forecastStart);
+            expect(actual?.last || null).toBe(impact.forecastEnd);
+        }
+        expect(
+            tasks.filter((task) => !actualPlacements.has(task._id.toString()))
+                .map((task) => task._id.toString())
+        ).toEqual(expectedUnscheduledIds);
+
+        const actualNewlyLateIds = tasks
+            .filter((task) => !isLate(baselinePlacements.get(task._id.toString()), task.dueDate)
+                && isLate(actualPlacements.get(task._id.toString()), task.dueDate))
+            .map((task) => task._id.toString());
+        const forecastNewlyLateIds = oracle.affected
+            .filter(({ newlyLate }) => newlyLate)
+            .map(({ taskId }) => taskId);
+        expect(actualNewlyLateIds).toEqual([]);
+        expect(actualNewlyLateIds).toEqual(forecastNewlyLateIds);
+
+        const actualSelected = actualPlacements.get(selectedTask._id.toString());
+        expect(actualSelected.first).not.toBe(selectedSlot.first);
+        expect(dateOnlyInZone(actualSelected.first, 'UTC')).toBe(dates.tuesday);
+        expect(oracle.affected.map(({ taskId }) => taskId)).not.toContain(
+            selectedTask._id.toString()
+        );
     });
 
     test('creates and completes tasks through the shared editor', async ({ seed, loggedInPage: page }) => {

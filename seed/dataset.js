@@ -9,7 +9,7 @@ const { zonedDateTime } = require('../utils/temporal');
  * find a bug in the wild, add its shape to this file so it is covered forever after.
  *
  * A second user exists solely to prove their data never leaks into the first user's views.
- * `recurruser` and `slipuser` hold focused scenarios for recurrence and task-slip forecasts.
+ * `recurruser`, `slipuser`, and `boundaryuser` hold focused recurrence and forecast scenarios.
  */
 
 module.exports = {
@@ -487,6 +487,36 @@ module.exports = {
             projectRef: capacityProject._id,
         });
 
+        // --- Fifth user: blocked-slot due-date boundary scenario -----------------------------
+        const slipBoundary = await b.createUser({
+            username: 'boundaryuser',
+            email: 'boundaryuser@example.com',
+        });
+        const slipBoundaryUser = slipBoundary.user;
+        const boundaryTasks = [
+            await b.createTask(slipBoundaryUser, {
+                title: 'Selected six-hour task',
+                duration: 360,
+                startDate: b.civilDate(nextMonday, 0),
+                dueDate: b.civilDate(nextMonday, 4),
+                priority: 1,
+            }),
+            ...await b.createTasks(slipBoundaryUser, 5, (index) => ({
+                title: `Two-hour follow-up ${index + 1}`,
+                duration: 120,
+                startDate: b.civilDate(nextMonday, 0),
+                dueDate: b.civilDate(nextMonday, 4),
+                priority: index + 2,
+            })),
+        ];
+        const boundaryBlockStart = nextMonday.clone().add(2, 'days').format('YYYY-MM-DD');
+        const boundaryBlockEnd = nextMonday.clone().add(70, 'days').format('YYYY-MM-DD');
+        const boundaryCapacityEvent = await b.createEvent(slipBoundaryUser, {
+            title: 'No capacity after Tuesday',
+            startDate: zonedDateTime(boundaryBlockStart, 9 * 60, 'UTC'),
+            endDate: zonedDateTime(boundaryBlockEnd, 17 * 60, 'UTC'),
+        });
+
         return {
             primary,
             other,
@@ -504,6 +534,20 @@ module.exports = {
                     capacityFriday,
                     recoveryMonday,
                     recoveryFriday,
+                },
+            },
+            slipBoundary: {
+                ...slipBoundary,
+                tasks: boundaryTasks,
+                selectedTask: boundaryTasks[0],
+                downstreamTasks: boundaryTasks.slice(1),
+                capacityEvent: boundaryCapacityEvent,
+                dates: {
+                    monday: capacityMonday,
+                    tuesday: nextMonday.clone().add(1, 'day').format('YYYY-MM-DD'),
+                    friday: capacityFriday,
+                    blockStart: boundaryBlockStart,
+                    blockEnd: boundaryBlockEnd,
                 },
             },
             named: {
@@ -564,6 +608,8 @@ module.exports = {
                 recurringGenerics: recurringGenerics.length,
                 capacityTasks: capacityTasks.length,
                 capacityEvents: capacityEvents.length,
+                boundaryTasks: boundaryTasks.length,
+                boundaryEvents: 1,
             },
         };
     },
