@@ -1,6 +1,6 @@
 'use strict';
 
-const { TaskDetails, EventDetails, TaskSlipForecastDetails } = require('../models');
+const { TaskDetails, EventDetails } = require('../models');
 const {
     DEFAULT_WHEN_UNSCHEDULABLE_BEHAVIOR,
     expandRecurrences,
@@ -123,9 +123,8 @@ async function generateTaskEvents(user) {
     await expandRecurrences(user, SCHEDULING_HORIZON_DAYS);
     await Promise.all([
         TaskDetails.updateMany(incompleteTaskFilter(user._id), {
-            $set: { scheduledDate: null },
+            $set: { scheduledDate: null, slipForecast: null },
         }),
-        TaskSlipForecastDetails.deleteMany({ userRef: user._id }),
         EventDetails.deleteMany({
             userRef: user._id,
             type: { $in: ['task', 'task-chunk'] },
@@ -296,36 +295,33 @@ async function cacheOneDaySlipForecasts(user, now = new Date()) {
     const ids = candidates.map((task) => task._id.toString());
     const { impacts } = await calculateOneDaySlipForecasts(user, ids);
     const calculatedAt = new Date();
-    if (ids.length) {
-        await TaskSlipForecastDetails.insertMany(ids.map((taskId) => ({
-            selectedTaskRef: taskId,
-            userRef: user._id,
-            movedCount: impacts[taskId].movedCount,
-            newlyLateCount: impacts[taskId].newlyLateCount,
-            affected: impacts[taskId].affected,
-            calculatedAt,
-        })));
-    }
+    const writes = ids.map((taskId) => ({
+        updateOne: {
+            filter: { _id: taskId, userRef: user._id },
+            update: {
+                $set: {
+                    slipForecast: {
+                        movedCount: impacts[taskId].movedCount,
+                        newlyLateCount: impacts[taskId].newlyLateCount,
+                        affected: impacts[taskId].affected,
+                        calculatedAt,
+                    },
+                },
+            },
+        },
+    }));
+    if (writes.length) await TaskDetails.bulkWrite(writes);
     return impacts;
 }
 
-async function getCachedOneDaySlipForecasts(user) {
-    const forecasts = await TaskSlipForecastDetails.find({
-        userRef: user._id,
-    }).select('-_id selectedTaskRef movedCount newlyLateCount affected calculatedAt').lean();
-    return Object.fromEntries(forecasts.map((forecast) => [
-        forecast.selectedTaskRef.toString(),
-        forecast,
-    ]));
-}
-
 async function invalidateOneDaySlipForecasts(userId) {
-    await TaskSlipForecastDetails.deleteMany({ userRef: userId });
+    await TaskDetails.updateMany({ userRef: userId, slipForecast: { $ne: null } }, {
+        $set: { slipForecast: null },
+    });
 }
 
 module.exports = {
     generateTaskEvents,
-    getCachedOneDaySlipForecasts,
     invalidateOneDaySlipForecasts,
     SCHEDULING_HORIZON_DAYS,
     MAX_FORECAST_TASKS,

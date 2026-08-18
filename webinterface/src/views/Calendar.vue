@@ -81,23 +81,6 @@
                 </li>
               </ol>
             </section>
-            <p
-              v-else-if="slipForecastLoading"
-              class="forecast-loading"
-              role="status"
-              data-test="slip-forecast-loading"
-            >
-              Checking one-day impact…
-            </p>
-            <p
-              v-else-if="slipForecastError"
-              class="forecast-loading forecast-error"
-              role="status"
-              data-test="slip-forecast-error"
-            >
-              One-day impact is unavailable.
-              <button type="button" @click="loadSlipForecasts">Retry</button>
-            </p>
             <div v-for="date in tasksDatesArray" :key="date" class="task-group">
               <h4 class="task-date-header">{{ date }}</h4>
               <ul class="task-items">
@@ -411,9 +394,6 @@ export default {
       quickCompletingTaskIds: [],
       quickCompleteError: "",
       slipForecasts: {},
-      slipForecastLoading: false,
-      slipForecastError: "",
-      slipForecastRequestId: 0,
       selectedSlipForecastId: null,
       // Compass roles, nested with their goals and projects.
       compassRoles: [],
@@ -480,48 +460,20 @@ export default {
         return;
       }
       this.taskList = taskDataResponse.data.taskList;
-      await this.loadSlipForecasts();
+      this.loadSlipForecasts();
     },
     clearSlipForecasts() {
-      this.slipForecastRequestId++;
       this.slipForecasts = {};
-      this.slipForecastLoading = false;
-      this.slipForecastError = "";
       this.selectedSlipForecastId = null;
     },
-    async loadSlipForecasts() {
-      const hasScheduledTasks = (this.taskList || []).some((task) => {
-        return !task.isBacklog && task.scheduledDate && this.isInSidebarWindow(task);
-      });
-      const requestId = ++this.slipForecastRequestId;
-      this.slipForecasts = {};
-      this.slipForecastError = "";
-      if (!hasScheduledTasks) {
-        this.slipForecastLoading = false;
+    loadSlipForecasts() {
+      this.slipForecasts = Object.fromEntries(
+        (this.taskList || [])
+          .filter((task) => task.slipForecast)
+          .map((task) => [task._id, task.slipForecast])
+      );
+      if (this.selectedSlipForecastId && !this.slipForecasts[this.selectedSlipForecastId]) {
         this.selectedSlipForecastId = null;
-        return;
-      }
-
-      this.slipForecastLoading = true;
-      try {
-        const response = await this.$http.get("/api/taskSlipForecasts");
-        if (requestId !== this.slipForecastRequestId) return;
-        if (!response.data.success) {
-          this.slipForecastError = response.data.log || "One-day impact could not be checked.";
-          this.selectedSlipForecastId = null;
-          return;
-        }
-        this.slipForecasts = response.data.impacts || {};
-        if (this.selectedSlipForecastId && !this.slipForecasts[this.selectedSlipForecastId]) {
-          this.selectedSlipForecastId = null;
-        }
-      } catch (error) {
-        if (requestId === this.slipForecastRequestId) {
-          this.slipForecastError = "One-day impact could not be checked.";
-          this.selectedSlipForecastId = null;
-        }
-      } finally {
-        if (requestId === this.slipForecastRequestId) this.slipForecastLoading = false;
       }
     },
     isInSidebarWindow(task) {
@@ -1183,21 +1135,6 @@ export default {
   margin: -8px 0 14px;
   color: #fca5a5;
   font-size: 13px;
-}
-
-.forecast-loading {
-  margin: -8px 0 14px;
-  color: #9ca3af;
-  font-size: 12px;
-}
-
-.forecast-error button {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #c4b5fd;
-  font: inherit;
-  text-decoration: underline;
 }
 
 .slip-forecast-panel {

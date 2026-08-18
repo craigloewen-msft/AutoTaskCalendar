@@ -43,17 +43,13 @@ The panel reports:
 - **tasks move later** — affected tasks whose first placement changes or disappears;
 - **newly miss deadlines** — the subset that crosses from on time to late/unplaceable.
 
-## Data flow and endpoint
+## Data flow
 
-**Schedule Tasks** owns the calculation lifecycle. After persisting the real schedule, the server calculates the one-day simulations for up to 100 scheduled, non-backlog tasks in Calendar’s 14-day sidebar window and caches the derived summaries in the forecast collection. This adds work to the explicit scheduling action once instead of repeating every simulation on every page load, without bloating canonical task records.
+**Schedule Tasks** owns the calculation lifecycle. After persisting the real schedule, the server calculates one-day simulations for up to 100 scheduled, non-backlog tasks in Calendar’s 14-day sidebar window and writes each nullable `slipForecast` beside that task’s `scheduledDate`.
 
-Calendar reloads only perform a lightweight tenant-scoped read:
+Calendar receives the forecast through the normal `GET /api/getUserTasks` payload. There is no forecast endpoint, collection, synchronization query, or calculation during a reload: a non-null object renders a chip, while `null` renders nothing.
 
-```http
-GET /api/taskSlipForecasts
-```
-
-The endpoint returns already-calculated summaries and never runs the planner. Task edits, completion, project reassignment, working-preference changes, and calendar-event changes invalidate all cached summaries. Calendar then omits the chips until the user runs **Schedule Tasks** again, so stale results are never presented as safe.
+Task edits, completion, project reassignment, working-preference changes, and calendar-event changes clear existing `slipForecast` values with one bulk update. The chips return after **Schedule Tasks** creates the next schedule, so stale results are never presented as safe.
 
 ## Scheduling reuse and read-only guarantee
 
@@ -61,7 +57,7 @@ The endpoint returns already-calculated summaries and never runs the planner. Ta
 
 `controllers/scheduling.js` uses that same engine for the real schedule and its suffix simulations. `generateTaskEvents()` expands recurrence, replaces generated placements, persists `scheduledDate`, calculates the visible-window simulations, and caches their summaries as one scheduling operation.
 
-Opening, closing, or reloading a forecast only reads the cache. It does not alter tasks, recurrence occurrences, generated events, calendar events, or user settings, and it never invokes the planner.
+Opening, closing, or reloading a forecast only reads the task object already in Calendar. It does not write data or invoke the planner.
 
 ## Limits
 
@@ -77,4 +73,4 @@ Opening, closing, or reloading a forecast only reads the cache. It does not alte
 
 Two buffered follow-ups start the next Tuesday. They keep their exact baseline slots when the risky Monday task slips, do not appear in that cascade, and show subtle `safe` chips for their own one-day previews.
 
-The test asserts **`+1 day → 2 late`**, all ten cascade rows, both unchanged buffered tasks, cache survival across a page reload, and no changes to the baseline schedule or cached timestamps while previewing.
+The test asserts **`+1 day → 2 late`**, all ten cascade rows, both unchanged buffered tasks, nullable forecast data surviving a page reload, and no changes to the baseline schedule or forecast timestamps while previewing.

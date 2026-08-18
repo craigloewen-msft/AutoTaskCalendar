@@ -11,7 +11,6 @@ const {
 const { validateRecurrence, normaliseRecurrence, expandRecurrences } = require('../controllers/recurrence');
 const {
     SCHEDULING_HORIZON_DAYS,
-    getCachedOneDaySlipForecasts,
     invalidateOneDaySlipForecasts,
 } = require('../controllers/scheduling');
 const { parseDateOnly } = require('../utils/temporal');
@@ -255,6 +254,7 @@ function createTaskRoutes(config, authenticateToken) {
             delete update.completed;
             delete update.completedDate;
             delete update.scheduledDate;
+            delete update.slipForecast;
             delete update.occurrenceDate;
             delete update.seriesRef;
             if (parsedStart) update.startDate = parsedStart.date;
@@ -526,21 +526,6 @@ function createTaskRoutes(config, authenticateToken) {
         } catch (error) {
             console.error(error);
             return res.json({ success: false });
-        }
-    });
-
-    router.get('/taskSlipForecasts', authenticateToken, async (req, res) => {
-        try {
-            const user = await UserDetails.findOne({ username: req.user.id });
-            if (!req.user || !user) {
-                return res.send(returnFailure('Not logged in'));
-            }
-
-            const impacts = await getCachedOneDaySlipForecasts(user);
-            return res.json({ success: true, impacts });
-        } catch (error) {
-            console.error(error);
-            return res.send(returnFailure('Task slip forecasts could not be loaded'));
         }
     });
 

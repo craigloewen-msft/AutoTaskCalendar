@@ -62,16 +62,11 @@ Extract the placement loop in `controllers/scheduling.js` into a side-effect-fre
 
 The planner should accept tasks, non-task calendar events, user working settings, a start instant, and any already-finished prefix; it should return task/chunk placements and completion/scheduled dates. The existing scheduling orchestration remains responsible for recurrence expansion, deleting/replacing generated task events, and persisting `scheduledDate`.
 
-Add one authenticated, tenant-scoped batch forecast endpoint under the existing task routes. Calendar should submit only the scheduled task IDs for which it needs sidebar indicators. The endpoint must:
+After the real schedule is persisted, calculate forecasts for up to 100 scheduled, non-backlog tasks in Calendar’s visible 14-day window. Store each result in the task’s nullable `slipForecast` scheduler-output field beside `scheduledDate`.
 
-- reject malformed IDs and ignore/reject tasks not owned by the caller;
-- bound the number of requested tasks to avoid unbounded repeated simulation;
-- load the baseline task events and non-task conflicts once;
-- run the pure planner for each requested suffix without database writes;
-- return per-selected-task summary counts plus affected task IDs, baseline/forecast dates, and newly-late state;
-- compare civil due dates in the user’s saved timezone.
+The normal authenticated `GET /api/getUserTasks` payload carries the result. Calendar renders a non-null forecast and does nothing for `null`; there is no forecast endpoint, collection, or page-load simulation.
 
-Refresh forecast data after scheduling, task refresh/completion, and other Calendar flows that replace the task list. Do not block initial Calendar rendering while forecasts calculate.
+Task, calendar-event, project-assignment, and working-preference changes clear forecast fields with one tenant-scoped bulk update. The next **Schedule Tasks** run replaces them. Compare civil due dates in the user’s saved timezone.
 
 Preserve current scheduler invariants and behavior: working windows, conflict avoidance, dependency order, chunk totals, recurrence handling, unschedulable behavior, and idempotence.
 
@@ -87,8 +82,9 @@ The test will:
 4. Go to Calendar and generate the baseline schedule: two tasks per day, Monday through Friday, all on time.
 5. Assert the first Monday task’s at-a-glance chip reports that a one-day slip causes two newly late tasks.
 6. Open the chip and assert the expanded forecast shows all ten tasks moving and the final two moving beyond Friday, with the selected/moved/late visual states.
-7. Verify through the database that opening forecasts did not change baseline `scheduledDate` values or generated task events.
-8. Attach two screenshots to the passing Playwright result: the at-a-glance risk chips and the expanded cascade panel. Also inspect and report those screenshots when delivering the work so the user can see this exact ten-task scenario.
+7. Add two buffered follow-ups that keep their slots, stay absent from the risky cascade, and show subtle safe chips.
+8. Verify through the database that opening and reloading forecasts do not change baseline `scheduledDate`, `slipForecast` timestamps, or generated task events.
+9. Attach two screenshots to the passing Playwright result: the at-a-glance risk/safe chips and the expanded cascade panel. Inspect and report them without committing documentation images.
 
 Do not add a parallel API test. Existing scheduling specs plus this end-to-end UI test cover the shared planner and read-only forecast contract.
 

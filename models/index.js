@@ -81,14 +81,12 @@ const SlipForecastImpact = new Schema({
     unscheduled: Boolean,
 }, { _id: false });
 
-const TaskSlipForecastDetail = new Schema({
-    selectedTaskRef: { type: Schema.Types.ObjectId, ref: 'taskInfo', required: true },
-    userRef: { type: Schema.Types.ObjectId, ref: 'userInfo', required: true, index: true },
+const TaskSlipForecast = new Schema({
     movedCount: Number,
     newlyLateCount: Number,
     affected: [SlipForecastImpact],
     calculatedAt: Date,
-});
+}, { _id: false });
 
 const TaskDetail = new Schema({
     title: String,
@@ -103,6 +101,8 @@ const TaskDetail = new Schema({
     // Scheduler OUTPUT: where the algorithm actually placed this task. Recomputed from
     // scratch on every scheduling run, and null until the first one.
     scheduledDate: Date,
+    // Scheduler output for the same generated schedule; null when inputs change.
+    slipForecast: { type: TaskSlipForecast, default: null },
     repeat: String,
     recurrence: { type: RecurrenceRule, default: null },
     // Set on generated occurrences, pointing at the template that owns the rule.
@@ -173,7 +173,6 @@ const ProjectDetail = new Schema({
 // Expansion dedupes on this key, so re-runs never duplicate occurrences.
 TaskDetail.index({ seriesRef: 1, occurrenceDate: 1 });
 TaskDetail.index({ userRef: 1, completed: 1, completedDate: -1, projectRef: 1 });
-TaskSlipForecastDetail.index({ userRef: 1, selectedTaskRef: 1 }, { unique: true });
 
 // Add a new schema for events
 const EventDetail = new Schema({
@@ -199,11 +198,6 @@ const EventDetails = mongoose.model('eventInfo', EventDetail, 'eventInfo');
 const RoleDetails = mongoose.model('roleInfo', RoleDetail, 'roleInfo');
 const GoalDetails = mongoose.model('goalInfo', GoalDetail, 'goalInfo');
 const ProjectDetails = mongoose.model('projectInfo', ProjectDetail, 'projectInfo');
-const TaskSlipForecastDetails = mongoose.model(
-    'taskSlipForecastInfo',
-    TaskSlipForecastDetail,
-    'taskSlipForecastInfo'
-);
 
 module.exports = {
     UserDetails,
@@ -211,6 +205,5 @@ module.exports = {
     EventDetails,
     RoleDetails,
     GoalDetails,
-    ProjectDetails,
-    TaskSlipForecastDetails
+    ProjectDetails
 };
