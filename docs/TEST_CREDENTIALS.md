@@ -25,7 +25,7 @@ Seeding also creates:
 - `otheruser` / `testpassword`, whose data proves tenant isolation;
 - `recurruser` / `testpassword`, with a minimal weekly recurrence; and
 - `slipuser` / `testpassword`, with a full mixed-capacity week and a spacious following week
-  for checking one-day task-slip forecasts.
+  for checking blocked-slot reschedule forecasts.
 
 ## What's Included
 

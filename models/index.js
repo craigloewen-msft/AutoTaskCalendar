@@ -72,7 +72,9 @@ const SlipForecastImpact = new Schema({
     taskId: { type: Schema.Types.ObjectId, ref: 'taskInfo' },
     title: String,
     baselineStart: Date,
+    baselineEnd: Date,
     forecastStart: Date,
+    forecastEnd: Date,
     baselineDate: String,
     forecastDate: String,
     dueDate: String,
@@ -82,6 +84,7 @@ const SlipForecastImpact = new Schema({
 }, { _id: false });
 
 const TaskSlipForecast = new Schema({
+    version: Number,
     movedCount: Number,
     newlyLateCount: Number,
     affected: [SlipForecastImpact],

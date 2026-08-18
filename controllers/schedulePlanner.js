@@ -19,16 +19,64 @@ const MS_PER_DAY = 24 * MS_PER_HOUR;
 const MAX_SCHEDULING_ITERATIONS = 10000;
 const MAX_NO_PROGRESS_ITERATIONS = 100;
 const VERY_LARGE_TIME_MS = 999 * MS_PER_DAY;
+// Forecasts rerun the same immutable task objects, so derived metadata is shared safely.
+const taskMetadataCache = new WeakMap();
+
+function taskMetadata(task) {
+    if (!task || typeof task !== 'object') {
+        return {
+            id: '',
+            dependencyIds: [],
+            dueDate: null,
+            priority: 100,
+            startRank: Number.POSITIVE_INFINITY,
+            seriesId: null,
+            occurrenceDate: null,
+            eligibleByTimeZone: new Map(),
+            expiryByTimeZone: new Map(),
+        };
+    }
+
+    let metadata = taskMetadataCache.get(task);
+    if (metadata) return metadata;
+
+    const priority = Number(task.priority ?? 100);
+    const startRank = task.startDate ? new Date(task.startDate).getTime() : Number.POSITIVE_INFINITY;
+    metadata = {
+        id: task._id?.toString() || '',
+        dependencyIds: (task.dependsOn || []).map((dependencyId) => dependencyId.toString()),
+        dueDate: dateOnlyFromMarker(task.dueDate),
+        priority: Number.isFinite(priority) ? priority : 100,
+        startRank: Number.isNaN(startRank) ? Number.POSITIVE_INFINITY : startRank,
+        seriesId: task.seriesRef?.toString() || null,
+        occurrenceDate: task.occurrenceDate || null,
+        eligibleByTimeZone: new Map(),
+        expiryByTimeZone: new Map(),
+    };
+    taskMetadataCache.set(task, metadata);
+    return metadata;
+}
+
+function taskEligibleAt(task, timeZone) {
+    const metadata = taskMetadata(task);
+    if (!metadata.eligibleByTimeZone.has(timeZone)) {
+        metadata.eligibleByTimeZone.set(
+            timeZone,
+            taskEligibleInstant(task.startDate, timeZone)
+        );
+    }
+    return metadata.eligibleByTimeZone.get(timeZone);
+}
 
 function taskId(task) {
-    return task?._id?.toString() || '';
+    return taskMetadata(task).id;
 }
 
 function areDependenciesMet(task, incompleteTaskMap, scheduledTaskIds) {
-    if (!task.dependsOn || task.dependsOn.length === 0) return true;
+    const dependencyIds = taskMetadata(task).dependencyIds;
+    if (!dependencyIds.length) return true;
 
-    for (const dependencyId of task.dependsOn) {
-        const id = dependencyId.toString();
+    for (const id of dependencyIds) {
         if (incompleteTaskMap.has(id) && !scheduledTaskIds.has(id)) return false;
     }
     return true;
@@ -88,36 +136,25 @@ function getChunkDuration(task) {
     return task.breakUpTask ? task.breakUpTaskChunkDuration * MS_PER_MINUTE : 0;
 }
 
-function priorityRank(task) {
-    const priority = Number(task?.priority ?? 100);
-    return Number.isFinite(priority) ? priority : 100;
-}
-
-function dateRank(value) {
-    if (!value) return Number.POSITIVE_INFINITY;
-    const time = new Date(value).getTime();
-    return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time;
-}
-
 function compareTaskSchedulingKeys(left, right) {
     const backlogOrder = Number(!!left?.isBacklog) - Number(!!right?.isBacklog);
     if (backlogOrder) return backlogOrder;
 
     // Backlog stays below dated work and keeps its historical start-date ordering.
     if (left?.isBacklog && right?.isBacklog) {
-        const startOrder = dateRank(left.startDate) - dateRank(right.startDate);
+        const startOrder = taskMetadata(left).startRank - taskMetadata(right).startRank;
         if (startOrder) return startOrder;
     }
 
-    const leftDueDate = dateOnlyFromMarker(left?.dueDate);
-    const rightDueDate = dateOnlyFromMarker(right?.dueDate);
+    const leftDueDate = taskMetadata(left).dueDate;
+    const rightDueDate = taskMetadata(right).dueDate;
     if (leftDueDate !== rightDueDate) {
         if (!leftDueDate) return 1;
         if (!rightDueDate) return -1;
         return leftDueDate.localeCompare(rightDueDate);
     }
 
-    return priorityRank(left) - priorityRank(right);
+    return taskMetadata(left).priority - taskMetadata(right).priority;
 }
 
 function compareCandidatesForScheduling(left, right) {
@@ -131,16 +168,24 @@ function compareCandidatesForScheduling(left, right) {
 }
 
 function whenUnschedulableBehaviorForTask(task, context) {
-    if (!task.seriesRef) return null;
-    return context.seriesWhenUnschedulableBehaviorById.get(task.seriesRef.toString())
+    const seriesId = taskMetadata(task).seriesId;
+    if (!seriesId) return null;
+    return context.seriesWhenUnschedulableBehaviorById.get(seriesId)
         || DEFAULT_WHEN_UNSCHEDULABLE_BEHAVIOR;
 }
 
 function occurrenceExpiresAt(task, context) {
-    if (whenUnschedulableBehaviorForTask(task, context) !== 'skip' || !task.occurrenceDate) {
+    const metadata = taskMetadata(task);
+    if (whenUnschedulableBehaviorForTask(task, context) !== 'skip' || !metadata.occurrenceDate) {
         return null;
     }
-    return nextDateStartInZone(task.occurrenceDate, context.timeZone);
+    if (!metadata.expiryByTimeZone.has(context.timeZone)) {
+        metadata.expiryByTimeZone.set(
+            context.timeZone,
+            nextDateStartInZone(metadata.occurrenceDate, context.timeZone)
+        );
+    }
+    return metadata.expiryByTimeZone.get(context.timeZone);
 }
 
 function removeExpiredOccurrences(context) {
@@ -166,7 +211,7 @@ function findBestTaskForSlot(context, availableTime) {
         const task = pendingTasks[index];
         if (!areDependenciesMet(task, incompleteTaskMap, scheduledTaskIds)) continue;
 
-        const eligibleAt = taskEligibleInstant(task.startDate, context.timeZone);
+        const eligibleAt = taskEligibleAt(task, context.timeZone);
         if (!eligibleAt || currentTime.getTime() < eligibleAt.getTime()) continue;
 
         const canFitFully = availableTime >= getRemainingDuration(task, chunkInfo);

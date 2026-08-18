@@ -204,10 +204,10 @@ After creation, a task behaves exactly like one created on Calendar. The schedul
 to use normal start dates, due dates, priority, dependencies, working hours, and calendar
 availability. Future Compass scheduling influence remains a separate, higher-risk feature.
 
-After running **Schedule Tasks** on Calendar, use each task’s **`+1 day`** chip to preview how
-letting it slip would reflow the remaining queue and expose newly missed deadlines. The preview
-is read-only and does not run merely by opening Weekly Plan. See
-[One-day Task Slip Forecast](TASK_SLIP_FORECAST.md) for its assumptions and visual states.
+After running **Schedule Tasks** on Calendar, use each task's **`slot blocked`** control to
+preview the result of another event occupying that task's planned time before scheduling again.
+The preview is read-only and does not run merely by opening Weekly Plan. See
+[Blocked-slot Task Reschedule Forecast](TASK_SLIP_FORECAST.md) for its assumptions and visual states.
 
 ---
 
