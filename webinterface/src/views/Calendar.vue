@@ -21,7 +21,7 @@
       <div class="calendar-box">
         <div class="task-controls">
           <div class="task-list">
-            <h3 class="sidebar-title">Tasks</h3>
+            <h3 ref="taskListTitle" class="sidebar-title" tabindex="-1">Tasks</h3>
             <p
               v-if="quickCompleteError"
               class="quick-complete-error"
@@ -90,6 +90,7 @@
                 <li
                   v-for="task in taskGroupedByDate[date]"
                   :key="task._id"
+                  :data-test="`task-item-${task._id}`"
                   v-bind:class="{
                     'task-item': true,
                     'late-task': !task.isBacklog && getTaskDaysBetweenDeadlineAndSchedule(task) < 0,
@@ -104,31 +105,46 @@
                   }"
                   v-on:click="openEditTaskModal(task)"
                 >
-                  <span class="task-title">
-                    <span v-if="isRecurringTask(task)" class="recurring-icon" title="Part of a repeating series" role="img" aria-label="Repeating task">↻</span>
-                    <span v-if="task.dependsOn && task.dependsOn.length > 0" class="dependency-icon" title="Has dependencies" role="img" aria-label="Has dependencies">🔗</span>
-                    {{ task.title }}
+                  <span class="task-primary-row">
+                    <span class="task-title">
+                      <span v-if="isRecurringTask(task)" class="recurring-icon" title="Part of a repeating series" role="img" aria-label="Repeating task">↻</span>
+                      <span v-if="task.dependsOn && task.dependsOn.length > 0" class="dependency-icon" title="Has dependencies" role="img" aria-label="Has dependencies">🔗</span>
+                      {{ task.title }}
+                    </span>
+                    <span class="task-row-meta">
+                      <span class="task-badge" v-if="task.isBacklog">BACKLOG</span>
+                      <span
+                        v-else-if="!hasValidScheduledDate(task)"
+                        class="task-badge unscheduled-badge"
+                        title="No scheduled time"
+                        aria-label="Needs time: no scheduled time"
+                      >
+                        NEEDS TIME
+                      </span>
+                      <span
+                        class="task-days"
+                        v-else
+                        :title="deadlineGapLabel(task)"
+                        :aria-label="deadlineGapLabel(task)"
+                      >
+                        {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
+                      </span>
+                      <button
+                        v-if="isRecurringTask(task)"
+                        class="quick-complete-button"
+                        type="button"
+                        :aria-label="`Complete recurring task: ${task.title}`"
+                        :aria-busy="isQuickCompleting(task)"
+                        title="Complete this occurrence"
+                        :disabled="isQuickCompleting(task)"
+                        @click.stop="quickCompleteTask(task)"
+                      >
+                        <span aria-hidden="true">{{ isQuickCompleting(task) ? "…" : "✓" }}</span>
+                      </button>
+                    </span>
                   </span>
-                  <span class="task-row-meta">
-                    <span class="task-badge" v-if="task.isBacklog">BACKLOG</span>
-                    <span
-                      v-else-if="!hasValidScheduledDate(task)"
-                      class="task-badge unscheduled-badge"
-                      title="No scheduled time"
-                      aria-label="Needs time: no scheduled time"
-                    >
-                      NEEDS TIME
-                    </span>
-                    <span
-                      class="task-days"
-                      v-else
-                      :title="deadlineGapLabel(task)"
-                      :aria-label="deadlineGapLabel(task)"
-                    >
-                      {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
-                    </span>
+                  <span v-if="hasVisibleSlipForecast(task)" class="slip-impact-row">
                     <button
-                      v-if="slipForecastFor(task)"
                       class="slip-impact-chip"
                       :class="{ risk: slipForecastFor(task).newlyLateCount > 0, safe: !slipForecastFor(task).newlyLateCount }"
                       type="button"
@@ -139,18 +155,6 @@
                     >
                       <span aria-hidden="true">+1 day →</span>
                       {{ slipForecastFor(task).newlyLateCount ? `${slipForecastFor(task).newlyLateCount} late` : "safe" }}
-                    </button>
-                    <button
-                      v-if="isRecurringTask(task)"
-                      class="quick-complete-button"
-                      type="button"
-                      :aria-label="`Complete recurring task: ${task.title}`"
-                      :aria-busy="isQuickCompleting(task)"
-                      title="Complete this occurrence"
-                      :disabled="isQuickCompleting(task)"
-                      @click.stop="quickCompleteTask(task)"
-                    >
-                      <span aria-hidden="true">{{ isQuickCompleting(task) ? "…" : "✓" }}</span>
                     </button>
                   </span>
                 </li>
@@ -471,13 +475,20 @@ export default {
           .filter((task) => task.slipForecast)
           .map((task) => [task._id, task.slipForecast])
       );
-      if (this.selectedSlipForecastId && !this.slipForecasts[this.selectedSlipForecastId]) {
-        this.selectedSlipForecastId = null;
+      const selectedTask = this.taskList?.find((task) => task._id === this.selectedSlipForecastId);
+      if (this.selectedSlipForecastId &&
+        (!this.isInSidebarWindow(selectedTask) || !this.hasVisibleSlipForecast(selectedTask))) {
+        this.clearSlipForecastSelection();
       }
     },
     hasValidScheduledDate(task) {
       if (!task?.scheduledDate) return false;
       return !Number.isNaN(new Date(task.scheduledDate).getTime());
+    },
+    hasVisibleSlipForecast(task) {
+      const forecast = this.slipForecastFor(task);
+      if (!this.hasValidScheduledDate(task) || !forecast) return false;
+      return Number(forecast.movedCount) > 0 || Number(forecast.newlyLateCount) > 0;
     },
     isInSidebarWindow(task) {
       if (!task?.seriesRef || !this.hasValidScheduledDate(task)) return true;
@@ -496,12 +507,19 @@ export default {
     toggleSlipForecast(task) {
       this.selectedSlipForecastId = this.selectedSlipForecastId === task._id ? null : task._id;
     },
-    closeSlipForecast() {
+    clearSlipForecastSelection(restoreFocus = null) {
       const taskId = this.selectedSlipForecastId;
+      const panelHadFocus = typeof document !== "undefined"
+        && !!document.activeElement?.closest?.(".slip-forecast-panel");
       this.selectedSlipForecastId = null;
+      if (!taskId || !(restoreFocus ?? panelHadFocus)) return;
       this.$nextTick(() => {
-        document.querySelector(`[data-test="slip-impact-chip-${taskId}"]`)?.focus();
+        const chip = document.querySelector(`[data-test="slip-impact-chip-${taskId}"]`);
+        (chip || this.$refs.taskListTitle)?.focus();
       });
+    },
+    closeSlipForecast() {
+      this.clearSlipForecastSelection(true);
     },
     slipForecastAriaLabel(task) {
       const forecast = this.slipForecastFor(task);
@@ -1015,6 +1033,12 @@ export default {
   color: #e0e0e0;
 }
 
+.sidebar-title:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #fbbf24;
+  outline-offset: 3px;
+}
+
 .task-list {
   overflow-y: auto;
   max-height: calc(100vh - 200px);
@@ -1061,8 +1085,8 @@ export default {
 
 .task-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: stretch;
+  flex-direction: column;
   padding: 12px 16px;
   margin-bottom: 8px;
   background: rgba(255, 255, 255, 0.05);
@@ -1076,6 +1100,14 @@ export default {
   background: rgba(255, 255, 255, 0.12);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   border-left-width: 4px;
+}
+
+.task-primary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
 }
 
 .task-title {
@@ -1186,6 +1218,10 @@ export default {
   color: #fef3c7;
 }
 
+.forecast-close:focus-visible {
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.28);
+}
+
 .forecast-summary {
   display: flex;
   flex-wrap: wrap;
@@ -1275,6 +1311,13 @@ export default {
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.13);
 }
 
+.slip-impact-row {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  margin-top: 8px;
+}
+
 .slip-impact-chip {
   padding: 4px 7px;
   border: 1px solid rgba(156, 163, 175, 0.35);
@@ -1284,7 +1327,7 @@ export default {
   font-size: 10px;
   font-weight: 700;
   line-height: 1.2;
-  white-space: nowrap;
+  text-align: left;
 }
 
 .slip-impact-chip.risk {
@@ -1536,7 +1579,7 @@ export default {
     white-space: normal;
   }
 
-  .task-item {
+  .task-primary-row {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -1544,6 +1587,10 @@ export default {
   .task-row-meta {
     flex-wrap: wrap;
     margin: 7px 0 0;
+  }
+
+  .slip-impact-row {
+    justify-content: flex-start;
   }
 }
 </style>
