@@ -109,6 +109,14 @@
                   <span class="task-row-meta">
                     <span class="task-badge" v-if="task.isBacklog">BACKLOG</span>
                     <span
+                      v-else-if="!hasValidScheduledDate(task)"
+                      class="task-badge unscheduled-badge"
+                      title="No scheduled time"
+                      aria-label="Needs time: no scheduled time"
+                    >
+                      NEEDS TIME
+                    </span>
+                    <span
                       class="task-days"
                       v-else
                       :title="deadlineGapLabel(task)"
@@ -464,10 +472,13 @@ export default {
         this.selectedSlipForecastId = null;
       }
     },
+    hasValidScheduledDate(task) {
+      if (!task?.scheduledDate) return false;
+      return !Number.isNaN(new Date(task.scheduledDate).getTime());
+    },
     isInSidebarWindow(task) {
-      if (!task?.scheduledDate) return true;
+      if (!task?.seriesRef || !this.hasValidScheduledDate(task)) return true;
       const scheduled = new Date(task.scheduledDate);
-      if (Number.isNaN(scheduled.getTime())) return true;
       const windowEnd = new Date();
       windowEnd.setDate(windowEnd.getDate() + SIDEBAR_WINDOW_DAYS);
       windowEnd.setHours(23, 59, 59, 999);
@@ -679,22 +690,17 @@ export default {
       this.selectedEvent = null;
     },
     getTaskDaysBetweenDeadlineAndSchedule(inTask) {
-      if (!inTask.dueDate || !inTask.scheduledDate) return null;
+      if (!inTask.dueDate || !this.hasValidScheduledDate(inTask)) return null;
       return calendarDayDifference(inTask.dueDate, inTask.scheduledDate);
     },
     getTaskDate(task) {
-      if (task.isBacklog && !task.scheduledDate) {
+      if (task.isBacklog && !this.hasValidScheduledDate(task)) {
         return "Backlog";
       }
-      // Anything the scheduler could not place has no scheduledDate; formatting it would
-      // produce the literal string "Invalid Date" as a group header.
-      if (!task.scheduledDate) {
+      if (!this.hasValidScheduledDate(task)) {
         return "Unscheduled";
       }
       const taskDate = new Date(task.scheduledDate);
-      if (Number.isNaN(taskDate.getTime())) {
-        return "Unscheduled";
-      }
       return taskDate.toLocaleDateString("en-US", {
         weekday: "long",
         year: "numeric",
@@ -796,14 +802,13 @@ export default {
     tasksDatesArray() {
       if (this.taskGroupedByDate) {
         let taskDateArray = Object.keys(this.taskGroupedByDate);
-        // "Backlog" and "Unscheduled" are labels, not dates, so they sort to the end.
-        const labels = ["Backlog", "Unscheduled"];
         taskDateArray.sort(function (a, b) {
-          const aIsLabel = labels.includes(a);
-          const bIsLabel = labels.includes(b);
-          if (aIsLabel || bIsLabel) {
-            if (aIsLabel && bIsLabel) return a.localeCompare(b);
-            return aIsLabel ? 1 : -1;
+          if (a === b) return 0;
+          if (a === "Unscheduled" || b === "Unscheduled") {
+            return a === "Unscheduled" ? -1 : 1;
+          }
+          if (a === "Backlog" || b === "Backlog") {
+            return a === "Backlog" ? 1 : -1;
           }
           return new Date(a) - new Date(b);
         });
@@ -1337,6 +1342,11 @@ export default {
   padding: 4px 10px;
   border-radius: 12px;
   white-space: nowrap;
+}
+
+.unscheduled-badge {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
 }
 
 .late-task {

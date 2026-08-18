@@ -229,6 +229,71 @@ test.describe('calendar page', () => {
         await expect(page.locator('.task-list')).not.toContainText(createdTitle);
     });
 
+    test('keeps one-off and unscheduled tasks visible without expanding the recurring window', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        await seed.clearTasks();
+        const today = todayInZone('UTC');
+        const later = addDateOnlyDays(today, 20);
+
+        await withDb(async () => {
+            const series = await TaskDetails.create({
+                title: 'Future recurring series',
+                duration: 30,
+                startDate: parseDateOnly(today).date,
+                dueDate: parseDateOnly(today).date,
+                recurrence: { freq: 'daily', interval: 1 },
+                completed: false,
+                userRef: data.primary.user._id,
+            });
+            await TaskDetails.insertMany([
+                {
+                    title: 'Later one-off task',
+                    duration: 30,
+                    startDate: parseDateOnly(today).date,
+                    dueDate: parseDateOnly(later).date,
+                    scheduledDate: zonedDateTime(later, 10 * 60, 'UTC'),
+                    completed: false,
+                    isBacklog: false,
+                    userRef: data.primary.user._id,
+                },
+                {
+                    title: 'Task that needs time',
+                    duration: 30,
+                    startDate: parseDateOnly(today).date,
+                    dueDate: parseDateOnly(later).date,
+                    scheduledDate: null,
+                    completed: false,
+                    isBacklog: false,
+                    userRef: data.primary.user._id,
+                },
+                {
+                    title: 'Later recurring occurrence',
+                    duration: 30,
+                    startDate: parseDateOnly(later).date,
+                    dueDate: parseDateOnly(later).date,
+                    scheduledDate: zonedDateTime(later, 11 * 60, 'UTC'),
+                    completed: false,
+                    isBacklog: false,
+                    seriesRef: series._id,
+                    occurrenceDate: parseDateOnly(later).date,
+                    userRef: data.primary.user._id,
+                },
+            ]);
+        });
+
+        await page.goto('/#/calendar');
+
+        await expect(page.locator('.task-item', { hasText: 'Later one-off task' })).toBeVisible();
+        await expect(page.locator('.task-item', { hasText: 'Later recurring occurrence' })).toHaveCount(0);
+        await expect(page.locator('.task-date-header').first()).toHaveText('Unscheduled');
+        const unscheduled = page.locator('.task-item', { hasText: 'Task that needs time' });
+        await expect(unscheduled).toBeVisible();
+        await expect(unscheduled.locator('.unscheduled-badge')).toHaveText('NEEDS TIME');
+    });
+
     test('keeps a recurring occurrence when quick completion fails', async ({
         seed,
         loggedInPage: page,
