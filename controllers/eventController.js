@@ -121,144 +121,192 @@ async function deleteEvent(eventId, userId) {
   }
 }
 
-async function refreshGoogleCalendarAccessToken(inUser, config) {
-  // Check for missing configuration
-  if (!config.googleOAuthClientID || !config.googleOAuthClientSecret) {
-    console.error('[Google OAuth] ERROR: Cannot refresh token - OAuth credentials not configured');
-    throw new Error('Google OAuth credentials not configured');
-  }
+class GoogleAuthorizationFailure extends Error {}
 
-  const credentials = readGoogleCredentials(inUser, config);
-  if (!credentials.refreshToken) throw new Error('No refresh token available');
-
-  // Refresh Google Calendar access token
-  const oauth2Client = new google.auth.OAuth2(
-    config.googleOAuthClientID,
-    config.googleOAuthClientSecret,
-  );
-  oauth2Client.setCredentials({
-    refresh_token: credentials.refreshToken
-  });
-
-  try {
-    const tokens = await oauth2Client.refreshAccessToken();
-    writeGoogleCredentials(inUser, config, {
-      accessToken: tokens.credentials.access_token,
-      refreshToken: tokens.credentials.refresh_token,
-    });
-    await inUser.save();
-    return true;
-  } catch (err) {
-    console.error('[Google OAuth] Access token refresh failed');
-    throw err;
-  }
+function isGoogleAuthorizationError(error) {
+  return Number(error?.code) === 401 || Number(error?.response?.status) === 401;
 }
 
-async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod, config, calendarTimeZones = {}) {
-  try {
+function createGoogleCalendarService(googleApi = google) {
+  async function refreshGoogleCalendarAccessToken(inUser, config) {
+    if (!config.googleOAuthClientID || !config.googleOAuthClientSecret) {
+      throw new Error('Google OAuth credentials not configured');
+    }
+
     const credentials = readGoogleCredentials(inUser, config);
-    if (!credentials.accessToken) return false;
+    if (!credentials.refreshToken) throw new Error('No refresh token available');
 
-    // Sync Google Calendar events to events database
-    const oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({
-      access_token: credentials.accessToken,
-      refresh_token: credentials.refreshToken
+    const oauth2Client = new googleApi.auth.OAuth2(
+      config.googleOAuthClientID,
+      config.googleOAuthClientSecret,
+    );
+    oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
+
+    const tokens = await oauth2Client.refreshAccessToken();
+    const accessToken = tokens?.credentials?.access_token;
+    if (typeof accessToken !== 'string' || accessToken.length === 0) {
+      throw new Error('Google token refresh returned no access token');
+    }
+
+    const refreshToken = tokens.credentials.refresh_token;
+    writeGoogleCredentials(inUser, config, {
+      accessToken,
+      refreshToken: typeof refreshToken === 'string' && refreshToken.length > 0
+        ? refreshToken
+        : undefined,
     });
+    await inUser.save();
+    return accessToken;
+  }
 
-    const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+  function createCalendar(accessToken) {
+    const auth = new googleApi.auth.OAuth2();
+    auth.setCredentials({ access_token: accessToken });
+    return googleApi.calendar({ version: 'v3', auth });
+  }
 
-    // Array of calendar IDs
-    const calendarIds = inUser.selectedCalendars || [];
+  function createRequest(inUser, config) {
+    const credentials = readGoogleCredentials(inUser, config);
+    if (!credentials.accessToken) throw new Error('No Google access token available');
 
-    // Array of promises that get events for each calendar
-    const eventsPromises = calendarIds.map(async (calendarId) => {
+    let accessToken = credentials.accessToken;
+    let refreshAttempted = false;
+
+    return {
+      async run(operation) {
+        try {
+          return await operation(createCalendar(accessToken));
+        } catch (error) {
+          if (!isGoogleAuthorizationError(error)) throw error;
+          if (refreshAttempted) throw new GoogleAuthorizationFailure();
+          refreshAttempted = true;
+
+          try {
+            accessToken = await refreshGoogleCalendarAccessToken(inUser, config);
+          } catch {
+            throw new GoogleAuthorizationFailure();
+          }
+
+          try {
+            return await operation(createCalendar(accessToken));
+          } catch (retryError) {
+            if (isGoogleAuthorizationError(retryError)) {
+              throw new GoogleAuthorizationFailure();
+            }
+            throw retryError;
+          }
+        }
+      },
+    };
+  }
+
+  async function listGoogleCalendars(inUser, config) {
+    const request = createRequest(inUser, config);
+    const response = await request.run((calendar) => calendar.calendarList.list());
+    return response.data.items;
+  }
+
+  async function fetchSelectedCalendarEvents(calendar, calendarIds, startPeriod, endPeriod) {
+    const results = await Promise.allSettled(calendarIds.map(async (calendarId) => {
       const eventsResponse = await calendar.events.list({
         calendarId,
         timeMin: startPeriod.toISOString(),
         timeMax: endPeriod.toISOString(),
         maxResults: 2500,
         singleEvents: true,
-        orderBy: "startTime",
+        orderBy: 'startTime',
       });
       return (eventsResponse.data.items || []).map((event) => ({
         ...event,
         calendarId,
       }));
-    });
-
-    // Wait for all promises to resolve
-    const eventsResults = await Promise.all(eventsPromises);
-
-    // Merge events from all calendars into one array
-    const eventsResponse = eventsResults.reduce((accumulator, currentValue) => {
-      return [...accumulator, ...currentValue];
-    }, []);
-
-    const eventsData = eventsResponse;
-
-    const events = await Promise.all(
-      eventsData.map(async (eventData) => {
-        const temporal = transformGoogleEventData(
-          eventData,
-          calendarTimeZones[eventData.organizer?.email] ||
-            calendarTimeZones[eventData.calendarId] ||
-            inUser.timeZone
-        );
-        const event = await EventDetails.findOneAndUpdate(
-          { externalEventID: eventData.id, userRef: inUser._id },
-          {
-            $set: {
-              userRef: inUser._id,
-              title: eventData.summary,
-              notes: eventData.description,
-              type: 'google',
-              ...temporal,
-            },
-            $setOnInsert: { externalEventID: eventData.id },
-          },
-          { new: true, upsert: true }
-        );
-        return event;
-      })
+    }));
+    const failures = results.filter((result) => result.status === 'rejected');
+    const nonAuthorizationFailure = failures.find(
+      (result) => !isGoogleAuthorizationError(result.reason)
     );
-
-    let eventIds = events.map((event) => event._id);
-
-    // Delete all events that are not in the Google Calendar
-    await EventDetails.deleteMany({
-      userRef: inUser._id,
-      type: "google",
-      _id: { $nin: eventIds }
-    });
-
-    return true;
-
-  } catch (err) {
-    console.error('[Google OAuth] Calendar sync failed');
-
-    if (err.code == 401) {
-      await refreshGoogleCalendarAccessToken(inUser, config);
-      // Try again
-      return syncCalendarsToDatabase(
-        inUser,
-        startPeriod,
-        endPeriod,
-        config,
-        calendarTimeZones
-      );
-    }
-
-    return false;
+    if (nonAuthorizationFailure) throw nonAuthorizationFailure.reason;
+    if (failures.length > 0) throw failures[0].reason;
+    return results.flatMap((result) => result.value);
   }
+
+  async function syncCalendarsToDatabase(inUser, startPeriod, endPeriod, config) {
+    try {
+      const request = createRequest(inUser, config);
+      let calendarTimeZones = {};
+
+      try {
+        const entries = await request.run((calendar) => calendar.calendarList.list());
+        calendarTimeZones = Object.fromEntries(
+          (entries.data.items || []).map((entry) => [entry.id, entry.timeZone])
+        );
+      } catch (error) {
+        if (error instanceof GoogleAuthorizationFailure) throw error;
+        console.error('[Google OAuth] Could not load calendar timezones');
+      }
+
+      const eventsData = await request.run((calendar) => fetchSelectedCalendarEvents(
+        calendar,
+        inUser.selectedCalendars || [],
+        startPeriod,
+        endPeriod
+      ));
+
+      const events = await Promise.all(
+        eventsData.map(async (eventData) => {
+          const temporal = transformGoogleEventData(
+            eventData,
+            calendarTimeZones[eventData.organizer?.email] ||
+              calendarTimeZones[eventData.calendarId] ||
+              inUser.timeZone
+          );
+          return EventDetails.findOneAndUpdate(
+            { externalEventID: eventData.id, userRef: inUser._id },
+            {
+              $set: {
+                userRef: inUser._id,
+                title: eventData.summary,
+                notes: eventData.description,
+                type: 'google',
+                ...temporal,
+              },
+              $setOnInsert: { externalEventID: eventData.id },
+            },
+            { new: true, upsert: true }
+          );
+        })
+      );
+
+      await EventDetails.deleteMany({
+        userRef: inUser._id,
+        type: 'google',
+        _id: { $nin: events.map((event) => event._id) }
+      });
+
+      return true;
+    } catch (error) {
+      console.error('[Google OAuth] Calendar sync failed');
+      return false;
+    }
+  }
+
+  return {
+    listGoogleCalendars,
+    refreshGoogleCalendarAccessToken,
+    syncCalendarsToDatabase,
+  };
 }
+
+const googleCalendarService = createGoogleCalendarService();
 
 module.exports = {
   getEventListFromUsername,
   createEvent,
   updateEvent,
   deleteEvent,
-  refreshGoogleCalendarAccessToken,
-  syncCalendarsToDatabase,
+  createGoogleCalendarService,
+  listGoogleCalendars: googleCalendarService.listGoogleCalendars,
+  refreshGoogleCalendarAccessToken: googleCalendarService.refreshGoogleCalendarAccessToken,
+  syncCalendarsToDatabase: googleCalendarService.syncCalendarsToDatabase,
   transformGoogleEventData
 };

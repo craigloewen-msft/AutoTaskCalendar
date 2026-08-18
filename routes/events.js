@@ -11,7 +11,7 @@ const {
   createEvent,
   updateEvent,
   deleteEvent,
-  refreshGoogleCalendarAccessToken,
+  listGoogleCalendars,
   syncCalendarsToDatabase
 } = require('../controllers/eventController');
 
@@ -239,30 +239,10 @@ function createEventRoutes(config, authenticateSession) {
     try {
       const user = await UserDetails.findOne({ username: req.user.username });
       if (!user) return res.send(returnFailure('User is not authenticated with Google'));
-      const credentials = readGoogleCredentials(user, config);
-      if (!credentials.accessToken) {
+      if (!readGoogleCredentials(user, config).accessToken) {
         return res.send(returnFailure('User is not authenticated with Google'));
       }
-
-      const auth = new google.auth.OAuth2();
-      auth.setCredentials({ access_token: credentials.accessToken });
-      const calendar = google.calendar({ version: 'v3', auth });
-
-      let calendarListResponse = null;
-      try {
-        calendarListResponse = await calendar.calendarList.list();
-      } catch (err) {
-        if (err.code == 401) {
-          await refreshGoogleCalendarAccessToken(user, config);
-          const refreshed = readGoogleCredentials(user, config);
-          auth.setCredentials({ access_token: refreshed.accessToken });
-          calendarListResponse = await calendar.calendarList.list();
-        } else {
-          throw err;
-        }
-      }
-      const calendars = calendarListResponse.data.items;
-
+      const calendars = await listGoogleCalendars(user, config);
       return res.json({ success: true, calendars });
     } catch (err) {
       console.error('[Google OAuth] Calendar listing failed');
@@ -282,27 +262,13 @@ function createEventRoutes(config, authenticateSession) {
       let twoWeeksBefore = new Date(now.getTime() - 12096e5);
       let monthAfter = new Date(now.getTime() + 2629800000);
 
-      let calendarTimeZones = {};
-      try {
-        const auth = new google.auth.OAuth2();
-        const credentials = readGoogleCredentials(user, config);
-        auth.setCredentials({ access_token: credentials.accessToken });
-        const calendar = google.calendar({ version: 'v3', auth });
-        const entries = await calendar.calendarList.list();
-        calendarTimeZones = Object.fromEntries(
-          (entries.data.items || []).map((entry) => [entry.id, entry.timeZone])
-        );
-      } catch (error) {
-        console.error('[Google OAuth] Could not load calendar timezones');
-      }
-
-      await syncCalendarsToDatabase(
+      const synced = await syncCalendarsToDatabase(
         user,
         twoWeeksBefore,
         monthAfter,
-        config,
-        calendarTimeZones
+        config
       );
+      if (!synced) return res.send(returnFailure('Could not sync Google calendars'));
 
       return res.send({ success: true });
     } catch (err) {

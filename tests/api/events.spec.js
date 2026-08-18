@@ -1,9 +1,16 @@
 const { createHash } = require('crypto');
 const { test, expect, withDb } = require('../fixtures');
-const { transformGoogleEventData } = require('../../controllers/eventController');
+const {
+    createGoogleCalendarService,
+    transformGoogleEventData,
+} = require('../../controllers/eventController');
 const { EventDetails, GoogleOAuthStateDetails, UserDetails } = require('../../models');
 const { migrateGoogleCredentials } = require('../../utils/googleCredentialMigration');
-const { decryptGoogleCredential, writeGoogleCredentials } = require('../../utils/googleCredentials');
+const {
+    decryptGoogleCredential,
+    readGoogleCredentials,
+    writeGoogleCredentials,
+} = require('../../utils/googleCredentials');
 
 function stateFrom(authUrl) {
     return new URL(authUrl).searchParams.get('state');
@@ -12,6 +19,72 @@ function stateFrom(authUrl) {
 function stateDigest(state) {
     return createHash('sha256').update(state).digest('hex');
 }
+
+const googleConfig = {
+    googleOAuthClientID: 'client-id',
+    googleOAuthClientSecret: 'client-secret',
+    secret: 'mysecret',
+};
+
+function googleError(status) {
+    const error = new Error('sensitive provider detail');
+    error.response = { status };
+    return error;
+}
+
+function fakeGoogleApi({ calendarList, events, refresh }) {
+    const calls = {
+        events: 0,
+        eventTokens: [],
+        refresh: 0,
+    };
+
+    class OAuth2 {
+        setCredentials(credentials) {
+            this.credentials = credentials;
+        }
+
+        async refreshAccessToken() {
+            calls.refresh++;
+            return refresh(calls);
+        }
+    }
+
+    return {
+        calls,
+        googleApi: {
+            auth: { OAuth2 },
+            calendar({ auth }) {
+                return {
+                    calendarList: {
+                        async list() {
+                            return calendarList({ auth, calls });
+                        },
+                    },
+                    events: {
+                        async list(options) {
+                            calls.events++;
+                            calls.eventTokens.push(auth.credentials.access_token);
+                            return events({ auth, calls, options });
+                        },
+                    },
+                };
+            },
+        },
+    };
+}
+
+async function googleUser(seed, { accessToken = 'old-access', refreshToken = 'old-refresh', calendars = [] } = {}) {
+    const data = await seed();
+    const user = await withDb(() => UserDetails.findById(data.primary.user._id));
+    user.selectedCalendars = calendars;
+    writeGoogleCredentials(user, googleConfig, { accessToken, refreshToken });
+    await user.save();
+    return user;
+}
+
+const syncStart = new Date('2025-01-01T00:00:00Z');
+const syncEnd = new Date('2025-02-01T00:00:00Z');
 
 test.describe('events', () => {
     test('createEvent validates inputs and persists a calendar event', async ({ seed, api }) => {
@@ -189,6 +262,72 @@ test.describe('events', () => {
         await withDb(() => migrateGoogleCredentials({ secret: 'mysecret' }));
         const rerun = await withDb(() => UserDetails.collection.findOne({ _id: data.primary.user._id }));
         expect(rerun.googleAccessTokenEncrypted).toBe(raw.googleAccessTokenEncrypted);
+    });
+
+    test('Google sync reports missing credentials truthfully', async ({ seed, api }) => {
+        await seed();
+
+        const body = await (await api.get('/api/synccalendar')).json();
+
+        expect(body.success).toBe(false);
+        expect(body.log).toBe('Could not sync Google calendars');
+    });
+
+    test('Google sync refreshes and retries once across selected calendars', async ({ seed }) => {
+        const user = await googleUser(seed, { calendars: ['work', 'home'] });
+        const fake = fakeGoogleApi({
+            calendarList: async () => ({ data: { items: [] } }),
+            events: async ({ auth }) => {
+                if (auth.credentials.access_token === 'old-access') throw googleError(401);
+                return { data: { items: [] } };
+            },
+            refresh: async () => ({ credentials: { access_token: 'new-access' } }),
+        });
+        const service = createGoogleCalendarService(fake.googleApi);
+
+        const synced = await service.syncCalendarsToDatabase(user, syncStart, syncEnd, googleConfig);
+        const saved = await withDb(() => UserDetails.findById(user._id));
+        const credentials = readGoogleCredentials(saved, googleConfig);
+
+        expect(synced).toBe(true);
+        expect(fake.calls.refresh).toBe(1);
+        expect(fake.calls.eventTokens.filter((token) => token === 'new-access')).toHaveLength(2);
+        expect(credentials.accessToken).toBe('new-access');
+        expect(credentials.refreshToken).toBe('old-refresh');
+    });
+
+    test('Google sync stops after a repeated authorization failure', async ({ seed }) => {
+        const user = await googleUser(seed, { calendars: ['work', 'home'] });
+        const fake = fakeGoogleApi({
+            calendarList: async () => ({ data: { items: [] } }),
+            events: async () => { throw googleError(401); },
+            refresh: async () => ({ credentials: { access_token: 'still-rejected' } }),
+        });
+        const service = createGoogleCalendarService(fake.googleApi);
+
+        const synced = await service.syncCalendarsToDatabase(user, syncStart, syncEnd, googleConfig);
+
+        expect(synced).toBe(false);
+        expect(fake.calls.refresh).toBe(1);
+        expect(fake.calls.events).toBe(4);
+    });
+
+    test('Google sync does not refresh a mixed-failure calendar batch', async ({ seed }) => {
+        const user = await googleUser(seed, { calendars: ['unauthorized', 'unavailable'] });
+        const fake = fakeGoogleApi({
+            calendarList: async () => ({ data: { items: [] } }),
+            events: async ({ options }) => {
+                throw googleError(options.calendarId === 'unauthorized' ? 401 : 503);
+            },
+            refresh: async () => ({ credentials: { access_token: 'new-access' } }),
+        });
+        const service = createGoogleCalendarService(fake.googleApi);
+
+        const synced = await service.syncCalendarsToDatabase(user, syncStart, syncEnd, googleConfig);
+
+        expect(synced).toBe(false);
+        expect(fake.calls.events).toBe(2);
+        expect(fake.calls.refresh).toBe(0);
     });
 
     test('update, delete, and Google event transforms preserve intended event semantics', async ({ seed, api }) => {
