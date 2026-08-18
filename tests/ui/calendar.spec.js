@@ -1,6 +1,12 @@
 const { test, expect, withDb } = require('../fixtures');
-const { EventDetails, TaskDetails } = require('../../models');
-const { addDateOnlyDays, parseDateOnly, todayInZone, zonedDateTime } = require('../../utils/temporal');
+const { EventDetails, TaskDetails, UserDetails } = require('../../models');
+const {
+    addDateOnlyDays,
+    mondayWeekBounds,
+    parseDateOnly,
+    todayInZone,
+    zonedDateTime,
+} = require('../../utils/temporal');
 
 async function createQuickCompleteFixture(data) {
     const today = todayInZone('UTC');
@@ -33,6 +39,127 @@ async function createQuickCompleteFixture(data) {
 }
 
 test.describe('calendar page', () => {
+    test('shows the deadline cascade if one of ten Friday tasks slips a day', async ({
+        seed,
+        loggedInPage: page,
+    }, testInfo) => {
+        const data = seed.last();
+        const week = mondayWeekBounds(todayInZone('UTC'), 'UTC');
+        const monday = week.nextStartDate;
+        const friday = addDateOnlyDays(monday, 4);
+        const followingMonday = addDateOnlyDays(monday, 7);
+
+        const tasks = await withDb(async () => {
+            await Promise.all([
+                TaskDetails.deleteMany({ userRef: data.primary.user._id }),
+                EventDetails.deleteMany({ userRef: data.primary.user._id }),
+                UserDetails.updateOne({ _id: data.primary.user._id }, {
+                    $set: {
+                        timeZone: 'UTC',
+                        workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+                        workingStartMinutes: 9 * 60,
+                        workingEndMinutes: 17 * 60,
+                    },
+                }),
+            ]);
+            return TaskDetails.insertMany(Array.from({ length: 10 }, (_, index) => ({
+                title: `Friday launch ${String(index + 1).padStart(2, '0')}`,
+                duration: 4 * 60,
+                startDate: parseDateOnly(monday).date,
+                dueDate: parseDateOnly(friday).date,
+                completed: false,
+                isBacklog: false,
+                breakUpTask: false,
+                priority: index + 1,
+                dependsOn: [],
+                projectRef: data.named.migrationProject._id,
+                userRef: data.primary.user._id,
+            })));
+        });
+
+        await page.setViewportSize({ width: 1440, height: 1600 });
+        await page.clock.install({ time: new Date(`${monday}T08:00:00.000Z`) });
+        await page.goto('/#/weekly-plan');
+        const overview = page.locator('[data-test=weekly-overview]');
+        await expect(overview).toContainText('10 tasks');
+        await expect(overview).toContainText('40h due this week');
+        await expect(page.locator(`[data-test="week-tasks-${data.named.migrationProject._id}"] li`)).toHaveCount(10);
+
+        await page.goto('/#/calendar');
+        await page.getByRole('button', { name: 'Schedule tasks' }).click();
+
+        const firstTask = tasks[0];
+        const chip = page.locator(`[data-test="slip-impact-chip-${firstTask._id}"]`);
+        await expect(chip).toHaveText('+1 day → 2 late');
+        const baselineRows = page.locator('.task-controls');
+        await testInfo.attach('one-day-slip-at-a-glance', {
+            body: await baselineRows.screenshot(),
+            contentType: 'image/png',
+        });
+
+        const before = await withDb(async () => {
+            const taskEvents = await EventDetails.find({
+                userRef: data.primary.user._id,
+                type: { $in: ['task', 'task-chunk'] },
+            }).sort({ startDate: 1 });
+            return {
+                tasks: (await TaskDetails.find({ userRef: data.primary.user._id }).sort({ priority: 1 }))
+                    .map((task) => `${task._id}:${task.scheduledDate?.toISOString()}`),
+                events: taskEvents.map(
+                    (event) => `${event._id}:${event.taskRef}:${event.startDate.toISOString()}:${event.endDate.toISOString()}`
+                ),
+                eventDates: taskEvents.map((event) => event.startDate.toISOString().slice(0, 10)),
+            };
+        });
+        expect(before.events).toHaveLength(10);
+        expect(before.eventDates).toEqual(Array.from({ length: 5 }, (_, index) => {
+            return [addDateOnlyDays(monday, index), addDateOnlyDays(monday, index)];
+        }).flat());
+
+        await chip.click();
+        const panel = page.locator('[data-test=slip-forecast-panel]');
+        await expect(panel).toBeVisible();
+        await expect(panel).toContainText('Let “Friday launch 01” slip one day');
+        const summary = panel.locator('[data-test=slip-forecast-summary]');
+        await expect(summary).toContainText('10 tasks move later');
+        await expect(summary).toContainText('2 newly miss deadlines');
+        const impacts = panel.locator('[data-test^=slip-impact-]');
+        await expect(impacts).toHaveCount(10);
+
+        for (const task of tasks.slice(8)) {
+            const impact = panel.locator(`[data-test="slip-impact-${task._id}"]`);
+            await expect(impact).toHaveAttribute('data-baseline-date', friday);
+            await expect(impact).toHaveAttribute('data-forecast-date', followingMonday);
+            await expect(impact).toContainText('Late');
+            await expect(page.locator('.task-item', { hasText: task.title })).toHaveClass(
+                /forecast-newly-late-task/
+            );
+        }
+        await expect(page.locator('.task-item', { hasText: firstTask.title })).toHaveClass(
+            /forecast-selected-task/
+        );
+        await testInfo.attach('one-day-slip-expanded-cascade', {
+            body: await panel.screenshot(),
+            contentType: 'image/png',
+        });
+
+        const after = await withDb(async () => {
+            const taskEvents = await EventDetails.find({
+                userRef: data.primary.user._id,
+                type: { $in: ['task', 'task-chunk'] },
+            }).sort({ startDate: 1 });
+            return {
+                tasks: (await TaskDetails.find({ userRef: data.primary.user._id }).sort({ priority: 1 }))
+                    .map((task) => `${task._id}:${task.scheduledDate?.toISOString()}`),
+                events: taskEvents.map(
+                    (event) => `${event._id}:${event.taskRef}:${event.startDate.toISOString()}:${event.endDate.toISOString()}`
+                ),
+                eventDates: taskEvents.map((event) => event.startDate.toISOString().slice(0, 10)),
+            };
+        });
+        expect(after).toEqual(before);
+    });
+
     test('creates and completes tasks through the shared editor', async ({ seed, loggedInPage: page }) => {
         const data = await seed();
         const createdTitle = 'Task created from the UI';

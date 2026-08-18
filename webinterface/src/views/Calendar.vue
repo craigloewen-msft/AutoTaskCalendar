@@ -30,6 +30,74 @@
             >
               {{ quickCompleteError }}
             </p>
+            <section
+              v-if="selectedSlipForecast"
+              class="slip-forecast-panel"
+              data-test="slip-forecast-panel"
+              aria-labelledby="slip-forecast-title"
+            >
+              <div class="slip-forecast-heading">
+                <div>
+                  <span class="what-if-label">What if?</span>
+                  <h4 id="slip-forecast-title">Let “{{ selectedSlipForecastTitle }}” slip one day</h4>
+                </div>
+                <button
+                  class="forecast-close"
+                  type="button"
+                  aria-label="Close one-day slip forecast"
+                  @click="closeSlipForecast"
+                >
+                  ×
+                </button>
+              </div>
+              <p class="forecast-summary" data-test="slip-forecast-summary">
+                <strong>{{ selectedSlipForecast.movedCount }} tasks move later</strong>
+                <span>·</span>
+                <strong :class="{ danger: selectedSlipForecast.newlyLateCount }">
+                  {{ selectedSlipForecast.newlyLateCount }} newly miss deadlines
+                </strong>
+              </p>
+              <p class="forecast-assumption">
+                Work before this task stays fixed. This task and everything after it restart
+                at the same time tomorrow. Nothing is saved.
+              </p>
+              <ol class="forecast-cascade">
+                <li
+                  v-for="impact in selectedSlipForecast.affected"
+                  :key="impact.taskId"
+                  :class="{ 'newly-late': impact.newlyLate }"
+                  :data-test="`slip-impact-${impact.taskId}`"
+                  :data-baseline-date="impact.baselineDate"
+                  :data-forecast-date="impact.forecastDate || 'unscheduled'"
+                >
+                  <span class="cascade-marker" aria-hidden="true"></span>
+                  <span class="cascade-task">{{ impact.title }}</span>
+                  <span class="cascade-dates">
+                    {{ forecastDateLabel(impact.baselineDate) }}
+                    <span aria-hidden="true">→</span>
+                    {{ forecastDateLabel(impact.forecastDate) || "Unscheduled" }}
+                    <strong v-if="impact.newlyLate">Late</strong>
+                  </span>
+                </li>
+              </ol>
+            </section>
+            <p
+              v-else-if="slipForecastLoading"
+              class="forecast-loading"
+              role="status"
+              data-test="slip-forecast-loading"
+            >
+              Checking one-day impact…
+            </p>
+            <p
+              v-else-if="slipForecastError"
+              class="forecast-loading forecast-error"
+              role="status"
+              data-test="slip-forecast-error"
+            >
+              One-day impact is unavailable.
+              <button type="button" @click="loadSlipForecasts">Retry</button>
+            </p>
             <div v-for="date in tasksDatesArray" :key="date" class="task-group">
               <h4 class="task-date-header">{{ date }}</h4>
               <ul class="task-items">
@@ -43,7 +111,10 @@
                       getTaskDaysBetweenDeadlineAndSchedule(task) > 0,
                     'due-that-day-task': !task.isBacklog &&
                       getTaskDaysBetweenDeadlineAndSchedule(task) == 0,
-                    'backlog-task': task.isBacklog
+                    'backlog-task': task.isBacklog,
+                    'forecast-selected-task': selectedSlipForecastId === task._id,
+                    'forecast-moved-task': selectedImpactForTask(task)?.moved,
+                    'forecast-newly-late-task': selectedImpactForTask(task)?.newlyLate
                   }"
                   v-on:click="openEditTaskModal(task)"
                 >
@@ -54,7 +125,27 @@
                   </span>
                   <span class="task-row-meta">
                     <span class="task-badge" v-if="task.isBacklog">BACKLOG</span>
-                    <span class="task-days" v-else>{{ getTaskDaysBetweenDeadlineAndSchedule(task) }}</span>
+                    <span
+                      class="task-days"
+                      v-else
+                      :title="deadlineGapLabel(task)"
+                      :aria-label="deadlineGapLabel(task)"
+                    >
+                      {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
+                    </span>
+                    <button
+                      v-if="slipForecastFor(task)"
+                      class="slip-impact-chip"
+                      :class="{ risk: slipForecastFor(task).newlyLateCount > 0 }"
+                      type="button"
+                      :data-test="`slip-impact-chip-${task._id}`"
+                      :aria-expanded="selectedSlipForecastId === task._id"
+                      :aria-label="slipForecastAriaLabel(task)"
+                      @click.stop="toggleSlipForecast(task)"
+                    >
+                      <span aria-hidden="true">+1 day →</span>
+                      {{ slipForecastFor(task).newlyLateCount ? `${slipForecastFor(task).newlyLateCount} late` : "safe" }}
+                    </button>
                     <button
                       v-if="isRecurringTask(task)"
                       class="quick-complete-button"
@@ -312,6 +403,11 @@ export default {
       allDayEvents: [],
       quickCompletingTaskIds: [],
       quickCompleteError: "",
+      slipForecasts: {},
+      slipForecastLoading: false,
+      slipForecastError: "",
+      slipForecastRequestId: 0,
+      selectedSlipForecastId: null,
       // Compass roles, nested with their goals and projects.
       compassRoles: [],
     };
@@ -360,7 +456,7 @@ export default {
 
         this.taskList = response.data.taskList;
         completed = true;
-        await this.loadCalendarEvents();
+        await Promise.all([this.loadCalendarEvents(), this.loadSlipForecasts()]);
       } catch (error) {
         this.quickCompleteError = completed
           ? "Task completed, but the calendar could not refresh."
@@ -371,10 +467,97 @@ export default {
     },
     async loadTasks() {
       const taskDataResponse = await this.$http.get("/api/getUserTasks/");
-      this.taskList = taskDataResponse.data.taskList;
       if (!taskDataResponse.data.success) {
         console.error("Task retrieval error");
+        return;
       }
+      this.taskList = taskDataResponse.data.taskList;
+      await this.loadSlipForecasts();
+    },
+    async loadSlipForecasts() {
+      const taskIds = (this.taskList || [])
+        .filter((task) => !task.isBacklog && task.scheduledDate && this.isInSidebarWindow(task))
+        .slice(0, 100)
+        .map((task) => task._id);
+      const requestId = ++this.slipForecastRequestId;
+      this.slipForecasts = {};
+      this.slipForecastError = "";
+      if (!taskIds.length) {
+        this.slipForecastLoading = false;
+        this.selectedSlipForecastId = null;
+        return;
+      }
+
+      this.slipForecastLoading = true;
+      try {
+        const response = await this.$http.post("/api/forecastTaskSlips", { taskIds });
+        if (requestId !== this.slipForecastRequestId) return;
+        if (!response.data.success) {
+          this.slipForecastError = response.data.log || "One-day impact could not be checked.";
+          this.selectedSlipForecastId = null;
+          return;
+        }
+        this.slipForecasts = response.data.impacts || {};
+        if (this.selectedSlipForecastId && !this.slipForecasts[this.selectedSlipForecastId]) {
+          this.selectedSlipForecastId = null;
+        }
+      } catch (error) {
+        if (requestId === this.slipForecastRequestId) {
+          this.slipForecastError = "One-day impact could not be checked.";
+          this.selectedSlipForecastId = null;
+        }
+      } finally {
+        if (requestId === this.slipForecastRequestId) this.slipForecastLoading = false;
+      }
+    },
+    isInSidebarWindow(task) {
+      if (!task?.scheduledDate) return true;
+      const scheduled = new Date(task.scheduledDate);
+      if (Number.isNaN(scheduled.getTime())) return true;
+      const windowEnd = new Date();
+      windowEnd.setDate(windowEnd.getDate() + SIDEBAR_WINDOW_DAYS);
+      windowEnd.setHours(23, 59, 59, 999);
+      return scheduled <= windowEnd;
+    },
+    slipForecastFor(task) {
+      return this.slipForecasts[task?._id] || null;
+    },
+    selectedImpactForTask(task) {
+      return this.selectedSlipForecast?.affected.find((impact) => impact.taskId === task?._id) || null;
+    },
+    toggleSlipForecast(task) {
+      this.selectedSlipForecastId = this.selectedSlipForecastId === task._id ? null : task._id;
+    },
+    closeSlipForecast() {
+      const taskId = this.selectedSlipForecastId;
+      this.selectedSlipForecastId = null;
+      this.$nextTick(() => {
+        document.querySelector(`[data-test="slip-impact-chip-${taskId}"]`)?.focus();
+      });
+    },
+    slipForecastAriaLabel(task) {
+      const forecast = this.slipForecastFor(task);
+      if (!forecast) return "";
+      const result = forecast.newlyLateCount
+        ? `${forecast.newlyLateCount} newly missed ${forecast.newlyLateCount === 1 ? "deadline" : "deadlines"}`
+        : "no newly missed deadlines";
+      return `If ${task.title} slips one day: ${result}. Show cascade.`;
+    },
+    deadlineGapLabel(task) {
+      const days = this.getTaskDaysBetweenDeadlineAndSchedule(task);
+      if (days === null) return "No scheduled date";
+      if (days < 0) return `${Math.abs(days)} calendar ${Math.abs(days) === 1 ? "day" : "days"} after its deadline`;
+      if (days === 0) return "Scheduled on its deadline";
+      return `Scheduled ${days} calendar ${days === 1 ? "day" : "days"} before its deadline; this is not spare capacity`;
+    },
+    forecastDateLabel(date) {
+      if (!date) return "";
+      const [year, month, day] = date.split("-").map(Number);
+      return new Intl.DateTimeFormat("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      }).format(new Date(year, month - 1, day));
     },
     async loadCompass() {
       try {
@@ -428,9 +611,7 @@ export default {
       this.calendar.update({ events: eventsToAdd });
     },
     async loadData() {
-      this.loadTasks();
-      this.loadCalendarEvents();
-      this.loadCompass();
+      await Promise.all([this.loadTasks(), this.loadCalendarEvents(), this.loadCompass()]);
     },
     async syncCalendar() {
       const taskDataResponse = await this.$http.get("/api/synccalendar/");
@@ -464,6 +645,7 @@ export default {
           taskID: this.selectedTask?._id,
         });
         this.taskList = response.data.taskList;
+        await this.loadSlipForecasts();
 
         Object.keys(this.input).forEach((i) => (this.input[i] = null));
       } catch (error) {
@@ -494,8 +676,8 @@ export default {
     },
     async scheduleTasks() {
       try {
-        const response = await this.$http.get("api/scheduletasks");
-        this.loadData();
+        await this.$http.get("api/scheduletasks");
+        await this.loadData();
       } catch (error) {
         console.error(error);
       }
@@ -513,7 +695,7 @@ export default {
     applyTaskChanges(taskList) {
       this.taskList = taskList;
       this.closeTaskEditor();
-      this.loadCalendarEvents();
+      Promise.all([this.loadCalendarEvents(), this.loadSlipForecasts()]);
     },
     openFollowUpModal(inputTask) {
       this.taskEditorOpen = false;
@@ -625,21 +807,18 @@ export default {
       if (this.selectedEvent?.tags?.type !== "task-chunk") return null;
       return (this.selectedEvent.end.getTime() - this.selectedEvent.start.getTime()) / 60000;
     },
+    selectedSlipForecast() {
+      return this.slipForecasts[this.selectedSlipForecastId] || null;
+    },
+    selectedSlipForecastTitle() {
+      return this.taskList?.find((task) => task._id === this.selectedSlipForecastId)?.title || "this task";
+    },
     taskGroupedByDate() {
       const groupedTasks = {};
       if (this.taskList) {
         // 60 days of occurrences would bury the list, so the sidebar keeps a shorter
         // window. Backlog and unscheduled tasks have no date, so they are always kept.
-        const windowEnd = new Date();
-        windowEnd.setDate(windowEnd.getDate() + SIDEBAR_WINDOW_DAYS);
-        windowEnd.setHours(23, 59, 59, 999);
-
-        const visibleTasks = this.taskList.filter((task) => {
-          if (!task.scheduledDate) return true;
-          const scheduled = new Date(task.scheduledDate);
-          if (Number.isNaN(scheduled.getTime())) return true;
-          return scheduled <= windowEnd;
-        });
+        const visibleTasks = this.taskList.filter((task) => this.isInSidebarWindow(task));
 
         visibleTasks.forEach((task) => {
           const date = this.getTaskDate(task);
@@ -991,6 +1170,206 @@ export default {
   font-size: 13px;
 }
 
+.forecast-loading {
+  margin: -8px 0 14px;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.forecast-error button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #c4b5fd;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.slip-forecast-panel {
+  position: relative;
+  margin: -8px 0 20px;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(251, 191, 36, 0.38);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 100% 0, rgba(239, 68, 68, 0.16), transparent 160px),
+    rgba(38, 31, 35, 0.96);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.slip-forecast-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.what-if-label {
+  color: #fbbf24;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.slip-forecast-heading h4 {
+  margin: 3px 0 0;
+  color: #f9fafb;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.forecast-close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.12);
+  color: #d1d5db;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.forecast-close:hover,
+.forecast-close:focus-visible {
+  border-color: #fbbf24;
+  outline: none;
+  color: #fef3c7;
+}
+
+.forecast-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 12px 0 8px;
+  color: #d1d5db;
+  font-size: 12px;
+}
+
+.forecast-summary .danger {
+  color: #fca5a5;
+}
+
+.forecast-assumption {
+  margin: 0 0 13px;
+  color: #9ca3af;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.forecast-cascade {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.forecast-cascade li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  min-height: 31px;
+  color: #d1d5db;
+  font-size: 11px;
+}
+
+.forecast-cascade li:not(:last-child)::after {
+  position: absolute;
+  top: 20px;
+  bottom: -11px;
+  left: 4px;
+  width: 2px;
+  background: rgba(251, 191, 36, 0.32);
+  content: "";
+}
+
+.cascade-marker {
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #fbbf24;
+  border-radius: 50%;
+  background: #262026;
+}
+
+.cascade-task {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cascade-dates {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #fcd34d;
+  white-space: nowrap;
+}
+
+.cascade-dates strong {
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.forecast-cascade .newly-late .cascade-marker {
+  border-color: #ef4444;
+  background: #7f1d1d;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.13);
+}
+
+.slip-impact-chip {
+  padding: 4px 7px;
+  border: 1px solid rgba(156, 163, 175, 0.35);
+  border-radius: 999px;
+  background: rgba(107, 114, 128, 0.13);
+  color: #d1d5db;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.slip-impact-chip.risk {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(239, 68, 68, 0.17);
+  color: #fca5a5;
+}
+
+.slip-impact-chip:hover,
+.slip-impact-chip:focus-visible,
+.slip-impact-chip[aria-expanded="true"] {
+  border-color: #fbbf24;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.18);
+}
+
+.task-item.forecast-moved-task {
+  background: rgba(245, 158, 11, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.22);
+}
+
+.task-item.forecast-selected-task {
+  background: rgba(245, 158, 11, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.48);
+}
+
+.task-item.forecast-newly-late-task {
+  background: rgba(239, 68, 68, 0.14);
+  border-left-color: #ef4444;
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.26);
+}
+
 .dependency-icon,
 .recurring-icon {
   margin-right: 6px;
@@ -1148,5 +1527,57 @@ export default {
 .all-day-delete:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 1px;
+}
+
+@media (max-width: 900px) {
+  .page-header-section,
+  .calendar-box {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .header-actions {
+    flex-wrap: wrap;
+  }
+
+  .task-controls {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .task-list {
+    max-height: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .calendar-page {
+    padding: 12px;
+  }
+
+  .action-btn {
+    flex: 1 1 calc(50% - 6px);
+    justify-content: center;
+  }
+
+  .forecast-cascade li {
+    grid-template-columns: 12px minmax(0, 1fr);
+  }
+
+  .cascade-dates {
+    grid-column: 2;
+    white-space: normal;
+  }
+
+  .task-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .task-row-meta {
+    flex-wrap: wrap;
+    margin: 7px 0 0;
+  }
 }
 </style>

@@ -9,7 +9,10 @@ const {
     generateTaskEvents,
 } = require('../controllers/taskController');
 const { validateRecurrence, normaliseRecurrence, expandRecurrences } = require('../controllers/recurrence');
-const { SCHEDULING_HORIZON_DAYS } = require('../controllers/scheduling');
+const {
+    SCHEDULING_HORIZON_DAYS,
+    forecastOneDaySlips,
+} = require('../controllers/scheduling');
 const { parseDateOnly } = require('../utils/temporal');
 
 function parseTaskDate(value, label, { required = false } = {}) {
@@ -514,6 +517,22 @@ function createTaskRoutes(config, authenticateToken) {
         } catch (error) {
             console.error(error);
             return res.json({ success: false });
+        }
+    });
+
+    router.post('/forecastTaskSlips', authenticateToken, async (req, res) => {
+        try {
+            const user = await UserDetails.findOne({ username: req.user.id });
+            if (!req.user || !user) {
+                return res.send(returnFailure('Not logged in'));
+            }
+
+            const result = await forecastOneDaySlips(user, req.body?.taskIds);
+            if (result.error) return res.send(returnFailure(result.error));
+            return res.json({ success: true, impacts: result.impacts });
+        } catch (error) {
+            console.error(error);
+            return res.send(returnFailure('Task slip forecasts could not be calculated'));
         }
     });
 

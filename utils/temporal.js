@@ -200,6 +200,22 @@ function taskEligibleInstant(value, timeZone) {
     return dateOnly ? startOfDateInZone(dateOnly, timeZone) : null;
 }
 
+function sameWallTimeNextDay(value, timeZone) {
+    const zone = normaliseTimeZone(timeZone);
+    const current = moment(value).tz(zone);
+    if (!current.isValid()) return null;
+
+    const nextDate = addDateOnlyDays(current.format('YYYY-MM-DD'), 1);
+    const wallTime = current.format('HH:mm:ss.SSS');
+    const next = moment.tz(
+        `${nextDate} ${wallTime}`,
+        'YYYY-MM-DD HH:mm:ss.SSS',
+        true,
+        zone
+    );
+    return next.isValid() ? next.toDate() : null;
+}
+
 function legacyWorkingMinutes(user, timeZone) {
     const zone = normaliseTimeZone(timeZone);
     if (!(user.workingStartTime instanceof Date) || Number.isNaN(user.workingStartTime.getTime())) {
@@ -240,5 +256,6 @@ module.exports = {
     localWeekBounds,
     mondayWeekBounds,
     taskEligibleInstant,
+    sameWallTimeNextDay,
     legacyWorkingMinutes,
 };
