@@ -256,7 +256,7 @@
                   type="button"
                   @click="useFollowUpRecommendation"
                 >
-                  Use suggestion
+                  Use this project
                 </button>
               </div>
             </template>
@@ -653,7 +653,7 @@ export default {
       }
       this.followUpRecommendationTimer = setTimeout(
         () => this.loadFollowUpRecommendation(),
-        350
+        1000
       );
     },
     async loadFollowUpRecommendation() {

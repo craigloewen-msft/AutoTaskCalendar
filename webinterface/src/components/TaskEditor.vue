@@ -126,7 +126,7 @@
             >
               <span><strong>Suggested:</strong> {{ recommendationLabel }}</span>
               <button class="btn btn-sm btn-outline-primary" type="button" @click="useRecommendation">
-                Use suggestion
+                Use this project
               </button>
             </div>
           </div>
@@ -362,7 +362,7 @@ export default {
         this.recommendation = null;
         return;
       }
-      this.recommendationTimer = setTimeout(() => this.loadRecommendation(), 350);
+      this.recommendationTimer = setTimeout(() => this.loadRecommendation(), 1000);
     },
     async loadRecommendation() {
       const request = this.recommendationRequest;

@@ -1,6 +1,6 @@
 const { TaskDetails, RoleDetails, GoalDetails, ProjectDetails } = require('../models');
 const { parseDateOnly, addDateOnlyDays, todayInZone } = require('../utils/temporal');
-const { invalidateProjectRecommendation } = require('./projectRecommendation');
+const { clearProjectRecommendationCache } = require('./projectRecommendation');
 
 /**
  * Compass: roles > goals > projects. See docs/COMPASS.md.
@@ -176,9 +176,7 @@ async function buildFields(level, body, user, existing) {
 
 async function createItem(level, body, user) {
     const fields = await buildFields(level, body, user, null);
-    const item = await LEVELS[level].Model.create({ ...fields, userRef: user._id });
-    invalidateProjectRecommendation(user._id);
-    return item;
+    return LEVELS[level].Model.create({ ...fields, userRef: user._id });
 }
 
 async function editItem(level, body, user) {
@@ -187,7 +185,6 @@ async function editItem(level, body, user) {
 
     Object.assign(existing, fields);
     await existing.save();
-    invalidateProjectRecommendation(user._id);
 
     return existing;
 }
@@ -228,7 +225,6 @@ async function deleteItem(level, body, user, cascade = false) {
     }
 
     await doc.deleteOne();
-    invalidateProjectRecommendation(user._id);
 }
 
 // Deleting hierarchy never destroys work: the tasks survive with no project.
@@ -270,7 +266,7 @@ async function setTaskProject(taskId, projectId, user) {
     }
 
     await task.save();
-    invalidateProjectRecommendation(user._id);
+    clearProjectRecommendationCache(user._id);
     return task;
 }
 

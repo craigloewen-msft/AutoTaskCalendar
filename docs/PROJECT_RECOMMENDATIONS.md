@@ -22,17 +22,17 @@ Existing tasks are unaffected. There is no legacy migration and no completion or
 
 ## Recommendation interaction
 
-After meaningful title text is entered, the client waits briefly and calls the recommendation API. A strong result appears beneath the selector:
+After the user stops typing a meaningful title for one second, the client automatically calls the recommendation API. A result appears beneath the selector:
 
 ```text
 Project*
 [ Choose a project or Unassigned…                         ▾ ]
-Suggested: Engineer → Ship v2 → Migration plan   [Use suggestion]
+Suggested: Engineer → Ship v2 → Migration plan   [Use this project]
 ```
 
-The suggestion is not a default value. The user must click **Use suggestion** or make a manual selection. Manual selection cancels outstanding recommendation work, and stale responses cannot overwrite it.
+The suggestion is not a default value. The user must click **Use this project** or make a manual selection. Manual selection cancels outstanding recommendation work, and stale responses cannot overwrite it.
 
-Weak, tied, failed, or unavailable recommendations are omitted. Manual project selection and Unassigned remain usable even when recommendation fails.
+Strong text matches use the sparse model. When text evidence is weak, the service offers the most frequently used available project, breaking ties by recent use, as a `likely` fallback so the helper normally remains useful. A genuinely ambiguous strong match, unavailable history, or recommendation failure produces no suggestion. Manual project selection and Unassigned always remain usable.
 
 ## API
 
@@ -87,7 +87,7 @@ The score combines:
 2. a centroid summarizing the vocabulary of each project; and
 3. low-weight project, goal, and role metadata for cold start.
 
-The model recommends only when the best score clears an absolute threshold and is clearly ahead of the runner-up. Otherwise it abstains.
+A strong text result must clear an absolute threshold and lead the runner-up. Weak text falls back to the most frequently used available project, breaking ties by recent use; a strong tie still abstains instead of inventing a winner.
 
 ### Training rules
 
@@ -113,7 +113,7 @@ The process-wide cache:
 - evicts least-recently-used models to remain under the cap;
 - evicts entries idle for 30 minutes;
 - coalesces concurrent cold builds for one user;
-- uses a generation counter so invalidation during a build cannot publish stale data.
+- uses a generation counter so a cache clear during a build cannot publish stale data.
 
 Each model contains a 128 KB IDF array plus bounded sparse centroids and examples. Normal accounts should remain around 0.5–2 MB including JavaScript overhead; conservative estimated sizes drive the process-wide cap.
 
@@ -121,17 +121,18 @@ After restart the cache is empty. The first recommendation for an account rebuil
 
 Derived model blobs are deliberately not persisted in v1. Persistence would duplicate source data and require model-version and stale-cache handling. Add versioned Mongo snapshots only if production measurement shows that cold builds repeatedly exceed the latency target; snapshots must remain optional caches, never authoritative data.
 
-## Invalidation
+## Clearing stale cached models
 
-Invalidate only the affected user's model after mutations that can alter recommendations:
+Clear only the affected user's model after mutations that alter recommendation training data:
 
 - task create, edit, delete, or reassignment;
-- standalone or derived follow-up creation;
-- Compass role, goal, or project create/edit/delete.
+- standalone or derived follow-up creation.
 
-Completion does not change recommendation text or assignment and does not require invalidation.
+Completion does not change recommendation text or assignment and needs no cache clear.
 
-If a new mutation path changes task text, `projectRef`, or Compass metadata, call `invalidateProjectRecommendation(user._id)` after its database write succeeds.
+`clearProjectRecommendationCache(user._id)` removes only that user's disposable cached model after task text or assignment data changes. It increments a generation counter so an older build already in flight cannot repopulate stale data. The next request lazily rebuilds from MongoDB; no learned task data is deleted.
+
+Call it once, after all writes in a task create/edit/delete or reassignment operation succeed. Compass hierarchy metadata changes do not clear the cache; its existing behavior remains independent of this feature.
 
 ## Performance and failure behavior
 
@@ -147,10 +148,10 @@ Use focused synthetic performance tests to catch large regressions, but do not m
 
 - rare-name and broader-vocabulary learning;
 - metadata cold start;
-- weak and tied abstention;
+- metadata and recent-history fallbacks plus tied abstention;
 - null-task exclusion and recurring-series deduplication;
 - tenant isolation and malformed candidates;
-- cache invalidation;
+- stale-cache clearing after task mutations;
 - deterministic input and memory bounds.
 
 Calendar UI coverage verifies the explicit new-task choice, Unassigned persistence, recommendation confirmation, standalone follow-up choice, and existing edit/completion behavior. Weekly Plan remains covered by its project-scoped creation specs.

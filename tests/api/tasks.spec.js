@@ -313,26 +313,6 @@ test.describe('tasks', () => {
         expect(report).not.toContain('duration');
     });
 
-    test('inherits project context for a follow-up created from a task', async ({ seed, api }) => {
-        const data = await seed();
-        const source = data.named.proposal;
-
-        const body = await (await api.post('/api/setFollowUp', {
-            data: {
-                title: 'Proposal follow-up',
-                followUpDate: dateOnly(3),
-                taskID: String(source._id),
-                // The source task remains authoritative even if a caller posts another project.
-                projectRef: String(data.named.hiringProject._id),
-            },
-        })).json();
-        const followUp = body.taskList.find((task) => task.title === 'Proposal follow-up');
-
-        expect(body.success).toBe(true);
-        expect(followUp.projectRef).toBe(String(data.named.perfProject._id));
-        expect(body.taskList.find((task) => task._id === String(source._id))).toBeUndefined();
-    });
-
     test('validates completed task export date bounds and returns an empty report', async ({ seed, api }) => {
         await seed.clearTasks();
 

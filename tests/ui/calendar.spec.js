@@ -225,13 +225,13 @@ test.describe('calendar page', () => {
         await page.selectOption('#task-project', { label: 'Unassigned' });
         await page.getByRole('button', { name: 'Add task', exact: true }).click();
 
+        const createdTask = page.locator('.task-item', { hasText: createdTitle }).first();
+        await expect(createdTask).toBeVisible();
         const saved = await withDb(() => TaskDetails.findOne({
             userRef: data.primary.user._id,
             title: createdTitle,
         }));
         expect(saved.projectRef).toBeNull();
-        const createdTask = page.locator('.task-item', { hasText: createdTitle }).first();
-        await expect(createdTask).toBeVisible();
         await page.click('button:has-text("Schedule Tasks")');
         await expect(page.locator('.calendar_default_event').first()).toBeVisible();
 
@@ -269,7 +269,7 @@ test.describe('calendar page', () => {
             'Choose a project or Unassigned…'
         );
 
-        await suggestion.getByRole('button', { name: 'Use suggestion' }).click();
+        await suggestion.getByRole('button', { name: 'Use this project' }).click();
         await expect(page.locator('#task-project')).toHaveValue(String(data.named.migrationProject._id));
     });
 

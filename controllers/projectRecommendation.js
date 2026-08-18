@@ -305,14 +305,17 @@ async function buildModel(userId) {
     const projectModels = new Map(projects.map((project) => [String(project._id), {
         projectId: String(project._id),
         historyCount: 0,
+        recentHistoryRank: Number.POSITIVE_INFINITY,
         vectors: [],
         centroid: null,
     }]));
 
-    for (const task of taskSamples) {
+    for (let rank = 0; rank < taskSamples.length; rank++) {
+        const task = taskSamples[rank];
         const project = projectModels.get(task.projectId);
         if (!project) continue;
         project.historyCount++;
+        project.recentHistoryRank = Math.min(project.recentHistoryRank, rank);
         project.vectors.push(sparseVector(textFeatures(task.title, task.notes), idf));
     }
 
@@ -426,6 +429,17 @@ function scoreProjects(model, queryVector, candidates) {
     return scored.sort((left, right) => right.score - left.score || left.projectId.localeCompare(right.projectId));
 }
 
+function historyFallback(model, candidates) {
+    return [...candidates]
+        .map((projectId) => model.projects.get(projectId))
+        .filter((project) => project?.historyCount)
+        .sort((left, right) => {
+            return right.historyCount - left.historyCount
+                || left.recentHistoryRank - right.recentHistoryRank
+                || left.projectId.localeCompare(right.projectId);
+        })[0] || null;
+}
+
 async function recommendTaskProject(user, input = {}) {
     const title = boundedText(input.title, MAX_TITLE_LENGTH).trim();
     if (title.length < 2) return null;
@@ -446,14 +460,25 @@ async function recommendTaskProject(user, input = {}) {
     const scored = scoreProjects(model, queryVector, candidates);
     const best = scored[0];
     const runnerUp = scored[1];
-    if (!best || best.score < MIN_SCORE) return null;
-    if (runnerUp && best.score - runnerUp.score < MIN_MARGIN) return null;
+    const ambiguous = best?.score >= MIN_SCORE
+        && runnerUp
+        && best.score - runnerUp.score < MIN_MARGIN;
+    if (ambiguous) return null;
 
-    return {
-        projectId: best.projectId,
-        confidence: 'high',
-        evidenceCount: best.evidenceCount,
-    };
+    if (best?.score >= MIN_SCORE) {
+        return {
+            projectId: best.projectId,
+            confidence: 'high',
+            evidenceCount: best.evidenceCount,
+        };
+    }
+
+    const fallback = historyFallback(model, candidates);
+    return fallback ? {
+        projectId: fallback.projectId,
+        confidence: 'likely',
+        evidenceCount: fallback.historyCount,
+    } : null;
 }
 
 function pruneGenerations() {
@@ -465,7 +490,13 @@ function pruneGenerations() {
     }
 }
 
-function invalidateProjectRecommendation(userId) {
+/**
+ * Drop one user's disposable model after its source task data changes.
+ *
+ * The generation counter also prevents an in-flight old build from being cached. The next
+ * recommendation lazily rebuilds from MongoDB, so this does not delete learned data.
+ */
+function clearProjectRecommendationCache(userId) {
     if (!userId) return;
     const userKey = String(userId);
     generations.set(userKey, (generations.get(userKey) || 0) + 1);
@@ -475,7 +506,7 @@ function invalidateProjectRecommendation(userId) {
 
 module.exports = {
     recommendTaskProject,
-    invalidateProjectRecommendation,
+    clearProjectRecommendationCache,
     // Export pure primitives for deterministic focused tests.
     _internals: {
         FEATURE_SPACE,

@@ -14,7 +14,7 @@ const { parseDateOnly } = require('../utils/temporal');
 const { createCompletedTaskReport } = require('../controllers/completedTaskExport');
 const {
     recommendTaskProject,
-    invalidateProjectRecommendation,
+    clearProjectRecommendationCache,
 } = require('../controllers/projectRecommendation');
 
 function parseTaskDate(value, label, { required = false } = {}) {
@@ -173,15 +173,13 @@ function createTaskRoutes(config, authenticateSession) {
                 projectRef: resolvedProject,
             });
             await task.save();
-            invalidateProjectRecommendation(user._id);
 
             // Materialise now, so a new series shows its occurrences without waiting for
             // the user to press "Schedule Tasks".
             if (normalisedRecurrence || repeatValue) {
                 await expandRecurrences(user, SCHEDULING_HORIZON_DAYS);
             }
-            // A request may have rebuilt between the initial save and series expansion.
-            invalidateProjectRecommendation(user._id);
+            clearProjectRecommendationCache(user._id);
 
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.username);
@@ -308,7 +306,6 @@ function createTaskRoutes(config, authenticateSession) {
             if (!actualTask) {
                 return res.send(returnFailure('Task not found'));
             }
-            invalidateProjectRecommendation(user._id);
 
             // Refresh every series edit immediately. Expansion also synchronizes authored
             // template fields onto pending occurrences, even when the rule was not posted.
@@ -322,8 +319,7 @@ function createTaskRoutes(config, authenticateSession) {
                     synchronizeSeriesId: targetId,
                 });
             }
-            // Clear any model rebuilt while pending occurrences were being synchronized.
-            invalidateProjectRecommendation(user._id);
+            clearProjectRecommendationCache(user._id);
 
             return res.json({ success: true });
         } catch (error) {
@@ -367,7 +363,7 @@ function createTaskRoutes(config, authenticateSession) {
             }
 
 
-            invalidateProjectRecommendation(user._id);
+            clearProjectRecommendationCache(user._id);
 
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.username);
@@ -583,7 +579,7 @@ function createTaskRoutes(config, authenticateSession) {
                 projectRef: followUpProjectRef,
             });
             await task.save();
-            invalidateProjectRecommendation(user._id);
+            clearProjectRecommendationCache(user._id);
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.username);
 

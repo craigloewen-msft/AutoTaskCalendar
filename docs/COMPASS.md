@@ -18,14 +18,12 @@ nothing in the product would tell you.
 
 Two rules keep the ladder from becoming overbearing:
 
-**1. Tasks attach to projects only.** Never to a goal, never to a role. One dropdown on the
-task modal is the entire daily cost. Everything above is derived by walking the chain. If you
-want a task under a bare goal, make a one-line project — they are free.
+**1. Tasks attach to projects only.** Never to a goal, never to a role. One optional
+dropdown on the task modal is the entire daily cost. Everything above is derived by walking
+the chain. If you want a task under a bare goal, make a one-line project — they are free.
 
-**2. Every new UI task gets a deliberate choice.** Choose a project or **Unassigned**. The
-latter remains `projectRef: null`, so old tasks and API callers stay compatible; only the
-creation form requires the user to make the choice. The local recommender makes likely
-projects one click away. See [PROJECT_RECOMMENDATIONS.md](PROJECT_RECOMMENDATIONS.md).
+**2. Nothing is ever required.** A task with no project behaves exactly as tasks always
+have. The unaligned count is a place to bulk-assign from, not a nag.
 
 ### Status is derived from dates, never stored
 
@@ -306,21 +304,19 @@ a branch for any caller that genuinely wants that.
 
 ### On the Calendar page
 
-The shared task editor carries a **Project** select, grouped by the ladder above each
-project. A new task must choose a project or Unassigned; an existing task edits its saved
-value normally. Calendar and Weekly Plan use this same modern editor for task editing:
+The shared task editor carries a **Project (optional)** select, grouped by the ladder above
+each project. Calendar and Weekly Plan use this same modern editor for both task creation and
+editing:
 
 ```
-Project*                [ Choose a project or Unassigned… ▾ ]
-  Unassigned
+Project (optional)     [ ─ none ─                  ▾ ]
   Engineer → Ship v2      ▸ Migration plan
                           ▸ Perf pass
   Father   → Be present   ▸ Weekend adventures
 ```
 
-A strong local recommendation appears as a compact **Use suggestion** action without
-silently selecting it. `projectRef` is sent on both create and edit. Compass data is loaded
-alongside tasks and events; recommendation failure never blocks manual choice.
+`projectRef` is sent on both create and edit. Compass data is loaded alongside tasks and
+events, and a failure there is logged but never blocks the calendar.
 
 ### On the Weekly Plan page
 

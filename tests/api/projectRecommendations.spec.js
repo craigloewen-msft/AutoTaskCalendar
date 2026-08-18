@@ -3,7 +3,7 @@ const { test, expect, withDb } = require('../fixtures');
 const { TaskDetails, ProjectDetails } = require('../../models');
 const { parseDateOnly } = require('../../utils/temporal');
 const {
-    invalidateProjectRecommendation,
+    clearProjectRecommendationCache,
     _internals,
 } = require('../../controllers/projectRecommendation');
 
@@ -55,7 +55,7 @@ test.describe('project recommendations', () => {
         expect(vocabulary.recommendation.projectId).toBe(String(migration));
     });
 
-    test('uses project metadata for cold start and abstains on weak or tied evidence', async ({
+    test('uses metadata and history fallbacks while abstaining on tied evidence', async ({
         seed,
         api,
     }) => {
@@ -75,8 +75,9 @@ test.describe('project recommendations', () => {
         );
         expect(coldStart.recommendation.projectId).toBe(String(coldProject._id));
 
-        const weak = await recommend(api, 'zzqv wxjk', [coldProject._id, competitor]);
-        expect(weak.recommendation).toBeNull();
+        const fallback = await recommend(api, 'zzqv wxjk', [coldProject._id, competitor]);
+        expect(fallback.recommendation.projectId).toBe(String(competitor));
+        expect(fallback.recommendation.confidence).toBe('likely');
 
         const twins = await withDb(async () => {
             const projects = await ProjectDetails.create([
@@ -99,7 +100,7 @@ test.describe('project recommendations', () => {
             ]);
             return projects;
         });
-        invalidateProjectRecommendation(data.primary.user._id);
+        clearProjectRecommendationCache(data.primary.user._id);
         const tied = await recommend(api, 'Discuss Ambrosia with Rowan', twins.map((item) => item._id));
         expect(tied.recommendation).toBeNull();
     });
@@ -149,7 +150,7 @@ test.describe('project recommendations', () => {
         expect(foreignOnly.recommendation).toBeNull();
     });
 
-    test('invalidates a warm model after a relevant task mutation', async ({ seed, api }) => {
+    test('clears a warm model after a relevant task mutation', async ({ seed, api }) => {
         const data = await seed();
         const projectId = data.named.emptyProject._id;
         const phrase = 'Flibbertigibbet xylophone rendezvous';
