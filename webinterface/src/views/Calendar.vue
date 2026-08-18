@@ -136,7 +136,7 @@
                     <button
                       v-if="slipForecastFor(task)"
                       class="slip-impact-chip"
-                      :class="{ risk: slipForecastFor(task).newlyLateCount > 0 }"
+                      :class="{ risk: slipForecastFor(task).newlyLateCount > 0, safe: !slipForecastFor(task).newlyLateCount }"
                       type="button"
                       :data-test="`slip-impact-chip-${task._id}`"
                       :aria-expanded="selectedSlipForecastId === task._id"
@@ -322,6 +322,7 @@ export default {
                 id: response.data.event._id,
                 text: modal.result,
               });
+              this.clearSlipForecasts();
             } else {
               console.error(response.data.log);
             }
@@ -344,6 +345,8 @@ export default {
               });
               if (!response.data.success) {
                 console.error(response.data.log);
+              } else {
+                this.clearSlipForecasts();
               }
             } catch (error) {
               console.error(error);
@@ -359,6 +362,8 @@ export default {
             });
             if (!response.data.success) {
               console.error(response.data.log);
+            } else {
+              this.clearSlipForecasts();
             }
           } catch (error) {
             console.error(error);
@@ -383,6 +388,8 @@ export default {
             });
             if (!response.data.success) {
               console.error(response.data.log);
+            } else {
+              this.clearSlipForecasts();
             }
           } catch (error) {
             console.error(error);
@@ -429,6 +436,7 @@ export default {
           return;
         }
         this.allDayEvents = this.allDayEvents.filter(({ _id }) => _id !== event._id);
+        this.clearSlipForecasts();
       } catch (error) {
         console.error(error);
       }
@@ -474,15 +482,21 @@ export default {
       this.taskList = taskDataResponse.data.taskList;
       await this.loadSlipForecasts();
     },
+    clearSlipForecasts() {
+      this.slipForecastRequestId++;
+      this.slipForecasts = {};
+      this.slipForecastLoading = false;
+      this.slipForecastError = "";
+      this.selectedSlipForecastId = null;
+    },
     async loadSlipForecasts() {
-      const taskIds = (this.taskList || [])
-        .filter((task) => !task.isBacklog && task.scheduledDate && this.isInSidebarWindow(task))
-        .slice(0, 100)
-        .map((task) => task._id);
+      const hasScheduledTasks = (this.taskList || []).some((task) => {
+        return !task.isBacklog && task.scheduledDate && this.isInSidebarWindow(task);
+      });
       const requestId = ++this.slipForecastRequestId;
       this.slipForecasts = {};
       this.slipForecastError = "";
-      if (!taskIds.length) {
+      if (!hasScheduledTasks) {
         this.slipForecastLoading = false;
         this.selectedSlipForecastId = null;
         return;
@@ -490,7 +504,7 @@ export default {
 
       this.slipForecastLoading = true;
       try {
-        const response = await this.$http.post("/api/forecastTaskSlips", { taskIds });
+        const response = await this.$http.get("/api/taskSlipForecasts");
         if (requestId !== this.slipForecastRequestId) return;
         if (!response.data.success) {
           this.slipForecastError = response.data.log || "One-day impact could not be checked.";
@@ -614,7 +628,8 @@ export default {
       await Promise.all([this.loadTasks(), this.loadCalendarEvents(), this.loadCompass()]);
     },
     async syncCalendar() {
-      const taskDataResponse = await this.$http.get("/api/synccalendar/");
+      await this.$http.get("/api/synccalendar/");
+      this.clearSlipForecasts();
       this.loadCalendarEvents();
     },
     async createFollowUp(bvModalEvent) {
@@ -1344,6 +1359,20 @@ export default {
   border-color: rgba(248, 113, 113, 0.55);
   background: rgba(239, 68, 68, 0.17);
   color: #fca5a5;
+}
+
+.slip-impact-chip.safe {
+  border-color: transparent;
+  background: transparent;
+  color: #7d8590;
+  font-weight: 500;
+  opacity: 0.62;
+}
+
+.task-item:hover .slip-impact-chip.safe,
+.slip-impact-chip.safe:focus-visible,
+.slip-impact-chip.safe[aria-expanded="true"] {
+  opacity: 1;
 }
 
 .slip-impact-chip:hover,

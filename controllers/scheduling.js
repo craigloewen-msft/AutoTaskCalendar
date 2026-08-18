@@ -1,7 +1,6 @@
 'use strict';
 
-const mongoose = require('mongoose');
-const { TaskDetails, EventDetails } = require('../models');
+const { TaskDetails, EventDetails, TaskSlipForecastDetails } = require('../models');
 const {
     DEFAULT_WHEN_UNSCHEDULABLE_BEHAVIOR,
     expandRecurrences,
@@ -25,6 +24,7 @@ const {
 } = require('./schedulePlanner');
 
 const SCHEDULING_HORIZON_DAYS = 60;
+const FORECAST_WINDOW_DAYS = 14;
 const MAX_FORECAST_TASKS = 100;
 
 function incompleteTaskFilter(userId) {
@@ -122,7 +122,10 @@ async function generateTaskEvents(user) {
 
     await expandRecurrences(user, SCHEDULING_HORIZON_DAYS);
     await Promise.all([
-        TaskDetails.updateMany(incompleteTaskFilter(user._id), { $set: { scheduledDate: null } }),
+        TaskDetails.updateMany(incompleteTaskFilter(user._id), {
+            $set: { scheduledDate: null },
+        }),
+        TaskSlipForecastDetails.deleteMany({ userRef: user._id }),
         EventDetails.deleteMany({
             userRef: user._id,
             type: { $in: ['task', 'task-chunk'] },
@@ -138,6 +141,7 @@ async function generateTaskEvents(user) {
         console.error('Task scheduling loop limit reached. Remaining tasks:', plan.unscheduledTaskIds.length);
     }
     await persistPlan(plan, user);
+    await cacheOneDaySlipForecasts(user);
 }
 
 function placementSummary(events) {
@@ -196,19 +200,10 @@ function yieldToEventLoop() {
     return new Promise((resolve) => setImmediate(resolve));
 }
 
-async function forecastOneDaySlips(user, requestedTaskIds) {
-    if (!Array.isArray(requestedTaskIds) || !requestedTaskIds.length) {
-        return { error: 'taskIds must be a non-empty array' };
-    }
-    if (requestedTaskIds.length > MAX_FORECAST_TASKS) {
-        return { error: `Forecasts are limited to ${MAX_FORECAST_TASKS} tasks at a time` };
-    }
-
+async function calculateOneDaySlipForecasts(user, requestedTaskIds) {
+    if (!requestedTaskIds.length) return { impacts: {} };
     const ids = requestedTaskIds.map(String);
-    if (new Set(ids).size !== ids.length
-        || ids.some((id) => !mongoose.isObjectIdOrHexString(id))) {
-        return { error: 'taskIds must contain unique task ids' };
-    }
+    const requestedIds = new Set(ids);
 
     const [tasks, baselineEvents] = await Promise.all([
         loadSchedulingTasks(user._id),
@@ -218,12 +213,7 @@ async function forecastOneDaySlips(user, requestedTaskIds) {
         }).sort({ startDate: 1 }).lean(),
     ]);
     const taskById = new Map(tasks.map((task) => [task._id.toString(), task]));
-    if (ids.some((id) => !taskById.has(id))) return { error: 'Task not found' };
-
     const baselineByTask = placementSummary(baselineEvents);
-    if (ids.some((id) => !baselineByTask.has(id))) {
-        return { error: 'Forecasts require a generated schedule' };
-    }
 
     const firstStart = baselineEvents[0]?.startDate || new Date();
     const lastStart = baselineEvents[baselineEvents.length - 1]?.startDate || firstStart;
@@ -241,13 +231,18 @@ async function forecastOneDaySlips(user, requestedTaskIds) {
         const selectedStart = baselineByTask.get(selectedId).first;
         const forecastStart = sameWallTimeNextDay(selectedStart, user.timeZone);
         const suffix = tasks.filter((task) => {
-            const baseline = baselineByTask.get(task._id.toString());
-            return baseline && baseline.first.getTime() >= selectedStart.getTime();
+            const id = task._id.toString();
+            const baseline = baselineByTask.get(id);
+            return requestedIds.has(id)
+                && baseline
+                && baseline.first.getTime() >= selectedStart.getTime();
         });
         const suffixIds = new Set(suffix.map((task) => task._id.toString()));
         const fixedPrefixEvents = baselineEvents.filter((event) => {
-            const id = event.taskRef?.toString();
-            return id && !suffixIds.has(id) && event.endDate >= forecastStart;
+            const baseline = baselineByTask.get(event.taskRef?.toString());
+            return baseline
+                && baseline.first.getTime() < selectedStart.getTime()
+                && event.endDate >= forecastStart;
         });
         const relevantConflicts = [
             ...conflicts.filter((event) => event.endDate >= forecastStart),
@@ -285,9 +280,53 @@ async function forecastOneDaySlips(user, requestedTaskIds) {
     return { impacts };
 }
 
+async function cacheOneDaySlipForecasts(user, now = new Date()) {
+    const windowEnd = zonedDateTime(
+        addDateOnlyDays(dateOnlyInZone(now, user.timeZone), FORECAST_WINDOW_DAYS + 1),
+        0,
+        user.timeZone
+    );
+    const candidates = await TaskDetails.find({
+        ...incompleteTaskFilter(user._id),
+        $and: [
+            { scheduledDate: { $ne: null, $lt: windowEnd } },
+            { $or: [{ isBacklog: false }, { isBacklog: null }] },
+        ],
+    }).sort({ scheduledDate: 1 }).limit(MAX_FORECAST_TASKS);
+    const ids = candidates.map((task) => task._id.toString());
+    const { impacts } = await calculateOneDaySlipForecasts(user, ids);
+    const calculatedAt = new Date();
+    if (ids.length) {
+        await TaskSlipForecastDetails.insertMany(ids.map((taskId) => ({
+            selectedTaskRef: taskId,
+            userRef: user._id,
+            movedCount: impacts[taskId].movedCount,
+            newlyLateCount: impacts[taskId].newlyLateCount,
+            affected: impacts[taskId].affected,
+            calculatedAt,
+        })));
+    }
+    return impacts;
+}
+
+async function getCachedOneDaySlipForecasts(user) {
+    const forecasts = await TaskSlipForecastDetails.find({
+        userRef: user._id,
+    }).select('-_id selectedTaskRef movedCount newlyLateCount affected calculatedAt').lean();
+    return Object.fromEntries(forecasts.map((forecast) => [
+        forecast.selectedTaskRef.toString(),
+        forecast,
+    ]));
+}
+
+async function invalidateOneDaySlipForecasts(userId) {
+    await TaskSlipForecastDetails.deleteMany({ userRef: userId });
+}
+
 module.exports = {
     generateTaskEvents,
-    forecastOneDaySlips,
+    getCachedOneDaySlipForecasts,
+    invalidateOneDaySlipForecasts,
     SCHEDULING_HORIZON_DAYS,
     MAX_FORECAST_TASKS,
     areDependenciesMet,

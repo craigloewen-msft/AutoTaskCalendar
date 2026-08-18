@@ -1,5 +1,10 @@
 const { test, expect, withDb } = require('../fixtures');
-const { EventDetails, TaskDetails, UserDetails } = require('../../models');
+const {
+    EventDetails,
+    TaskDetails,
+    TaskSlipForecastDetails,
+    UserDetails,
+} = require('../../models');
 const {
     addDateOnlyDays,
     mondayWeekBounds,
@@ -48,6 +53,8 @@ test.describe('calendar page', () => {
         const monday = week.nextStartDate;
         const friday = addDateOnlyDays(monday, 4);
         const followingMonday = addDateOnlyDays(monday, 7);
+        const bufferedTuesday = addDateOnlyDays(monday, 8);
+        const bufferedFriday = addDateOnlyDays(monday, 11);
 
         const tasks = await withDb(async () => {
             await Promise.all([
@@ -62,19 +69,31 @@ test.describe('calendar page', () => {
                     },
                 }),
             ]);
-            return TaskDetails.insertMany(Array.from({ length: 10 }, (_, index) => ({
+            const common = {
+                completed: false,
+                isBacklog: false,
+                breakUpTask: false,
+                dependsOn: [],
+                projectRef: data.named.migrationProject._id,
+                userRef: data.primary.user._id,
+            };
+            const launchTasks = Array.from({ length: 10 }, (_, index) => ({
+                ...common,
                 title: `Friday launch ${String(index + 1).padStart(2, '0')}`,
                 duration: 4 * 60,
                 startDate: parseDateOnly(monday).date,
                 dueDate: parseDateOnly(friday).date,
-                completed: false,
-                isBacklog: false,
-                breakUpTask: false,
                 priority: index + 1,
-                dependsOn: [],
-                projectRef: data.named.migrationProject._id,
-                userRef: data.primary.user._id,
-            })));
+            }));
+            const bufferedTasks = Array.from({ length: 2 }, (_, index) => ({
+                ...common,
+                title: `Buffered follow-up ${String(index + 1).padStart(2, '0')}`,
+                duration: 60,
+                startDate: parseDateOnly(bufferedTuesday).date,
+                dueDate: parseDateOnly(bufferedFriday).date,
+                priority: 100 + index,
+            }));
+            return TaskDetails.insertMany([...launchTasks, ...bufferedTasks]);
         });
 
         await page.setViewportSize({ width: 1440, height: 1600 });
@@ -85,12 +104,26 @@ test.describe('calendar page', () => {
         await expect(overview).toContainText('40h due this week');
         await expect(page.locator(`[data-test="week-tasks-${data.named.migrationProject._id}"] li`)).toHaveCount(10);
 
+        const forecastRequestMethods = [];
+        page.on('request', (request) => {
+            if (request.url().includes('/api/taskSlipForecasts')) {
+                forecastRequestMethods.push(request.method());
+            }
+        });
+
         await page.goto('/#/calendar');
         await page.getByRole('button', { name: 'Schedule tasks' }).click();
 
-        const firstTask = tasks[0];
+        const launchTasks = tasks.slice(0, 10);
+        const bufferedTasks = tasks.slice(10);
+        const firstTask = launchTasks[0];
         const chip = page.locator(`[data-test="slip-impact-chip-${firstTask._id}"]`);
         await expect(chip).toHaveText('+1 day → 2 late');
+        for (const task of bufferedTasks) {
+            const safeChip = page.locator(`[data-test="slip-impact-chip-${task._id}"]`);
+            await expect(safeChip).toHaveText('+1 day → safe');
+            await expect(safeChip).toHaveClass(/safe/);
+        }
         const baselineRows = page.locator('.task-controls');
         await testInfo.attach('one-day-slip-at-a-glance', {
             body: await baselineRows.screenshot(),
@@ -105,16 +138,26 @@ test.describe('calendar page', () => {
             return {
                 tasks: (await TaskDetails.find({ userRef: data.primary.user._id }).sort({ priority: 1 }))
                     .map((task) => `${task._id}:${task.scheduledDate?.toISOString()}`),
+                forecasts: (await TaskSlipForecastDetails.find({
+                    userRef: data.primary.user._id,
+                }).sort({ selectedTaskRef: 1 })).map(
+                    (forecast) => `${forecast.selectedTaskRef}:${forecast.calculatedAt.toISOString()}`
+                ),
                 events: taskEvents.map(
                     (event) => `${event._id}:${event.taskRef}:${event.startDate.toISOString()}:${event.endDate.toISOString()}`
                 ),
                 eventDates: taskEvents.map((event) => event.startDate.toISOString().slice(0, 10)),
             };
         });
-        expect(before.events).toHaveLength(10);
-        expect(before.eventDates).toEqual(Array.from({ length: 5 }, (_, index) => {
-            return [addDateOnlyDays(monday, index), addDateOnlyDays(monday, index)];
-        }).flat());
+        expect(before.events).toHaveLength(12);
+        expect(before.forecasts).toHaveLength(12);
+        expect(before.eventDates).toEqual([
+            ...Array.from({ length: 5 }, (_, index) => {
+                return [addDateOnlyDays(monday, index), addDateOnlyDays(monday, index)];
+            }).flat(),
+            bufferedTuesday,
+            bufferedTuesday,
+        ]);
 
         await chip.click();
         const panel = page.locator('[data-test=slip-forecast-panel]');
@@ -126,7 +169,7 @@ test.describe('calendar page', () => {
         const impacts = panel.locator('[data-test^=slip-impact-]');
         await expect(impacts).toHaveCount(10);
 
-        for (const task of tasks.slice(8)) {
+        for (const task of launchTasks.slice(8)) {
             const impact = panel.locator(`[data-test="slip-impact-${task._id}"]`);
             await expect(impact).toHaveAttribute('data-baseline-date', friday);
             await expect(impact).toHaveAttribute('data-forecast-date', followingMonday);
@@ -138,10 +181,22 @@ test.describe('calendar page', () => {
         await expect(page.locator('.task-item', { hasText: firstTask.title })).toHaveClass(
             /forecast-selected-task/
         );
+        for (const task of bufferedTasks) {
+            await expect(panel).not.toContainText(task.title);
+            await expect(page.locator('.task-item', { hasText: task.title })).not.toHaveClass(
+                /forecast-moved-task/
+            );
+        }
         await testInfo.attach('one-day-slip-expanded-cascade', {
             body: await panel.screenshot(),
             contentType: 'image/png',
         });
+
+        await page.reload();
+        await expect(page.locator(`[data-test="slip-impact-chip-${firstTask._id}"]`)).toHaveText(
+            '+1 day → 2 late'
+        );
+        expect(forecastRequestMethods).toEqual(['GET', 'GET']);
 
         const after = await withDb(async () => {
             const taskEvents = await EventDetails.find({
@@ -151,6 +206,11 @@ test.describe('calendar page', () => {
             return {
                 tasks: (await TaskDetails.find({ userRef: data.primary.user._id }).sort({ priority: 1 }))
                     .map((task) => `${task._id}:${task.scheduledDate?.toISOString()}`),
+                forecasts: (await TaskSlipForecastDetails.find({
+                    userRef: data.primary.user._id,
+                }).sort({ selectedTaskRef: 1 })).map(
+                    (forecast) => `${forecast.selectedTaskRef}:${forecast.calculatedAt.toISOString()}`
+                ),
                 events: taskEvents.map(
                     (event) => `${event._id}:${event.taskRef}:${event.startDate.toISOString()}:${event.endDate.toISOString()}`
                 ),

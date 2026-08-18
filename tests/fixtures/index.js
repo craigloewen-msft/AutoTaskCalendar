@@ -28,7 +28,12 @@ const base = require('@playwright/test');
 const { createHash } = require('crypto');
 
 const { runSeed, wipeNamespace } = require('../../seed');
-const { TaskDetails, EventDetails, UserDetails } = require('../../models');
+const {
+    TaskDetails,
+    EventDetails,
+    TaskSlipForecastDetails,
+    UserDetails,
+} = require('../../models');
 const instance = require('../../instance');
 const { withDb } = require('./db');
 
@@ -113,6 +118,7 @@ const test = base.test.extend({
             await withDb(async () => {
                 await TaskDetails.deleteMany({ userRef: userId });
                 await EventDetails.deleteMany({ userRef: userId });
+                await TaskSlipForecastDetails.deleteMany({ userRef: userId });
             });
 
             return result;

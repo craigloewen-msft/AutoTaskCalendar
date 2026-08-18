@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const passport = require('passport');
 const { UserDetails } = require('../models');
 const { returnFailure, returnBasicUserInfo } = require('../utils/helpers');
+const { invalidateOneDaySlipForecasts } = require('../controllers/scheduling');
 const {
     TEMPORAL_DATA_VERSION,
     DEFAULT_WORKING_START_MINUTES,
@@ -156,6 +157,7 @@ function createAuthRoutes(config, authenticateToken) {
 
             // Save the updated user object
             let savedUser = await user.save();
+            await invalidateOneDaySlipForecasts(user._id);
 
             let response = { success: true, user: await returnBasicUserInfo(savedUser) };
             return res.json(response);

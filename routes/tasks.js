@@ -11,7 +11,8 @@ const {
 const { validateRecurrence, normaliseRecurrence, expandRecurrences } = require('../controllers/recurrence');
 const {
     SCHEDULING_HORIZON_DAYS,
-    forecastOneDaySlips,
+    getCachedOneDaySlipForecasts,
+    invalidateOneDaySlipForecasts,
 } = require('../controllers/scheduling');
 const { parseDateOnly } = require('../utils/temporal');
 
@@ -156,6 +157,7 @@ function createTaskRoutes(config, authenticateToken) {
                 projectRef: resolvedProject,
             });
             await task.save();
+            await invalidateOneDaySlipForecasts(user._id);
 
             // Materialise now, so a new series shows its occurrences without waiting for
             // the user to press "Schedule Tasks".
@@ -300,6 +302,7 @@ function createTaskRoutes(config, authenticateToken) {
                     synchronizeSeriesId: targetId,
                 });
             }
+            await invalidateOneDaySlipForecasts(user._id);
 
             return res.json({ success: true });
         } catch (error) {
@@ -342,6 +345,8 @@ function createTaskRoutes(config, authenticateToken) {
                 await task.deleteOne();
             }
 
+            await invalidateOneDaySlipForecasts(user._id);
+
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.id);
             return res.json({ success: true, taskList: returnTaskList });
@@ -369,6 +374,8 @@ function createTaskRoutes(config, authenticateToken) {
             if (!result.success) {
                 return res.send(returnFailure(result.message));
             }
+
+            await invalidateOneDaySlipForecasts(user._id);
 
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.id);
@@ -410,6 +417,7 @@ function createTaskRoutes(config, authenticateToken) {
             await task.save();
         }
 
+        await invalidateOneDaySlipForecasts(user._id);
         const returnTaskList = await getTaskListFromUsername(req.user.id);
         return res.json({ success: true, taskList: returnTaskList });
     });
@@ -510,6 +518,7 @@ function createTaskRoutes(config, authenticateToken) {
                 repeat: null,
             });
             let saveResult = await task.save();
+            await invalidateOneDaySlipForecasts(user._id);
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.id);
 
@@ -520,19 +529,18 @@ function createTaskRoutes(config, authenticateToken) {
         }
     });
 
-    router.post('/forecastTaskSlips', authenticateToken, async (req, res) => {
+    router.get('/taskSlipForecasts', authenticateToken, async (req, res) => {
         try {
             const user = await UserDetails.findOne({ username: req.user.id });
             if (!req.user || !user) {
                 return res.send(returnFailure('Not logged in'));
             }
 
-            const result = await forecastOneDaySlips(user, req.body?.taskIds);
-            if (result.error) return res.send(returnFailure(result.error));
-            return res.json({ success: true, impacts: result.impacts });
+            const impacts = await getCachedOneDaySlipForecasts(user);
+            return res.json({ success: true, impacts });
         } catch (error) {
             console.error(error);
-            return res.send(returnFailure('Task slip forecasts could not be calculated'));
+            return res.send(returnFailure('Task slip forecasts could not be loaded'));
         }
     });
 

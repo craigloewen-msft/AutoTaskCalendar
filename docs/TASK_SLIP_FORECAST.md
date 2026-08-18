@@ -8,7 +8,7 @@ Run **Schedule Tasks** first. Every scheduled, non-backlog task in the sidebar t
 
 - The small number is the civil-calendar gap between its scheduled day and due day. Its tooltip explicitly says this is **not spare capacity**.
 - The **`+1 day → …`** chip reports the downstream effect of waiting one day:
-  - **`safe`** means no currently on-time task newly misses its deadline.
+  - **`safe`** means no currently on-time task newly misses its deadline. It is deliberately low-contrast until hovered or focused.
   - **`N late`** means that many currently on-time tasks would newly miss deadlines.
 
 A failed or unavailable forecast never appears as `safe`. Calendar displays a quiet retry status and leaves normal task and calendar actions available.
@@ -22,6 +22,8 @@ For a task scheduled at a particular wall time, “slip one day” means:
 1. Work scheduled before that task stays fixed, as if it was completed.
 2. The selected task and the remaining queue do not begin until the same local wall time on the next civil date.
 3. The scheduler reflows that queue around saved working days, working hours, task eligibility, deadlines, priority, dependencies, chunking, recurrence behavior, and non-task calendar conflicts.
+
+The queue in this preview is the scheduled, non-backlog work in Calendar’s visible 14-day window. Farther-future tasks are intentionally outside both the chip’s claim and its calculation.
 
 The forecast intentionally leaves the skipped capacity empty. Moving another task into the abandoned slot would model reprioritization, not the cost of waiting, and would hide the cascade this indicator is designed to reveal.
 
@@ -43,34 +45,28 @@ The panel reports:
 
 ## Data flow and endpoint
 
-Calendar loads ordinary tasks and generated events as before. Once task records have `scheduledDate`, it sends the owned IDs visible in the sidebar’s 14-day window in one request:
+**Schedule Tasks** owns the calculation lifecycle. After persisting the real schedule, the server calculates the one-day simulations for up to 100 scheduled, non-backlog tasks in Calendar’s 14-day sidebar window and caches the derived summaries in the forecast collection. This adds work to the explicit scheduling action once instead of repeating every simulation on every page load, without bloating canonical task records.
+
+Calendar reloads only perform a lightweight tenant-scoped read:
 
 ```http
-POST /api/forecastTaskSlips
-Content-Type: application/json
-
-{"taskIds":["…"]}
+GET /api/taskSlipForecasts
 ```
 
-The authenticated endpoint accepts unique valid IDs, is tenant-scoped, and limits each batch to 100 tasks. It loads baseline generated task events and non-task conflicts once, then returns an impact summary for every requested task. Missing, foreign, malformed, duplicate, or unscheduled task IDs fail the request rather than yielding a false safe result.
-
-Calendar refreshes forecasts after scheduling and after flows that replace its task list, including completion and editing. The page does not wait for forecasts before rendering its normal controls.
+The endpoint returns already-calculated summaries and never runs the planner. Task edits, completion, project reassignment, working-preference changes, and calendar-event changes invalidate all cached summaries. Calendar then omits the chips until the user runs **Schedule Tasks** again, so stale results are never presented as safe.
 
 ## Scheduling reuse and read-only guarantee
 
 `controllers/schedulePlanner.js` is the pure placement engine. It receives tasks, conflicts, user work settings, a start instant, and a horizon, then returns placements without accessing MongoDB.
 
-`controllers/scheduling.js` uses that same engine in two ways:
+`controllers/scheduling.js` uses that same engine for the real schedule and its suffix simulations. `generateTaskEvents()` expands recurrence, replaces generated placements, persists `scheduledDate`, calculates the visible-window simulations, and caches their summaries as one scheduling operation.
 
-- `generateTaskEvents()` expands recurrence, clears old generated placements, runs the planner, then persists the returned task events and `scheduledDate` values.
-- `forecastOneDaySlips()` loads the current baseline, runs suffix plans in memory, compares results, and returns summaries without calling any write operation.
-
-Opening or closing a forecast does not alter task fields, recurrence occurrences, generated events, calendar events, or user settings. It also does not invoke the persisted scheduler.
+Opening, closing, or reloading a forecast only reads the cache. It does not alter tasks, recurrence occurrences, generated events, calendar events, or user settings, and it never invokes the planner.
 
 ## Limits
 
 - A forecast requires a generated schedule. Backlog and currently unscheduled tasks have no chip.
-- Calendar calculates chips for its existing 14-day sidebar window; later scheduled work appears when it enters that window.
+- **Schedule Tasks** calculates chips for the current 14-day sidebar window; run it again to refresh the schedule or bring a later window into the cache.
 - It evaluates one chosen task at a time; it does not combine several hypothetical delays.
 - It assumes earlier scheduled tasks are completed and the later queue retains normal scheduler ordering. It does not predict interruptions, partial manual progress, or future calendar changes that are not recorded yet.
 - The simulation uses the same 60-day placement horizon as normal scheduling.
@@ -79,19 +75,6 @@ Opening or closing a forecast does not alter task fields, recurrence occurrences
 
 `tests/ui/calendar.spec.js` has one scenario with ten four-hour tasks, all starting Monday and due Friday, against five eight-hour workdays. The generated baseline places two tasks per weekday. Letting the first task slip leaves Monday’s capacity unused, moves all ten tasks, and pushes the final two from Friday to the following Monday.
 
-The test asserts **`+1 day → 2 late`**, expands all ten cascade rows, verifies the final two late states, checks that task dates/events did not change, and attaches screenshots of both the compact indicators and expanded panel.
+Two buffered follow-ups start the next Tuesday. They keep their exact baseline slots when the risky Monday task slips, do not appear in that cascade, and show subtle `safe` chips for their own one-day previews.
 
-### At-a-glance indicators
-
-![Ten Friday tasks with one-day impact chips](task-slip-at-a-glance.png)
-
-The old green badges still show each task’s scheduled-day gap, while the adjacent forecast chips
-make the hidden capacity risk explicit. Friday’s final task reports only one newly late deadline
-because it has no downstream task behind it.
-
-### Expanded cascade
-
-![Expanded one-day slip cascade with two late tasks](task-slip-expanded-cascade.png)
-
-The connected list shows all ten tasks moving. The final two cross Friday’s due date and are
-visually marked `Late` on the following Monday.
+The test asserts **`+1 day → 2 late`**, all ten cascade rows, both unchanged buffered tasks, cache survival across a page reload, and no changes to the baseline schedule or cached timestamps while previewing.

@@ -24,7 +24,15 @@ function normalizeCivilFields(doc, fields) {
     return doc;
 }
 
-const { UserDetails, TaskDetails, EventDetails, RoleDetails, GoalDetails, ProjectDetails } = require('../models');
+const {
+    UserDetails,
+    TaskDetails,
+    EventDetails,
+    RoleDetails,
+    GoalDetails,
+    ProjectDetails,
+    TaskSlipForecastDetails,
+} = require('../models');
 const instance = require('../instance');
 const factories = require('./factories');
 const dataset = require('./dataset');
@@ -55,6 +63,7 @@ async function wipe() {
         RoleDetails.deleteMany({}),
         GoalDetails.deleteMany({}),
         ProjectDetails.deleteMany({}),
+        TaskSlipForecastDetails.deleteMany({}),
     ]);
 }
 
@@ -77,6 +86,7 @@ async function wipeNamespace(namespace) {
         RoleDetails.deleteMany(owned),
         GoalDetails.deleteMany(owned),
         ProjectDetails.deleteMany(owned),
+        TaskSlipForecastDetails.deleteMany(owned),
     ]);
     await UserDetails.deleteMany({ _id: { $in: userIds } });
 }

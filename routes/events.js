@@ -3,6 +3,7 @@ const router = express.Router();
 const { google } = require('googleapis');
 const { UserDetails } = require('../models');
 const { returnFailure } = require('../utils/helpers');
+const { invalidateOneDaySlipForecasts } = require('../controllers/scheduling');
 const { parseInstant, localWeekBounds } = require('../utils/temporal');
 const {
   getEventListFromUsername,
@@ -37,6 +38,7 @@ function createEventRoutes(config, authenticateToken) {
 
     try {
       const event = await createEvent(user._id, title, start.date, end.date, notes, 'calendar');
+      await invalidateOneDaySlipForecasts(user._id);
       return res.json({ success: true, event });
     } catch (error) {
       console.error(error);
@@ -75,6 +77,7 @@ function createEventRoutes(config, authenticateToken) {
         endDate !== undefined ? parsedEnd.date : undefined,
         notes
       );
+      await invalidateOneDaySlipForecasts(user._id);
       res.send({ success: true, event });
     } catch (err) {
       res.send(returnFailure(err.message));
@@ -95,6 +98,7 @@ function createEventRoutes(config, authenticateToken) {
 
     try {
       await deleteEvent(eventId, user._id);
+      await invalidateOneDaySlipForecasts(user._id);
       // Return the updated event list
       const returnEventList = await getEventListFromUsername(req.user.id);
       return res.json({ success: true, eventList: returnEventList });
@@ -297,6 +301,7 @@ function createEventRoutes(config, authenticateToken) {
         config,
         calendarTimeZones
       );
+      await invalidateOneDaySlipForecasts(user._id);
 
       return res.send({ success: true });
     } catch (err) {

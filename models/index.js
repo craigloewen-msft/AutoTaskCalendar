@@ -68,6 +68,28 @@ const RecurrenceRule = new Schema({
     },
 }, { _id: false });
 
+const SlipForecastImpact = new Schema({
+    taskId: { type: Schema.Types.ObjectId, ref: 'taskInfo' },
+    title: String,
+    baselineStart: Date,
+    forecastStart: Date,
+    baselineDate: String,
+    forecastDate: String,
+    dueDate: String,
+    moved: Boolean,
+    newlyLate: Boolean,
+    unscheduled: Boolean,
+}, { _id: false });
+
+const TaskSlipForecastDetail = new Schema({
+    selectedTaskRef: { type: Schema.Types.ObjectId, ref: 'taskInfo', required: true },
+    userRef: { type: Schema.Types.ObjectId, ref: 'userInfo', required: true, index: true },
+    movedCount: Number,
+    newlyLateCount: Number,
+    affected: [SlipForecastImpact],
+    calculatedAt: Date,
+});
+
 const TaskDetail = new Schema({
     title: String,
     dueDate: Date,
@@ -151,6 +173,7 @@ const ProjectDetail = new Schema({
 // Expansion dedupes on this key, so re-runs never duplicate occurrences.
 TaskDetail.index({ seriesRef: 1, occurrenceDate: 1 });
 TaskDetail.index({ userRef: 1, completed: 1, completedDate: -1, projectRef: 1 });
+TaskSlipForecastDetail.index({ userRef: 1, selectedTaskRef: 1 }, { unique: true });
 
 // Add a new schema for events
 const EventDetail = new Schema({
@@ -176,6 +199,11 @@ const EventDetails = mongoose.model('eventInfo', EventDetail, 'eventInfo');
 const RoleDetails = mongoose.model('roleInfo', RoleDetail, 'roleInfo');
 const GoalDetails = mongoose.model('goalInfo', GoalDetail, 'goalInfo');
 const ProjectDetails = mongoose.model('projectInfo', ProjectDetail, 'projectInfo');
+const TaskSlipForecastDetails = mongoose.model(
+    'taskSlipForecastInfo',
+    TaskSlipForecastDetail,
+    'taskSlipForecastInfo'
+);
 
 module.exports = {
     UserDetails,
@@ -183,5 +211,6 @@ module.exports = {
     EventDetails,
     RoleDetails,
     GoalDetails,
-    ProjectDetails
+    ProjectDetails,
+    TaskSlipForecastDetails
 };
