@@ -72,8 +72,10 @@ On each run, per series:
    remain pending across runs until they can be placed or completed.
 
 Each occurrence inherits title, notes, duration, chunking, priority, dependencies, and
-`projectRef` from its template, and gets `dueDate` = its canonical civil-date marker, which
-drives the scheduler's deadline ordering.
+`projectRef` from its template, and gets `dueDate` = its canonical civil-date marker. The
+scheduler orders eligible work by priority first and due date second, so this date breaks ties
+between equal-priority tasks; it never lets a lower-priority occurrence displace higher-priority
+work.
 
 Editing an occurrence writes these authored fields to the template, then refreshes every
 pending occurrence in that series immediately. Their identity and scheduler placement stay
@@ -148,6 +150,10 @@ expansion recreates it as a duplicate.
 
 `byWeekday` controls which civil date the task belongs to. `whenUnschedulableBehavior` controls
 whether placement may continue after that date.
+
+Priority is independent of recurrence policy. A skip occurrence competes at the priority inherited
+from its template; if higher-priority work uses its available day, it remains unscheduled instead
+of jumping the queue or moving later.
 
 ## Horizon
 

@@ -65,7 +65,7 @@
                 type="number"
                 min="0"
               />
-              <small>Lower numbers are scheduled first when due dates match.</small>
+              <small>Lower numbers are scheduled first. Due dates break priority ties.</small>
             </div>
 
             <div class="form-group">
