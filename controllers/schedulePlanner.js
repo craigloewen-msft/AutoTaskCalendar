@@ -104,10 +104,11 @@ function compareRanks(left, right) {
     return 0;
 }
 
-function compareTasksForScheduling(left, right) {
+function compareTaskSchedulingKeys(left, right) {
     const backlogOrder = Number(!!left?.isBacklog) - Number(!!right?.isBacklog);
     if (backlogOrder) return backlogOrder;
 
+    // Backlog stays below dated work and keeps its historical start-date ordering.
     if (left?.isBacklog && right?.isBacklog) {
         const startOrder = compareRanks(dateRank(left.startDate), dateRank(right.startDate));
         if (startOrder) return startOrder;
@@ -116,10 +117,17 @@ function compareTasksForScheduling(left, right) {
     const priorityOrder = compareRanks(priorityRank(left), priorityRank(right));
     if (priorityOrder) return priorityOrder;
 
-    const dueDateOrder = compareRanks(dateRank(left?.dueDate), dateRank(right?.dueDate));
-    if (dueDateOrder) return dueDateOrder;
+    return compareRanks(dateRank(left?.dueDate), dateRank(right?.dueDate));
+}
 
-    return taskId(left).localeCompare(taskId(right));
+function compareCandidatesForScheduling(left, right) {
+    const taskOrder = compareTaskSchedulingKeys(left.task, right.task);
+    if (taskOrder) return taskOrder;
+
+    const fullPlacementOrder = Number(!left.canFitFully) - Number(!right.canFitFully);
+    if (fullPlacementOrder) return fullPlacementOrder;
+
+    return taskId(left.task).localeCompare(taskId(right.task));
 }
 
 function whenUnschedulableBehaviorForTask(task, context) {
@@ -166,7 +174,7 @@ function findBestTaskForSlot(context, availableTime) {
         if (!canFitFully && !canFitChunk) continue;
 
         const candidate = { task, index, canFitFully };
-        if (!best || compareTasksForScheduling(candidate.task, best.task) < 0) {
+        if (!best || compareCandidatesForScheduling(candidate, best) < 0) {
             best = candidate;
         }
     }

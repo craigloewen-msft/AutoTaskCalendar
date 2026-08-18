@@ -402,7 +402,9 @@ test.describe('scheduling a recurring series', () => {
             return {
                 priorityEvent: await EventDetails.findOne({ taskRef: important._id }),
                 mondayOccurrence: occurrence,
-                occurrenceEvent: await EventDetails.findOne({ taskRef: occurrence._id }),
+                occurrenceEvent: occurrence
+                    ? await EventDetails.findOne({ taskRef: occurrence._id })
+                    : null,
                 weeklyEvents: await EventDetails.find({
                     userRef: userId,
                     title: mondaySeries.title,
@@ -410,6 +412,7 @@ test.describe('scheduling a recurring series', () => {
             };
         });
 
+        expect(mondayOccurrence).not.toBeNull();
         expect(priorityEvent.startDate).toEqual(zonedDateTime(monday, 9 * 60, 'UTC'));
         expect(priorityEvent.endDate).toEqual(zonedDateTime(monday, 12 * 60, 'UTC'));
         expect(occurrenceEvent).toBeNull();
