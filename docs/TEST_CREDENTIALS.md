@@ -20,8 +20,12 @@ After running the seed script, you can login with:
 - **Password:** `testpassword`
 - **Email:** `testuser@example.com`
 
-Seeding also creates a second user, `otheruser` / `testpassword`, whose data exists
-only to prove it never leaks into the first user's views.
+Seeding also creates:
+
+- `otheruser` / `testpassword`, whose data proves tenant isolation;
+- `recurruser` / `testpassword`, with a minimal weekly recurrence; and
+- `slipuser` / `testpassword`, with a full mixed-capacity week and a spacious following week
+  for checking one-day task-slip forecasts.
 
 ## What's Included
 
@@ -42,6 +46,12 @@ The dataset creates:
 
 4. **A Compass hierarchy** — roles, goals, and projects, with about half the tasks linked
    to a project. See `docs/COMPASS.md`.
+
+5. **Task-slip calendar on `slipuser`:**
+   - Ten 3½-hour tasks, all eligible Monday and due Friday
+   - One fixed 09:00–10:00 event on each workday
+   - Exactly 40 hours of combined work and event time in that week
+   - One isolated Friday task in the otherwise-empty following week
 
 ## Using the Test Credentials
 

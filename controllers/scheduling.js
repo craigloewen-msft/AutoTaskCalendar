@@ -24,7 +24,7 @@ const {
 } = require('./schedulePlanner');
 
 const SCHEDULING_HORIZON_DAYS = 60;
-const FORECAST_WINDOW_DAYS = 14;
+const FORECAST_WINDOW_DAYS = 21;
 const MAX_FORECAST_TASKS = 100;
 
 function incompleteTaskFilter(userId) {
@@ -258,7 +258,10 @@ async function calculateOneDaySlipForecasts(user, requestedTaskIds) {
         const forecastByTask = plannedPlacementSummary(plan.placements);
         const affected = baselineEvents
             .map((event) => event.taskRef?.toString())
-            .filter((id, index, all) => id && all.indexOf(id) === index && suffixIds.has(id))
+            .filter((id, index, all) => id
+                && id !== selectedId
+                && all.indexOf(id) === index
+                && suffixIds.has(id))
             .map((id) => serializeImpact(
                 taskById.get(id),
                 baselineByTask.get(id),
