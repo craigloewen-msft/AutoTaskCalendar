@@ -218,7 +218,18 @@ test.describe('calendar page', () => {
         await page.fill('#task-due-date', isoDay(3));
         await page.fill('#task-duration', '45');
         await page.getByRole('button', { name: 'Add task', exact: true }).click();
+        await expect(page.locator('[data-test=task-editor-error]')).toHaveText(
+            'Choose a project or Unassigned.'
+        );
+        await expect(page.locator('#task-project')).toBeFocused();
+        await page.selectOption('#task-project', { label: 'Unassigned' });
+        await page.getByRole('button', { name: 'Add task', exact: true }).click();
 
+        const saved = await withDb(() => TaskDetails.findOne({
+            userRef: data.primary.user._id,
+            title: createdTitle,
+        }));
+        expect(saved.projectRef).toBeNull();
         const createdTask = page.locator('.task-item', { hasText: createdTitle }).first();
         await expect(createdTask).toBeVisible();
         await page.click('button:has-text("Schedule Tasks")');
@@ -227,6 +238,64 @@ test.describe('calendar page', () => {
         await createdTask.click();
         await page.getByRole('button', { name: 'Complete', exact: true }).click();
         await expect(page.locator('.task-list')).not.toContainText(createdTitle);
+    });
+
+    test('offers but does not silently apply a project recommendation', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        await page.route('**/api/recommendTaskProject', async (route) => {
+            await route.fulfill({
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    success: true,
+                    recommendation: {
+                        projectId: String(data.named.migrationProject._id),
+                        confidence: 'high',
+                        evidenceCount: 2,
+                    },
+                }),
+            });
+        });
+
+        await page.goto('/#/calendar');
+        await page.getByRole('button', { name: 'Add new task' }).click();
+        await page.fill('#task-title', 'Ask Priyanka about rehearsal');
+
+        const suggestion = page.locator('[data-test=project-recommendation]');
+        await expect(suggestion).toContainText('Migration plan');
+        await expect(page.locator('#task-project').locator('option:checked')).toHaveText(
+            'Choose a project or Unassigned…'
+        );
+
+        await suggestion.getByRole('button', { name: 'Use suggestion' }).click();
+        await expect(page.locator('#task-project')).toHaveValue(String(data.named.migrationProject._id));
+    });
+
+    test('requires an explicit project choice for a standalone follow-up', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        await page.goto('/#/calendar');
+        await page.getByRole('button', { name: 'Add follow up' }).click();
+        await page.fill('#task-title', 'Standalone follow-up');
+        await page.fill('#task-duration', '2');
+        await page.locator('#followup-modal .modal-footer .btn-primary').click();
+        await expect(page.locator('#followup-modal-body')).toContainText(
+            'Choose a project or Unassigned.'
+        );
+        await expect(page.locator('#followup-project')).toBeFocused();
+
+        await page.selectOption('#followup-project', { label: 'Unassigned' });
+        await page.locator('#followup-modal .modal-footer .btn-primary').click();
+        await expect(page.locator('#followup-modal')).not.toBeVisible();
+        const saved = await withDb(() => TaskDetails.findOne({
+            userRef: data.primary.user._id,
+            title: 'Standalone follow-up',
+        }));
+        expect(saved.projectRef).toBeNull();
     });
 
     test('keeps one-off and unscheduled tasks visible without expanding the recurring window', async ({
@@ -341,6 +410,7 @@ test.describe('calendar page', () => {
         await page.fill('#task-due-date', isoDay(3));
         await page.fill('#task-duration', '30');
         await page.selectOption('#task-repeat', 'weekly');
+        await page.selectOption('#task-project', { label: 'Unassigned' });
 
         for (const day of ['Monday', 'Tuesday']) {
             const pill = page.locator(`.weekday-pill[data-day="${day}"]`);
@@ -388,6 +458,7 @@ test.describe('calendar page', () => {
         await page.fill('#task-title', 'Non UTC task');
         await page.fill('#task-due-date', '2030-03-10');
         await page.fill('#task-duration', '30');
+        await page.selectOption('#task-project', { label: 'Unassigned' });
         await page.getByRole('button', { name: 'Add task', exact: true }).click();
 
         const task = page.locator('.task-item', { hasText: 'Non UTC task' }).first();

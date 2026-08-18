@@ -12,6 +12,10 @@ const { validateRecurrence, normaliseRecurrence, expandRecurrences } = require('
 const { SCHEDULING_HORIZON_DAYS } = require('../controllers/scheduling');
 const { parseDateOnly } = require('../utils/temporal');
 const { createCompletedTaskReport } = require('../controllers/completedTaskExport');
+const {
+    recommendTaskProject,
+    invalidateProjectRecommendation,
+} = require('../controllers/projectRecommendation');
 
 function parseTaskDate(value, label, { required = false } = {}) {
     const parsed = parseDateOnly(value);
@@ -73,6 +77,21 @@ async function hasCircularDependency(taskId, dependsOn, userId) {
 }
 
 function createTaskRoutes(config, authenticateSession) {
+
+    router.post('/recommendTaskProject', authenticateSession, async (req, res) => {
+        try {
+            const user = await UserDetails.findOne({ username: req.user.username });
+            if (!req.user || !user) {
+                return res.send(returnFailure('Not logged in'));
+            }
+
+            const recommendation = await recommendTaskProject(user, req.body);
+            return res.json({ success: true, recommendation });
+        } catch (error) {
+            console.error(error);
+            return res.json({ success: false });
+        }
+    });
 
     router.post('/createTask', authenticateSession, async (req, res) => {
         let user = await UserDetails.findOne({ username: req.user.username });
@@ -154,12 +173,15 @@ function createTaskRoutes(config, authenticateSession) {
                 projectRef: resolvedProject,
             });
             await task.save();
+            invalidateProjectRecommendation(user._id);
 
             // Materialise now, so a new series shows its occurrences without waiting for
             // the user to press "Schedule Tasks".
             if (normalisedRecurrence || repeatValue) {
                 await expandRecurrences(user, SCHEDULING_HORIZON_DAYS);
             }
+            // A request may have rebuilt between the initial save and series expansion.
+            invalidateProjectRecommendation(user._id);
 
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.username);
@@ -286,6 +308,7 @@ function createTaskRoutes(config, authenticateSession) {
             if (!actualTask) {
                 return res.send(returnFailure('Task not found'));
             }
+            invalidateProjectRecommendation(user._id);
 
             // Refresh every series edit immediately. Expansion also synchronizes authored
             // template fields onto pending occurrences, even when the rule was not posted.
@@ -299,6 +322,8 @@ function createTaskRoutes(config, authenticateSession) {
                     synchronizeSeriesId: targetId,
                 });
             }
+            // Clear any model rebuilt while pending occurrences were being synchronized.
+            invalidateProjectRecommendation(user._id);
 
             return res.json({ success: true });
         } catch (error) {
@@ -341,6 +366,8 @@ function createTaskRoutes(config, authenticateSession) {
                 await task.deleteOne();
             }
 
+
+            invalidateProjectRecommendation(user._id);
 
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.username);
@@ -506,7 +533,7 @@ function createTaskRoutes(config, authenticateSession) {
             return res.send(returnFailure('Not logged in'));
         }
 
-        const { title, followUpDate, taskID } = req.body;
+        const { title, followUpDate, taskID, projectRef } = req.body;
         if (!title || !followUpDate) {
             return res.send(returnFailure('Title, and followUpDate are required'));
         }
@@ -517,12 +544,21 @@ function createTaskRoutes(config, authenticateSession) {
         }
 
         try {
-            // If taskID exists get task and complete it
+            // A derived follow-up inherits its source; standalone callers provide the project.
+            let followUpProjectRef = null;
+            if (!taskID) {
+                followUpProjectRef = await resolveProjectRef(projectRef, user._id);
+                if (followUpProjectRef === undefined) {
+                    return res.send(returnFailure('Invalid project'));
+                }
+            }
+
             if (taskID) {
                 let inputTask = await TaskDetails.findOne({ _id: taskID, userRef: user._id });
 
                 if (inputTask) {
                     // Complete task
+                    followUpProjectRef = inputTask.projectRef || null;
                     const result = await completeTask(inputTask, user);
 
                     if (!result.success) {
@@ -544,8 +580,10 @@ function createTaskRoutes(config, authenticateSession) {
                 breakUpTask: false,
                 breakUpTaskChunkDuration: null,
                 repeat: null,
+                projectRef: followUpProjectRef,
             });
-            let saveResult = await task.save();
+            await task.save();
+            invalidateProjectRecommendation(user._id);
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.username);
 

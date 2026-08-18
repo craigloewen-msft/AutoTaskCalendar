@@ -310,7 +310,7 @@
         data-test="unaligned-tasks"
       >
         <summary>Unaligned tasks · {{ unalignedWeeklyTasks.length }} due this week</summary>
-        <p>Alignment is optional. Assign a task when its project is clear.</p>
+        <p>Older tasks without a project can be assigned here when their project is clear.</p>
         <ul class="unaligned-list">
           <li v-for="task in unalignedWeeklyTasks" :key="task._id" class="unaligned-row">
             <button class="unaligned-task-button" type="button" @click="openTask(task, $event)">

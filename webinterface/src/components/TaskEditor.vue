@@ -99,9 +99,16 @@
           </label>
 
           <div class="form-group">
-            <label for="task-project">Project</label>
-            <select id="task-project" v-model="draft.projectRef" class="form-control">
-              <option :value="null">— none —</option>
+            <label for="task-project">Project{{ isEdit ? "" : "*" }}</label>
+            <select
+              id="task-project"
+              ref="projectSelect"
+              v-model="draft.projectRef"
+              class="form-control"
+              @change="chooseProject"
+            >
+              <option v-if="!isEdit" disabled value="">Choose a project or Unassigned…</option>
+              <option :value="null">Unassigned</option>
               <option v-if="currentProjectOutsideCompass" :value="draft.projectRef">
                 Current project (outside active Compass)
               </option>
@@ -111,6 +118,17 @@
                 </option>
               </optgroup>
             </select>
+            <div
+              v-if="recommendationLabel"
+              class="project-recommendation"
+              data-test="project-recommendation"
+              role="status"
+            >
+              <span><strong>Suggested:</strong> {{ recommendationLabel }}</span>
+              <button class="btn btn-sm btn-outline-primary" type="button" @click="useRecommendation">
+                Use suggestion
+              </button>
+            </div>
           </div>
 
           <div class="form-group">
@@ -211,6 +229,10 @@ export default {
       draft: this.buildDraft(this.task),
       error: "",
       busy: false,
+      recommendation: null,
+      recommendationTimer: null,
+      recommendationRequest: 0,
+      projectChoiceMade: !!this.task?._id,
     };
   },
   computed: {
@@ -229,6 +251,28 @@ export default {
     dependencyCandidates() {
       return this.tasks.filter((candidate) => candidate._id !== this.task?._id);
     },
+    projectIds() {
+      return this.projectGroups.flatMap((group) => group.projects.map((project) => project._id));
+    },
+    recommendationLabel() {
+      if (this.isEdit || this.projectChoiceMade || !this.recommendation?.projectId) return "";
+      for (const group of this.projectGroups) {
+        const project = group.projects.find(({ _id }) => _id === this.recommendation.projectId);
+        if (project) return `${group.label} → ${project.title}`;
+      }
+      return "";
+    },
+  },
+  watch: {
+    "draft.title"() {
+      this.scheduleRecommendation();
+    },
+    "draft.notes"() {
+      this.scheduleRecommendation();
+    },
+    projectIds(next, previous) {
+      if (next.length && !previous.length) this.scheduleRecommendation();
+    },
   },
   mounted() {
     document.body.classList.add("task-editor-open");
@@ -236,6 +280,8 @@ export default {
   },
   beforeUnmount() {
     document.body.classList.remove("task-editor-open");
+    clearTimeout(this.recommendationTimer);
+    this.recommendationRequest++;
   },
   methods: {
     buildDraft(task) {
@@ -248,7 +294,7 @@ export default {
           || dateOnlyInTimeZone(this.timeZone),
         dueDate: apiDateOnly(task?.dueDate) || this.defaultDueDate || "",
         isBacklog: !!task?.isBacklog,
-        projectRef: task?.projectRef || null,
+        projectRef: task?._id ? (task.projectRef || null) : "",
         notes: task?.notes || "",
         breakUpTask: !!task?.breakUpTask,
         breakUpTaskChunkDuration: Number(task?.breakUpTaskChunkDuration) || 30,
@@ -258,6 +304,9 @@ export default {
     },
     validate() {
       if (!this.draft.title.trim()) return "Enter a task title.";
+      if (!this.isEdit && this.draft.projectRef === "") {
+        return "Choose a project or Unassigned.";
+      }
       if (!Number.isFinite(Number(this.draft.duration)) || Number(this.draft.duration) <= 0) {
         return "Duration must be at least one minute.";
       }
@@ -290,9 +339,56 @@ export default {
         dependsOn: this.draft.dependsOn,
       };
     },
+    chooseProject() {
+      if (this.isEdit) return;
+      this.projectChoiceMade = this.draft.projectRef !== "";
+      this.recommendation = null;
+      clearTimeout(this.recommendationTimer);
+      this.recommendationRequest++;
+    },
+    useRecommendation() {
+      if (!this.recommendationLabel) return;
+      this.draft.projectRef = this.recommendation.projectId;
+      this.projectChoiceMade = true;
+      this.recommendation = null;
+      clearTimeout(this.recommendationTimer);
+      this.recommendationRequest++;
+    },
+    scheduleRecommendation() {
+      clearTimeout(this.recommendationTimer);
+      this.recommendationRequest++;
+      this.recommendation = null;
+      if (this.isEdit || this.projectChoiceMade || this.draft.title.trim().length < 2) {
+        this.recommendation = null;
+        return;
+      }
+      this.recommendationTimer = setTimeout(() => this.loadRecommendation(), 350);
+    },
+    async loadRecommendation() {
+      const request = this.recommendationRequest;
+      const title = this.draft.title.trim();
+      if (!title || !this.projectIds.length) return;
+
+      try {
+        const response = await this.$http.post("/api/recommendTaskProject", {
+          title,
+          notes: this.draft.notes,
+          candidateProjectIds: this.projectIds,
+        });
+        if (request !== this.recommendationRequest || this.projectChoiceMade) return;
+        this.recommendation = response.data.success ? response.data.recommendation : null;
+      } catch (error) {
+        if (request === this.recommendationRequest) this.recommendation = null;
+      }
+    },
     async save() {
       this.error = this.validate();
-      if (this.error) return;
+      if (this.error) {
+        if (this.error === "Choose a project or Unassigned.") {
+          this.$nextTick(() => this.$refs.projectSelect?.focus());
+        }
+        return;
+      }
       this.busy = true;
 
       try {
@@ -473,6 +569,28 @@ function clone(value) {
   align-items: center;
   gap: 8px;
   margin: 4px 0 14px;
+}
+
+.project-recommendation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 9px 10px;
+  border: 1px solid rgba(102, 126, 234, 0.42);
+  border-radius: 8px;
+  background: rgba(102, 126, 234, 0.1);
+  color: #d7dde4;
+  font-size: 0.86rem;
+}
+
+.project-recommendation span {
+  min-width: 0;
+}
+
+.project-recommendation button {
+  flex: 0 0 auto;
 }
 
 .chunk-field {
