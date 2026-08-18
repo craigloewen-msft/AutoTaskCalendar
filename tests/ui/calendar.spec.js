@@ -202,17 +202,7 @@ test.describe('calendar page', () => {
 
         await withDb(() => TaskDetails.updateOne(
             { _id: lastCapacityTask._id },
-            {
-                $set: { 'slipForecast.movedCount': 1 },
-                $unset: { 'slipForecast.version': 1 },
-            }
-        ));
-        await page.reload();
-        await expect(lastCapacityChip).toHaveCount(0);
-
-        await withDb(() => TaskDetails.updateOne(
-            { _id: lastCapacityTask._id },
-            { $set: { 'slipForecast.version': 2 } }
+            { $set: { 'slipForecast.movedCount': 1 } }
         ));
         await page.reload();
         await expect(lastCapacityChip).toHaveText('slot blocked → safe');

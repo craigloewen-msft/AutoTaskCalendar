@@ -25,7 +25,6 @@ const {
 const SCHEDULING_HORIZON_DAYS = 60;
 const FORECAST_WINDOW_DAYS = 21;
 const MAX_FORECAST_TASKS = 100;
-const BLOCKED_SLOT_FORECAST_VERSION = 2;
 
 function incompleteTaskFilter(userId) {
     return {
@@ -226,6 +225,7 @@ async function calculateBlockedSlotForecasts(user, requestedTaskIds, scheduleSta
     const baselineByTask = placementSummary(baselineEvents);
     const baselineTaskIds = [...baselineByTask.keys()];
     const behaviorMap = await seriesBehaviorMap(tasks, user._id);
+    const taskTemporalCache = new Map();
     const impacts = {};
 
     for (const selectedId of ids) {
@@ -243,6 +243,7 @@ async function calculateBlockedSlotForecasts(user, requestedTaskIds, scheduleSta
             currentTime,
             schedulingHorizon: horizon,
             seriesWhenUnschedulableBehaviorById: behaviorMap,
+            taskTemporalCache,
         });
         const forecastByTask = plannedPlacementSummary(plan.placements);
         const affected = baselineTaskIds
@@ -289,7 +290,6 @@ async function cacheBlockedSlotForecasts(user, scheduleStart = new Date()) {
             update: {
                 $set: {
                     slipForecast: {
-                        version: BLOCKED_SLOT_FORECAST_VERSION,
                         movedCount: impacts[taskId].movedCount,
                         newlyLateCount: impacts[taskId].newlyLateCount,
                         affected: impacts[taskId].affected,

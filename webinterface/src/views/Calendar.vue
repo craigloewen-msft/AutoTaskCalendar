@@ -475,7 +475,7 @@ export default {
     loadSlipForecasts() {
       this.slipForecasts = Object.fromEntries(
         (this.taskList || [])
-          .filter((task) => task.slipForecast?.version === 2)
+          .filter((task) => task.slipForecast)
           .map((task) => [task._id, task.slipForecast])
       );
       const selectedTask = this.taskList?.find((task) => task._id === this.selectedSlipForecastId);

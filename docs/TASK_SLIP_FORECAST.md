@@ -52,7 +52,7 @@ The selected task remains in the scheduler queue and consumes capacity in its ne
 
 The candidate window controls which tasks receive a cached forecast; it does not truncate the planner queue. Every simulation replans the complete normal set of incomplete regular and backlog tasks.
 
-Calendar receives the forecast through the normal `GET /api/getUserTasks` payload. There is no forecast endpoint, collection, synchronization query, or calculation during a reload. Calendar only reads the current blocked-slot forecast version, so older cached semantics stay hidden until **Schedule Tasks** refreshes them. A current non-null object renders a control only when it has downstream impact; missing and zero-impact results render nothing.
+Calendar receives the forecast through the normal `GET /api/getUserTasks` payload. There is no forecast endpoint, collection, synchronization query, or calculation during a reload. A non-null object renders a control only when it has downstream impact; missing and zero-impact results render nothing.
 
 `scheduledDate`, generated task events, and `slipForecast` are one snapshot of the last **Schedule Tasks** run. Editing tasks, preferences, or calendar events does not update or selectively clear one part of that snapshot; the next scheduling run replaces all three together.
 
@@ -60,7 +60,7 @@ Calendar receives the forecast through the normal `GET /api/getUserTasks` payloa
 
 `controllers/schedulePlanner.js` is the pure placement engine. It receives tasks, conflicts, user work settings, a start instant, and a horizon, then returns placements without accessing MongoDB.
 
-`controllers/scheduling.js` uses that same engine for the real schedule and blocked-slot simulations. `generateTaskEvents()` expands recurrence, replaces generated placements, persists `scheduledDate`, calculates the visible-window simulations, and caches their summaries as one scheduling operation. The planner reuses immutable task metadata such as eligibility and recurrence expiry across those simulations.
+`controllers/scheduling.js` uses that same engine for the real schedule and blocked-slot simulations. `generateTaskEvents()` expands recurrence, replaces generated placements, persists `scheduledDate`, calculates the visible-window simulations, and caches their summaries as one scheduling operation. Eligibility and recurrence-expiry calculations are cached only for that forecast operation and discarded afterward.
 
 Opening, closing, or reloading a forecast only reads the task object already in Calendar. It does not write data or invoke the planner. Press **Schedule Tasks** whenever inputs change and you want both the visible schedule and forecasts refreshed.
 

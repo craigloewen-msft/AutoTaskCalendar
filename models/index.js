@@ -84,7 +84,6 @@ const SlipForecastImpact = new Schema({
 }, { _id: false });
 
 const TaskSlipForecast = new Schema({
-    version: Number,
     movedCount: Number,
     newlyLateCount: Number,
     affected: [SlipForecastImpact],

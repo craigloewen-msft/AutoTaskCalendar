@@ -19,64 +19,16 @@ const MS_PER_DAY = 24 * MS_PER_HOUR;
 const MAX_SCHEDULING_ITERATIONS = 10000;
 const MAX_NO_PROGRESS_ITERATIONS = 100;
 const VERY_LARGE_TIME_MS = 999 * MS_PER_DAY;
-// Forecasts rerun the same immutable task objects, so derived metadata is shared safely.
-const taskMetadataCache = new WeakMap();
-
-function taskMetadata(task) {
-    if (!task || typeof task !== 'object') {
-        return {
-            id: '',
-            dependencyIds: [],
-            dueDate: null,
-            priority: 100,
-            startRank: Number.POSITIVE_INFINITY,
-            seriesId: null,
-            occurrenceDate: null,
-            eligibleByTimeZone: new Map(),
-            expiryByTimeZone: new Map(),
-        };
-    }
-
-    let metadata = taskMetadataCache.get(task);
-    if (metadata) return metadata;
-
-    const priority = Number(task.priority ?? 100);
-    const startRank = task.startDate ? new Date(task.startDate).getTime() : Number.POSITIVE_INFINITY;
-    metadata = {
-        id: task._id?.toString() || '',
-        dependencyIds: (task.dependsOn || []).map((dependencyId) => dependencyId.toString()),
-        dueDate: dateOnlyFromMarker(task.dueDate),
-        priority: Number.isFinite(priority) ? priority : 100,
-        startRank: Number.isNaN(startRank) ? Number.POSITIVE_INFINITY : startRank,
-        seriesId: task.seriesRef?.toString() || null,
-        occurrenceDate: task.occurrenceDate || null,
-        eligibleByTimeZone: new Map(),
-        expiryByTimeZone: new Map(),
-    };
-    taskMetadataCache.set(task, metadata);
-    return metadata;
-}
-
-function taskEligibleAt(task, timeZone) {
-    const metadata = taskMetadata(task);
-    if (!metadata.eligibleByTimeZone.has(timeZone)) {
-        metadata.eligibleByTimeZone.set(
-            timeZone,
-            taskEligibleInstant(task.startDate, timeZone)
-        );
-    }
-    return metadata.eligibleByTimeZone.get(timeZone);
-}
 
 function taskId(task) {
-    return taskMetadata(task).id;
+    return task?._id?.toString() || '';
 }
 
 function areDependenciesMet(task, incompleteTaskMap, scheduledTaskIds) {
-    const dependencyIds = taskMetadata(task).dependencyIds;
-    if (!dependencyIds.length) return true;
+    if (!task.dependsOn || task.dependsOn.length === 0) return true;
 
-    for (const id of dependencyIds) {
+    for (const dependencyId of task.dependsOn) {
+        const id = dependencyId.toString();
         if (incompleteTaskMap.has(id) && !scheduledTaskIds.has(id)) return false;
     }
     return true;
@@ -136,25 +88,36 @@ function getChunkDuration(task) {
     return task.breakUpTask ? task.breakUpTaskChunkDuration * MS_PER_MINUTE : 0;
 }
 
+function priorityRank(task) {
+    const priority = Number(task?.priority ?? 100);
+    return Number.isFinite(priority) ? priority : 100;
+}
+
+function dateRank(value) {
+    if (!value) return Number.POSITIVE_INFINITY;
+    const time = new Date(value).getTime();
+    return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time;
+}
+
 function compareTaskSchedulingKeys(left, right) {
     const backlogOrder = Number(!!left?.isBacklog) - Number(!!right?.isBacklog);
     if (backlogOrder) return backlogOrder;
 
     // Backlog stays below dated work and keeps its historical start-date ordering.
     if (left?.isBacklog && right?.isBacklog) {
-        const startOrder = taskMetadata(left).startRank - taskMetadata(right).startRank;
+        const startOrder = dateRank(left.startDate) - dateRank(right.startDate);
         if (startOrder) return startOrder;
     }
 
-    const leftDueDate = taskMetadata(left).dueDate;
-    const rightDueDate = taskMetadata(right).dueDate;
+    const leftDueDate = dateOnlyFromMarker(left?.dueDate);
+    const rightDueDate = dateOnlyFromMarker(right?.dueDate);
     if (leftDueDate !== rightDueDate) {
         if (!leftDueDate) return 1;
         if (!rightDueDate) return -1;
         return leftDueDate.localeCompare(rightDueDate);
     }
 
-    return taskMetadata(left).priority - taskMetadata(right).priority;
+    return priorityRank(left) - priorityRank(right);
 }
 
 function compareCandidatesForScheduling(left, right) {
@@ -168,24 +131,31 @@ function compareCandidatesForScheduling(left, right) {
 }
 
 function whenUnschedulableBehaviorForTask(task, context) {
-    const seriesId = taskMetadata(task).seriesId;
-    if (!seriesId) return null;
-    return context.seriesWhenUnschedulableBehaviorById.get(seriesId)
+    if (!task.seriesRef) return null;
+    return context.seriesWhenUnschedulableBehaviorById.get(task.seriesRef.toString())
         || DEFAULT_WHEN_UNSCHEDULABLE_BEHAVIOR;
 }
 
+function taskTemporalMetadata(task, context) {
+    const cache = context.taskTemporalCache || new Map();
+    context.taskTemporalCache = cache;
+    let metadata = cache.get(task);
+    if (metadata?.timeZone === context.timeZone) return metadata;
+
+    metadata = {
+        timeZone: context.timeZone,
+        eligibleAt: taskEligibleInstant(task.startDate, context.timeZone),
+        expiresAt: whenUnschedulableBehaviorForTask(task, context) === 'skip'
+            && task.occurrenceDate
+            ? nextDateStartInZone(task.occurrenceDate, context.timeZone)
+            : null,
+    };
+    cache.set(task, metadata);
+    return metadata;
+}
+
 function occurrenceExpiresAt(task, context) {
-    const metadata = taskMetadata(task);
-    if (whenUnschedulableBehaviorForTask(task, context) !== 'skip' || !metadata.occurrenceDate) {
-        return null;
-    }
-    if (!metadata.expiryByTimeZone.has(context.timeZone)) {
-        metadata.expiryByTimeZone.set(
-            context.timeZone,
-            nextDateStartInZone(metadata.occurrenceDate, context.timeZone)
-        );
-    }
-    return metadata.expiryByTimeZone.get(context.timeZone);
+    return taskTemporalMetadata(task, context).expiresAt;
 }
 
 function removeExpiredOccurrences(context) {
@@ -211,7 +181,7 @@ function findBestTaskForSlot(context, availableTime) {
         const task = pendingTasks[index];
         if (!areDependenciesMet(task, incompleteTaskMap, scheduledTaskIds)) continue;
 
-        const eligibleAt = taskEligibleAt(task, context.timeZone);
+        const eligibleAt = taskTemporalMetadata(task, context).eligibleAt;
         if (!eligibleAt || currentTime.getTime() < eligibleAt.getTime()) continue;
 
         const canFitFully = availableTime >= getRemainingDuration(task, chunkInfo);
@@ -338,6 +308,7 @@ function planTaskPlacements({
     currentTime = new Date(),
     schedulingHorizon,
     seriesWhenUnschedulableBehaviorById = new Map(),
+    taskTemporalCache = new Map(),
 }) {
     const pendingTasks = [...tasks];
     const context = {
@@ -353,6 +324,7 @@ function planTaskPlacements({
         scheduledDates: new Map(),
         chunkInfo: {},
         seriesWhenUnschedulableBehaviorById,
+        taskTemporalCache,
         events: events
             .map((event) => ({
                 ...event,
