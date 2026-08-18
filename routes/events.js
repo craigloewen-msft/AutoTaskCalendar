@@ -5,7 +5,6 @@ const { google } = require('googleapis');
 const { UserDetails, GoogleOAuthStateDetails } = require('../models');
 const { readGoogleCredentials, writeGoogleCredentials } = require('../utils/googleCredentials');
 const { returnFailure } = require('../utils/helpers');
-const { invalidateOneDaySlipForecasts } = require('../controllers/scheduling');
 const { parseInstant, localWeekBounds } = require('../utils/temporal');
 const {
   getEventListFromUsername,
@@ -50,7 +49,6 @@ function createEventRoutes(config, authenticateSession) {
 
     try {
       const event = await createEvent(user._id, title, start.date, end.date, notes, 'calendar');
-      await invalidateOneDaySlipForecasts(user._id);
       return res.json({ success: true, event });
     } catch (error) {
       console.error(error);
@@ -89,7 +87,6 @@ function createEventRoutes(config, authenticateSession) {
         endDate !== undefined ? parsedEnd.date : undefined,
         notes
       );
-      await invalidateOneDaySlipForecasts(user._id);
       res.send({ success: true, event });
     } catch (err) {
       res.send(returnFailure(err.message));
@@ -110,7 +107,6 @@ function createEventRoutes(config, authenticateSession) {
 
     try {
       await deleteEvent(eventId, user._id);
-      await invalidateOneDaySlipForecasts(user._id);
       // Return the updated event list
       const returnEventList = await getEventListFromUsername(req.user.username);
       return res.json({ success: true, eventList: returnEventList });
@@ -307,7 +303,6 @@ function createEventRoutes(config, authenticateSession) {
         config,
         calendarTimeZones
       );
-      await invalidateOneDaySlipForecasts(user._id);
 
       return res.send({ success: true });
     } catch (err) {

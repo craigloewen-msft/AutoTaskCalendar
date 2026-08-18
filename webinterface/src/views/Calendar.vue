@@ -305,7 +305,6 @@ export default {
                 id: response.data.event._id,
                 text: modal.result,
               });
-              this.clearSlipForecasts();
             } else {
               console.error(response.data.log);
             }
@@ -328,8 +327,6 @@ export default {
               });
               if (!response.data.success) {
                 console.error(response.data.log);
-              } else {
-                this.clearSlipForecasts();
               }
             } catch (error) {
               console.error(error);
@@ -345,8 +342,6 @@ export default {
             });
             if (!response.data.success) {
               console.error(response.data.log);
-            } else {
-              this.clearSlipForecasts();
             }
           } catch (error) {
             console.error(error);
@@ -371,8 +366,6 @@ export default {
             });
             if (!response.data.success) {
               console.error(response.data.log);
-            } else {
-              this.clearSlipForecasts();
             }
           } catch (error) {
             console.error(error);
@@ -416,7 +409,6 @@ export default {
           return;
         }
         this.allDayEvents = this.allDayEvents.filter(({ _id }) => _id !== event._id);
-        this.clearSlipForecasts();
       } catch (error) {
         console.error(error);
       }
@@ -461,10 +453,6 @@ export default {
       }
       this.taskList = taskDataResponse.data.taskList;
       this.loadSlipForecasts();
-    },
-    clearSlipForecasts() {
-      this.slipForecasts = {};
-      this.selectedSlipForecastId = null;
     },
     loadSlipForecasts() {
       this.slipForecasts = Object.fromEntries(
@@ -581,7 +569,6 @@ export default {
     },
     async syncCalendar() {
       await this.$http.get("/api/synccalendar/");
-      this.clearSlipForecasts();
       this.loadCalendarEvents();
     },
     async createFollowUp(bvModalEvent) {

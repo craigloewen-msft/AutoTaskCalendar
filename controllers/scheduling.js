@@ -314,15 +314,8 @@ async function cacheOneDaySlipForecasts(user, now = new Date()) {
     return impacts;
 }
 
-async function invalidateOneDaySlipForecasts(userId) {
-    await TaskDetails.updateMany({ userRef: userId, slipForecast: { $ne: null } }, {
-        $set: { slipForecast: null },
-    });
-}
-
 module.exports = {
     generateTaskEvents,
-    invalidateOneDaySlipForecasts,
     SCHEDULING_HORIZON_DAYS,
     MAX_FORECAST_TASKS,
     areDependenciesMet,

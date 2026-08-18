@@ -66,7 +66,7 @@ After the real schedule is persisted, calculate forecasts for up to 100 schedule
 
 The normal authenticated `GET /api/getUserTasks` payload carries the result. Calendar renders a non-null forecast and does nothing for `null`; there is no forecast endpoint, collection, or page-load simulation.
 
-Task, calendar-event, project-assignment, and working-preference changes clear forecast fields with one tenant-scoped bulk update. The next **Schedule Tasks** run replaces them. Compare civil due dates in the user’s saved timezone.
+Treat `scheduledDate`, generated task events, and `slipForecast` as one snapshot. Input edits do not selectively clear forecast fields; the next **Schedule Tasks** run replaces all scheduler outputs together. Compare civil due dates in the user’s saved timezone.
 
 Preserve current scheduler invariants and behavior: working windows, conflict avoidance, dependency order, chunk totals, recurrence handling, unschedulable behavior, and idempotence.
 

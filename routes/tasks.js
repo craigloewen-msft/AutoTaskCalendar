@@ -9,10 +9,7 @@ const {
     generateTaskEvents,
 } = require('../controllers/taskController');
 const { validateRecurrence, normaliseRecurrence, expandRecurrences } = require('../controllers/recurrence');
-const {
-    SCHEDULING_HORIZON_DAYS,
-    invalidateOneDaySlipForecasts,
-} = require('../controllers/scheduling');
+const { SCHEDULING_HORIZON_DAYS } = require('../controllers/scheduling');
 const { parseDateOnly } = require('../utils/temporal');
 const { createCompletedTaskReport } = require('../controllers/completedTaskExport');
 
@@ -157,7 +154,6 @@ function createTaskRoutes(config, authenticateSession) {
                 projectRef: resolvedProject,
             });
             await task.save();
-            await invalidateOneDaySlipForecasts(user._id);
 
             // Materialise now, so a new series shows its occurrences without waiting for
             // the user to press "Schedule Tasks".
@@ -303,7 +299,6 @@ function createTaskRoutes(config, authenticateSession) {
                     synchronizeSeriesId: targetId,
                 });
             }
-            await invalidateOneDaySlipForecasts(user._id);
 
             return res.json({ success: true });
         } catch (error) {
@@ -346,7 +341,6 @@ function createTaskRoutes(config, authenticateSession) {
                 await task.deleteOne();
             }
 
-            await invalidateOneDaySlipForecasts(user._id);
 
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.username);
@@ -376,7 +370,6 @@ function createTaskRoutes(config, authenticateSession) {
                 return res.send(returnFailure(result.message));
             }
 
-            await invalidateOneDaySlipForecasts(user._id);
 
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.username);
@@ -418,7 +411,6 @@ function createTaskRoutes(config, authenticateSession) {
             await task.save();
         }
 
-        await invalidateOneDaySlipForecasts(user._id);
         const returnTaskList = await getTaskListFromUsername(req.user.username);
         return res.json({ success: true, taskList: returnTaskList });
     });
@@ -554,7 +546,6 @@ function createTaskRoutes(config, authenticateSession) {
                 repeat: null,
             });
             let saveResult = await task.save();
-            await invalidateOneDaySlipForecasts(user._id);
             // Return the updated task list
             const returnTaskList = await getTaskListFromUsername(req.user.username);
 

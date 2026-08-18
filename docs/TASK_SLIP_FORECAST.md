@@ -49,7 +49,7 @@ The panel reports:
 
 Calendar receives the forecast through the normal `GET /api/getUserTasks` payload. There is no forecast endpoint, collection, synchronization query, or calculation during a reload: a non-null object renders a chip, while `null` renders nothing.
 
-Task edits, completion, project reassignment, working-preference changes, and calendar-event changes clear existing `slipForecast` values with one bulk update. The chips return after **Schedule Tasks** creates the next schedule, so stale results are never presented as safe.
+`scheduledDate`, generated task events, and `slipForecast` are one snapshot of the last **Schedule Tasks** run. Editing tasks, preferences, or calendar events does not update or clear only one part of that snapshot; the next scheduling run replaces all three together.
 
 ## Scheduling reuse and read-only guarantee
 
@@ -58,6 +58,8 @@ Task edits, completion, project reassignment, working-preference changes, and ca
 `controllers/scheduling.js` uses that same engine for the real schedule and its suffix simulations. `generateTaskEvents()` expands recurrence, replaces generated placements, persists `scheduledDate`, calculates the visible-window simulations, and caches their summaries as one scheduling operation.
 
 Opening, closing, or reloading a forecast only reads the task object already in Calendar. It does not write data or invoke the planner.
+
+This means a preview can become historical after an input edit, exactly like the visible generated schedule beside it. Press **Schedule Tasks** whenever you want both refreshed against current inputs.
 
 ## Limits
 

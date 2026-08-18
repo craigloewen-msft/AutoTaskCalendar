@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { UserDetails } = require('../models');
 const { returnFailure } = require('../utils/helpers');
-const { invalidateOneDaySlipForecasts } = require('../controllers/scheduling');
 const {
     CompassError,
     getCompassPayload,
@@ -87,7 +86,6 @@ function createCompassRoutes(config, authenticateSession) {
 
     router.post('/setTaskProject', authenticateSession, handle(async (req, user) => {
         await setTaskProject(req.body.taskId, req.body.projectId, user);
-        await invalidateOneDaySlipForecasts(user._id);
     }));
 
     return router;
