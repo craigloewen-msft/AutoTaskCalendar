@@ -159,7 +159,7 @@ events were loaded. A next-available occurrence that still has no slot remains p
 a later run as the rolling horizon advances; the scheduler never claims a slot beyond its
 known calendar window.
 
-The sidebar in `Calendar.vue` shows a shorter 14-day window (`SIDEBAR_WINDOW_DAYS`), since
+The sidebar in `Calendar.vue` shows a shorter 21-day window (`SIDEBAR_WINDOW_DAYS`), since
 60 days of daily occurrences would bury the list. Backlog and unscheduled tasks are always
 shown regardless.
 

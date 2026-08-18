@@ -1,5 +1,7 @@
 'use strict';
 
+const { zonedDateTime } = require('../utils/temporal');
+
 /**
  * The dataset. One user, and everything worth testing in a single seed.
  *
@@ -7,7 +9,7 @@
  * find a bug in the wild, add its shape to this file so it is covered forever after.
  *
  * A second user exists solely to prove their data never leaks into the first user's views.
- * A third (`recurruser`) holds a minimal recurring-task scenario.
+ * `recurruser` and `slipuser` hold focused scenarios for recurrence and task-slip forecasts.
  */
 
 module.exports = {
@@ -431,10 +433,79 @@ module.exports = {
             recurrence: { freq: 'weekly', interval: 1, byWeekday: [1] },
         });
 
+        // --- Fourth user: a capacity-tight task-slip scenario ------------------------------
+        const slip = await b.createUser({
+            username: 'slipuser',
+            email: 'slipuser@example.com',
+        });
+        const slipUser = slip.user;
+        const nextMonday = b.anchor.clone().startOf('isoWeek').add(1, 'week');
+        const capacityMonday = nextMonday.format('YYYY-MM-DD');
+        const capacityFriday = nextMonday.clone().add(4, 'days').format('YYYY-MM-DD');
+        const recoveryMonday = nextMonday.clone().add(7, 'days').format('YYYY-MM-DD');
+        const recoveryFriday = nextMonday.clone().add(11, 'days').format('YYYY-MM-DD');
+
+        const capacityRole = await b.createRole(slipUser, {
+            title: 'Delivery lead',
+            description: 'Protect committed delivery capacity',
+            startDate: nextMonday.clone().subtract(30, 'days').toDate(),
+        });
+        const capacityGoal = await b.createGoal(slipUser, capacityRole, {
+            title: 'Ship the Friday launch',
+            description: 'Finish committed launch work without deadline spillover',
+            startDate: nextMonday.clone().subtract(21, 'days').toDate(),
+        });
+        const capacityProject = await b.createProject(slipUser, capacityGoal, {
+            title: 'Friday launch',
+            description: 'A full mixed task and calendar-event week',
+            startDate: nextMonday.clone().subtract(14, 'days').toDate(),
+        });
+
+        const capacityTasks = await b.createTasks(slipUser, 10, (index) => ({
+            title: `Friday launch ${String(index + 1).padStart(2, '0')}`,
+            duration: 210,
+            startDate: b.civilDate(nextMonday, 0),
+            dueDate: b.civilDate(nextMonday, 4),
+            priority: index + 1,
+            projectRef: capacityProject._id,
+        }));
+        const capacityEvents = [];
+        for (let day = 0; day < 5; day++) {
+            const eventDate = nextMonday.clone().add(day, 'days').format('YYYY-MM-DD');
+            capacityEvents.push(await b.createEvent(slipUser, {
+                title: `Fixed launch meeting ${day + 1}`,
+                startDate: zonedDateTime(eventDate, 9 * 60, 'UTC'),
+                endDate: zonedDateTime(eventDate, 10 * 60, 'UTC'),
+            }));
+        }
+        const isolatedSlipTask = await b.createTask(slipUser, {
+            title: 'Isolated Friday task',
+            duration: 60,
+            startDate: b.civilDate(nextMonday, 11),
+            dueDate: b.civilDate(nextMonday, 11),
+            priority: 100,
+            projectRef: capacityProject._id,
+        });
+
         return {
             primary,
             other,
             recurring,
+            slip: {
+                ...slip,
+                capacityTasks,
+                capacityEvents,
+                isolatedTask: isolatedSlipTask,
+                role: capacityRole,
+                goal: capacityGoal,
+                project: capacityProject,
+                dates: {
+                    capacityMonday,
+                    capacityFriday,
+                    recoveryMonday,
+                    recoveryFriday,
+                },
+            },
             named: {
                 proposal,
                 codeReview,
@@ -491,6 +562,8 @@ module.exports = {
                 completed: completed.length,
                 events: events.length,
                 recurringGenerics: recurringGenerics.length,
+                capacityTasks: capacityTasks.length,
+                capacityEvents: capacityEvents.length,
             },
         };
     },

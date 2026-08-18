@@ -51,7 +51,10 @@
                 </button>
               </div>
               <p class="forecast-summary" data-test="slip-forecast-summary">
-                <strong>{{ selectedSlipForecast.movedCount }} tasks move later</strong>
+                <strong>
+                  {{ selectedSlipForecast.movedCount }} downstream
+                  {{ selectedSlipForecast.movedCount === 1 ? "task moves" : "tasks move" }} later
+                </strong>
                 <span>·</span>
                 <strong :class="{ danger: selectedSlipForecast.newlyLateCount }">
                   {{ selectedSlipForecast.newlyLateCount }} newly miss deadlines
@@ -255,7 +258,7 @@ import {
 } from "../utils/temporal";
 
 // The sidebar shows this far ahead; the scheduler materialises 60 days of occurrences.
-const SIDEBAR_WINDOW_DAYS = 14;
+const SIDEBAR_WINDOW_DAYS = 21;
 
 export default {
   name: "Calendar",
@@ -504,8 +507,8 @@ export default {
       const forecast = this.slipForecastFor(task);
       if (!forecast) return "";
       const result = forecast.newlyLateCount
-        ? `${forecast.newlyLateCount} newly missed ${forecast.newlyLateCount === 1 ? "deadline" : "deadlines"}`
-        : "no newly missed deadlines";
+        ? `${forecast.newlyLateCount} downstream ${forecast.newlyLateCount === 1 ? "deadline is" : "deadlines are"} newly missed`
+        : "no downstream deadlines are newly missed";
       return `If ${task.title} slips one day: ${result}. Show cascade.`;
     },
     deadlineGapLabel(task) {
