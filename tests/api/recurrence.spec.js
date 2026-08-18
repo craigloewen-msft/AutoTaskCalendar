@@ -7,7 +7,6 @@ const {
     validateRecurrence,
 } = require('../../controllers/recurrence');
 const {
-    addDateOnlyDays,
     mondayWeekBounds,
     parseDateOnly,
     todayInZone,
@@ -314,11 +313,10 @@ test.describe('recurrence expansion', () => {
 });
 
 test.describe('scheduling a recurring series', () => {
-    test('priority work does not become late behind a daily skip occurrence', async ({ seed, loginAs }) => {
+    test('same-day priority work does not become late behind a daily skip occurrence', async ({ seed, loginAs }) => {
         const data = await seed();
         const userId = data.recurring.user._id;
         const monday = mondayWeekBounds(todayInZone('UTC'), 'UTC').nextStartDate;
-        const tuesday = addDateOnlyDays(monday, 1);
 
         const { important, dailySeries, mondaySeries } = await withDb(async () => {
             await Promise.all([
@@ -354,7 +352,8 @@ test.describe('scheduling a recurring series', () => {
                 duration: 180,
                 priority: 1,
                 startDate: parseDateOnly(monday).date,
-                dueDate: parseDateOnly(tuesday).date,
+                // Older tasks may retain a time while occurrences use canonical midnight.
+                dueDate: new Date(`${monday}T23:59:59.999Z`),
                 completed: false,
                 isBacklog: false,
                 userRef: userId,
@@ -375,14 +374,6 @@ test.describe('scheduling a recurring series', () => {
                 },
                 userRef: userId,
             });
-            await EventDetails.create({
-                title: 'Tuesday capacity blocker',
-                startDate: zonedDateTime(tuesday, 9 * 60, 'UTC'),
-                endDate: zonedDateTime(tuesday, 12 * 60, 'UTC'),
-                type: 'calendar',
-                userRef: userId,
-            });
-
             return {
                 important: priorityTask,
                 dailySeries: series,

@@ -70,7 +70,7 @@ async function loadSchedulingTasks(userId) {
                 { $or: [{ completed: false }, { completed: null }] },
                 { $or: [{ isBacklog: false }, { isBacklog: null }] },
             ],
-        }).sort({ priority: 1, dueDate: 1, _id: 1 }),
+        }).sort({ dueDate: 1, priority: 1 }),
         TaskDetails.find({ ...filter, isBacklog: true }).sort({ startDate: 1 }),
     ]);
     return [...regular, ...backlog];

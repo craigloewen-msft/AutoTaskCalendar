@@ -1,106 +1,81 @@
-# Enforce priority-first task scheduling
+# Use priority to break same-day scheduling ties
 
 ## Problem
 
-A low-priority recurring occurrence using `whenUnschedulableBehavior: 'skip'` can be scheduled before a much higher-priority task and consume the capacity that task needs to meet its deadline.
+A low-priority recurring occurrence using `whenUnschedulableBehavior: 'skip'` could be
+scheduled before a higher-priority task that was due on the same civil day. The recurring
+occurrence consumed the only slot large enough for the other task, making the higher-priority
+work late.
 
-The recurrence layer is not losing priority: `expandSeries()` copies `priority` from the series template onto every occurrence. The inversion happens after expansion:
+The recurrence layer preserved priority correctly. The inversion came from comparing raw
+`dueDate` instants:
 
-- `loadSchedulingTasks()` in `controllers/scheduling.js` sorts regular work by `dueDate` first and `priority` second.
-- `findBestTaskForSlot()` in `controllers/schedulePlanner.js` takes the first full candidate and first chunkable candidate from that deadline-first queue, then compares those candidates by due date before priority.
-- The task editor accurately describes the current but unwanted behavior: “Lower numbers are scheduled first when due dates match.”
+- generated occurrences use a canonical UTC-midnight marker for their due day;
+- older one-off tasks can retain a later time on that same day;
+- raw MongoDB and JavaScript date ordering therefore treated the occurrence as having an
+  earlier deadline even though both tasks showed the same due date to the user;
+- priority never got a chance to break the apparent tie.
 
-This gives a skip-policy occurrence extra precedence merely because its generated due date is its occurrence day. The `skip` policy should limit how long an occurrence remains eligible; it should not let low-priority recurring work displace higher-priority work.
+## Reproduction
 
-## Confirmed reproduction
+The existing recurring scheduling spec was updated without increasing the test count. Its
+isolated UTC account has:
 
-The current planner was run locally with deterministic production-shaped input:
+- Monday–Wednesday working days, 09:00–12:00;
+- a priority `200` daily skip occurrence due Monday at its canonical midnight marker;
+- a priority `1` three-hour one-off task due Monday with a retained `23:59:59.999` time;
+- only one three-hour Monday working window.
 
-- UTC user working Monday through Wednesday, 09:00–12:00;
-- priority `200` daily recurring skip occurrence, 60 minutes, occurring/due Monday;
-- priority `1` one-off task, 180 minutes, starting Monday and due Tuesday;
-- Tuesday 09:00–12:00 blocked by a calendar event.
+The original planner selects the recurring occurrence first. That leaves only two Monday
+hours, so the priority-1 task moves to Tuesday and becomes late.
 
-The actual `planTaskPlacements()` loop, loaded from `controllers/schedulePlanner.js`, produced:
+## Final scheduling rule
+
+1. Tasks with earlier **civil due dates** schedule first.
+2. Priority is a tie-breaker for tasks due on the same civil day; lower numbers win.
+3. When civil due date and priority both tie, a task that can finish in the current slot wins
+   over starting a chunk.
+4. Task ID is the final deterministic tie-breaker.
+5. Dated work remains ahead of backlog work. Backlog keeps its historical start-date ordering.
+6. Start eligibility, dependencies, working windows, calendar conflicts, chunk limits,
+   recurrence expiry, and the scheduling horizon remain hard constraints.
+
+The planner scans all currently feasible tasks instead of relying on the first full and first
+chunkable record returned from MongoDB. It normalizes each regular task's `dueDate` to its
+canonical civil date before comparing, so midnight recurrence markers and legacy times on the
+same visible day tie correctly.
+
+The database query remains due-date-first and priority-second. Its raw order is only an input
+optimization; the planner applies the authoritative civil-day comparison when selecting work.
+
+## Result
+
+In the reproduced Monday contention:
 
 ```text
-Low-priority daily skip: Monday 09:00–10:00
-Priority-1 task:          Wednesday 09:00–12:00 (late)
+Priority-1 same-day task: Monday 09:00–12:00
+Priority-200 daily skip:  no event; scheduledDate remains null
 ```
 
-The isolated review worktree did not have npm dependencies installed, so only the missing date-library imports were replaced with UTC-equivalent stubs; the real planner selection and placement code executed unchanged. The first implementation step must reproduce the same failure through the real API and isolated MongoDB test stack before scheduler code is changed.
+The skip policy still means “do not move this occurrence later.” It does not grant recurring
+work extra precedence.
 
-## Required behavior
+## Files
 
-1. Lower numeric values are higher priority.
-2. Priority is the primary ordering rule for simultaneously eligible tasks competing for usable capacity.
-3. Due date is a tie-breaker between tasks at the same priority, not a way for a lower-priority recurring occurrence to jump the queue.
-4. Recurring skip occurrences use the same priority ordering as other tasks. Their special rule remains only that they expire at the end of their occurrence day when no valid placement is found.
-5. Existing hard constraints remain intact: start-date eligibility, dependencies, working windows, calendar conflicts, chunk limits, backlog treatment, occurrence expiry, and the 60-day horizon.
-6. Full and chunkable candidates use one deterministic, null-safe ordering rule. A missing due date must not compare ahead of a real deadline or cause `.getTime()` errors.
-
-For the reproduced scenario, the priority-1 task must occupy Monday 09:00–12:00 and finish on time. Monday’s priority-200 recurring occurrence must remain unscheduled and expire under its `skip` policy.
-
-## Implementation plan
-
-### 1. Capture the regression before changing behavior
-
-Update one existing recurring scheduling test rather than adding a new test, keeping the suite’s test count unchanged. Use `tests/api/recurrence.spec.js`’s existing “scheduling a recurring series” case (or the existing dense recurring scheduler case if it yields a cleaner diff).
-
-Create isolated test data from the next future Monday so recurrence expansion uses the real server clock safely:
-
-- clear that test tenant’s task and event data;
-- set UTC, Monday–Wednesday, 09:00–12:00 working time;
-- create the priority-200 daily skip series;
-- create the priority-1 three-hour one-off task due Tuesday;
-- block all of Tuesday with a calendar event;
-- invoke `/api/scheduletasks`;
-- assert the current implementation puts the recurring occurrence first and makes the priority-1 task late, proving the bug before any production change.
-
-Then change those assertions to the required behavior as part of the fix: priority-1 task Monday and on time; Monday skip occurrence has no task event and no `scheduledDate`.
-
-### 2. Centralize scheduler ordering
-
-In `controllers/schedulePlanner.js`, add one explicit task/candidate comparator that:
-
-- orders non-backlog schedulable work according to numeric priority ascending;
-- uses due date ascending as the next key, with missing dates sorted last;
-- provides a deterministic final tie-breaker;
-- is used consistently when choosing between full and chunkable feasible candidates.
-
-Scan the eligible candidates needed to find the comparator-best placement instead of relying on the first record returned by MongoDB. Preserve full placement when the chosen task can finish in the slot; otherwise use its valid chunk placement.
-
-Review fragmented-slot behavior while implementing so an opportunistic low-priority skip occurrence cannot consume capacity that an eligible higher-priority task can use. Do not introduce starvation from a permanently unschedulable long task; preserve the existing ability to make progress on other work when a task cannot use any valid slot.
-
-### 3. Align scheduling input and user-facing semantics
-
-- Change the regular scheduling query in `controllers/scheduling.js` to priority-first, due-date-second ordering so persisted scheduling and forecast inputs begin in the same deterministic order.
-- Keep backlog behavior explicit and preserve its existing lower scheduling class unless the comparator requires an equivalent explicit key.
-- Update `TaskEditor.vue` help text to say that lower numbers schedule first and due dates break priority ties.
-- Update `docs/RECURRING_TASKS.md` where it currently says occurrence due dates drive deadline ordering; explain that occurrences inherit priority and their occurrence date is the tie-break deadline/expiry boundary, not automatic precedence over higher-priority work.
-- Do not edit historical completed task briefs merely to rewrite their old design record.
-
-### 4. Verify
-
-Iterate narrowly, then run the full suite only during finalization:
-
-```bash
-npm test -- tests/api/recurrence.spec.js -g "<updated recurring scheduling test>"
-npm test -- tests/api/recurrence.spec.js
-npm test -- tests/api/scheduling.spec.js
-npm test
-```
-
-Also inspect the generated task events and occurrence `scheduledDate` values in the regression scenario to confirm the higher-priority task is on time and the displaced skip occurrence remains null.
+| File | Change |
+|---|---|
+| `controllers/schedulePlanner.js` | Scan feasible candidates; compare civil due day, then priority, full placement, and ID |
+| `tests/api/recurrence.spec.js` | Reproduce same-day raw-timestamp inversion in the existing recurring scheduling test |
+| `webinterface/src/components/TaskEditor.vue` | Keep the documented same-due-date priority semantics |
+| `docs/RECURRING_TASKS.md` | Explain civil deadline comparison and recurrence priority behavior |
 
 ## Acceptance criteria
 
-- The existing recurring-task spec first demonstrates the reported inversion against the old scheduler and passes with corrected expectations after the fix; no new test case is added.
-- In the deterministic capacity scenario, priority `1` work is scheduled before priority `200` recurring work and no longer becomes late.
-- The lower-priority Monday skip occurrence is not moved to a later day; it has no generated event and `scheduledDate` remains null.
-- For eligible tasks competing for the same usable capacity, lower numeric priority wins regardless of differing due dates.
-- Equal-priority tasks remain deadline ordered and deterministic.
-- Full/chunk arbitration uses the same priority semantics and safely handles tasks without due dates.
-- Dependencies, working hours/days, conflicts, recurrence policies, chunk totals, idempotence, and horizon bounds continue to pass.
-- The task editor and recurring-task manual describe the implemented priority-first rule.
+- A lower-priority recurring occurrence cannot beat higher-priority work due on the same civil
+  day merely because its stored timestamp is earlier.
+- An actually earlier civil due date still outranks a later deadline regardless of priority.
+- Equal-day priority applies consistently across full and chunkable candidates.
+- A displaced skip occurrence is not moved later and keeps `scheduledDate: null`.
+- Backlog and all existing scheduler constraints retain their behavior.
+- The existing recurrence test covers the production-shaped case; no test was added.
 - The full `npm test` suite passes.

@@ -3,6 +3,7 @@
 const momentTz = require('moment-timezone');
 const {
     addDateOnlyDays,
+    dateOnlyFromMarker,
     dateOnlyInZone,
     nextDateStartInZone,
     taskEligibleInstant,
@@ -98,26 +99,25 @@ function dateRank(value) {
     return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time;
 }
 
-function compareRanks(left, right) {
-    if (left < right) return -1;
-    if (left > right) return 1;
-    return 0;
-}
-
 function compareTaskSchedulingKeys(left, right) {
     const backlogOrder = Number(!!left?.isBacklog) - Number(!!right?.isBacklog);
     if (backlogOrder) return backlogOrder;
 
     // Backlog stays below dated work and keeps its historical start-date ordering.
     if (left?.isBacklog && right?.isBacklog) {
-        const startOrder = compareRanks(dateRank(left.startDate), dateRank(right.startDate));
+        const startOrder = dateRank(left.startDate) - dateRank(right.startDate);
         if (startOrder) return startOrder;
     }
 
-    const priorityOrder = compareRanks(priorityRank(left), priorityRank(right));
-    if (priorityOrder) return priorityOrder;
+    const leftDueDate = dateOnlyFromMarker(left?.dueDate);
+    const rightDueDate = dateOnlyFromMarker(right?.dueDate);
+    if (leftDueDate !== rightDueDate) {
+        if (!leftDueDate) return 1;
+        if (!rightDueDate) return -1;
+        return leftDueDate.localeCompare(rightDueDate);
+    }
 
-    return compareRanks(dateRank(left?.dueDate), dateRank(right?.dueDate));
+    return priorityRank(left) - priorityRank(right);
 }
 
 function compareCandidatesForScheduling(left, right) {

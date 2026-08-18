@@ -73,9 +73,9 @@ On each run, per series:
 
 Each occurrence inherits title, notes, duration, chunking, priority, dependencies, and
 `projectRef` from its template, and gets `dueDate` = its canonical civil-date marker. The
-scheduler orders eligible work by priority first and due date second, so this date breaks ties
-between equal-priority tasks; it never lets a lower-priority occurrence displace higher-priority
-work.
+scheduler orders eligible work by civil due date first, then uses priority to break ties between
+tasks due on the same day. Comparing civil dates keeps older timestamps and canonical recurrence
+markers equivalent when they represent the same deadline day.
 
 Editing an occurrence writes these authored fields to the template, then refreshes every
 pending occurrence in that series immediately. Their identity and scheduler placement stay
@@ -152,8 +152,8 @@ expansion recreates it as a duplicate.
 whether placement may continue after that date.
 
 Priority is independent of recurrence policy. A skip occurrence competes at the priority inherited
-from its template; if higher-priority work uses its available day, it remains unscheduled instead
-of jumping the queue or moving later.
+from its template when another task has the same civil due date; if that task wins their available
+slot, the occurrence remains unscheduled instead of moving later.
 
 ## Horizon
 
