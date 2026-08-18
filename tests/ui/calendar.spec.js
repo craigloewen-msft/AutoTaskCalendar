@@ -264,6 +264,30 @@ test.describe('calendar page', () => {
                     userRef: data.primary.user._id,
                 },
                 {
+                    title: 'Scheduled recurring occurrence',
+                    duration: 30,
+                    startDate: parseDateOnly(today).date,
+                    dueDate: parseDateOnly(today).date,
+                    scheduledDate: zonedDateTime(today, 11 * 60, 'UTC'),
+                    completed: false,
+                    isBacklog: false,
+                    seriesRef: series._id,
+                    occurrenceDate: parseDateOnly(today).date,
+                    userRef: data.primary.user._id,
+                },
+                {
+                    title: 'Unscheduled recurring occurrence',
+                    duration: 30,
+                    startDate: parseDateOnly(today).date,
+                    dueDate: parseDateOnly(today).date,
+                    scheduledDate: null,
+                    completed: false,
+                    isBacklog: false,
+                    seriesRef: series._id,
+                    occurrenceDate: parseDateOnly(addDateOnlyDays(today, 1)).date,
+                    userRef: data.primary.user._id,
+                },
+                {
                     title: 'Later recurring occurrence',
                     duration: 30,
                     startDate: parseDateOnly(later).date,
@@ -281,6 +305,8 @@ test.describe('calendar page', () => {
         await page.goto('/#/calendar');
 
         await expect(page.locator('.task-item', { hasText: 'Later one-off task' })).toBeVisible();
+        await expect(page.locator('.task-item', { hasText: 'Scheduled recurring occurrence' })).toBeVisible();
+        await expect(page.locator('.task-item', { hasText: 'Unscheduled recurring occurrence' })).toHaveCount(0);
         await expect(page.locator('.task-item', { hasText: 'Later recurring occurrence' })).toHaveCount(0);
         await expect(page.locator('.task-date-header').first()).toHaveText('Unscheduled');
         const unscheduled = page.locator('.task-item', { hasText: 'Task that needs time' });
@@ -356,6 +382,9 @@ test.describe('calendar page', () => {
         await page.getByRole('button', { name: 'Add task', exact: true }).click();
 
         const recurringTask = page.locator('.task-item', { hasText: 'Mon and Tue only' }).first();
+        await expect(recurringTask).toHaveCount(0);
+
+        await page.getByRole('button', { name: 'Schedule tasks' }).click();
         await expect(recurringTask).toBeVisible();
         await expect(recurringTask.locator('.recurring-icon')).toBeVisible();
     });

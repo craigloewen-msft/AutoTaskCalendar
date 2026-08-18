@@ -491,7 +491,8 @@ export default {
       return Number(forecast.movedCount) > 0 || Number(forecast.newlyLateCount) > 0;
     },
     isInSidebarWindow(task) {
-      if (!task?.seriesRef || !this.hasValidScheduledDate(task)) return true;
+      if (!this.hasValidScheduledDate(task)) return !this.isRecurringTask(task);
+      if (!task?.seriesRef) return true;
       const scheduled = new Date(task.scheduledDate);
       const windowEnd = new Date();
       windowEnd.setDate(windowEnd.getDate() + SIDEBAR_WINDOW_DAYS);
@@ -797,8 +798,8 @@ export default {
     taskGroupedByDate() {
       const groupedTasks = {};
       if (this.taskList) {
-        // 60 days of occurrences would bury the list, so the sidebar keeps a shorter
-        // window. Backlog and unscheduled tasks have no date, so they are always kept.
+        // Keep ordinary unscheduled work visible, but hide unplaced recurring occurrences
+        // and recurring occurrences beyond the shorter sidebar window.
         const visibleTasks = this.taskList.filter((task) => this.isInSidebarWindow(task));
 
         visibleTasks.forEach((task) => {
