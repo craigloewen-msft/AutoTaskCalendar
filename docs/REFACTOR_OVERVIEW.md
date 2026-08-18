@@ -11,19 +11,13 @@ This roadmap keeps the valuable findings and drops the architecture campaign. Wo
 risk at a time. Structural cleanup is worthwhile when it makes that work safer; it is not a goal by
 itself.
 
-## Do first: secure account and integration boundaries
+## Shipped
 
-- Bind Google OAuth to the initiating authenticated user with unpredictable, expiring, one-use
-  state. Stop logging OAuth URLs, codes, tokens, and provider bodies.
-- Protect stored Google credentials, or disable the integration until they can be protected.
-- Use one browser authentication lifecycle. Scope account reads to the authenticated actor and make
-  logout invalidate that lifecycle.
-- Add focused tests for OAuth replay and account binding, cross-account reads, and logout.
+- Task `00055` secured account and Google integration boundaries: one server-side browser session,
+  actor-scoped account reads, invalidating logout, protected provider credentials, and session-bound
+  one-use OAuth state with focused security specs.
 
-**Why this is worth doing:** the current code can expose provider credentials or bind an OAuth result
-to the wrong account. These are security defects, not code-style preferences.
-
-## Do next: prevent incorrect or partially published data
+## Do first: prevent incorrect or partially published data
 
 - Make Google sync return truthful failures and bound token refresh and retry.
 - Validate scheduler-critical values and calculate a complete schedule before replacing the last

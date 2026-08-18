@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
 const passport = require('passport');
 const { UserDetails } = require('../models');
 const { returnFailure, returnBasicUserInfo } = require('../utils/helpers');
@@ -28,77 +27,65 @@ function validateWorkingPreferences(body) {
     return { start: start.minutes, end: end.minutes };
 }
 
-const JWTTimeout = 4 * 604800; // 28 Days
+function regenerateSession(req) {
+    return new Promise((resolve, reject) => {
+        req.session.regenerate((error) => error ? reject(error) : resolve());
+    });
+}
 
-function createAuthRoutes(config, authenticateToken) {
+function loginSession(req, user) {
+    return new Promise((resolve, reject) => {
+        req.logIn(user, (error) => error ? reject(error) : resolve());
+    });
+}
+
+async function establishSession(req, user) {
+    await regenerateSession(req);
+    await loginSession(req, user);
+}
+
+function createAuthRoutes(config, authenticateSession, requireSameOrigin) {
     
-    router.post('/login', (req, res, next) => {
-        passport.authenticate('local',
-            (err, user, info) => {
-                if (err) {
-                    return res.json(returnFailure('Server error while authenticating'));
-                }
+    router.post('/login', requireSameOrigin, (req, res, next) => {
+        passport.authenticate('local', async (err, user) => {
+            if (err) return res.json(returnFailure('Server error while authenticating'));
+            if (!user) return res.json(returnFailure('Failure to login'));
 
-                if (!user) {
-                    return res.json(returnFailure('Failure to login'));
-                }
+            try {
+                await migrateTemporalData(user, req.body.timeZone);
+                user.lastLoginDate = new Date();
+                await user.save();
+                await establishSession(req, user);
 
-                req.logIn(user, async function (err) {
-                    if (err) {
-                        return res.json(returnFailure('Failure to login'));
-                    }
-
-                    try {
-                        await migrateTemporalData(user, req.body.timeZone);
-                        user.lastLoginDate = new Date();
-                        await user.save();
-
-                        const token = jwt.sign(
-                            { id: user.username },
-                            config.secret,
-                            { expiresIn: JWTTimeout }
-                        );
-                        const returnUserInfo = await returnBasicUserInfo(user);
-                        return res.json({ success: true, auth: true, token, user: returnUserInfo });
-                    } catch (error) {
-                        console.error(error);
-                        return res.json(returnFailure('Server error while updating account data'));
-                    }
-                });
-
-            })(req, res, next);
+                const returnUserInfo = await returnBasicUserInfo(user);
+                return res.json({ success: true, auth: true, user: returnUserInfo });
+            } catch (error) {
+                console.error('Could not establish the login session');
+                return res.json(returnFailure('Server error while updating account data'));
+            }
+        })(req, res, next);
     });
 
-    router.get('/user/:username/', authenticateToken, (req, res) => {
-        try {
-            UserDetails.find({ username: req.params.username }).populate('repos').exec(function (err, docs) {
-                if (err) {
-                    return res.json(returnFailure('Server error'));
-                } else {
-                    if (!docs[0]) {
-                        return res.json(returnFailure("Error while obtaining user"));
-                    } else {
-                        var returnValue = {
-                            success: true, auth: true,
-                            user: {
-                                username: docs[0].username, email: docs[0].email
-                            }
-                        };
-                        res.json(returnValue);
-                    }
-                }
+    router.get('/user', authenticateSession, async (req, res) => {
+        return res.json({
+            success: true,
+            auth: true,
+            user: await returnBasicUserInfo(req.user),
+        });
+    });
+
+    router.post('/logout', authenticateSession, (req, res, next) => {
+        req.logout((logoutError) => {
+            if (logoutError) return next(logoutError);
+            req.session.destroy((destroyError) => {
+                if (destroyError) return next(destroyError);
+                res.clearCookie(config.sessionCookieName, config.sessionCookieOptions);
+                return res.json({ success: true });
             });
-        } catch (error) {
-            return res.json(returnFailure(error));
-        }
+        });
     });
 
-    router.get('/logout', function (req, res) {
-        req.logout();
-        res.redirect('/api/');
-    });
-
-    router.post('/register', async function (req, res) {
+    router.post('/register', requireSameOrigin, async function (req, res) {
         try {
             let doesUserExist = await UserDetails.exists({ username: req.body.username });
 
@@ -120,11 +107,10 @@ function createAuthRoutes(config, authenticateToken) {
                 workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
             }, req.body.password);
 
-            let token = jwt.sign({ id: req.body.username }, config.secret, { expiresIn: JWTTimeout });
-
+            await establishSession(req, registeredUser);
             let returnUserInfo = await returnBasicUserInfo(registeredUser);
 
-            let response = { success: true, auth: true, token: token, user: returnUserInfo };
+            let response = { success: true, auth: true, user: returnUserInfo };
             return res.json(response);
         }
         catch (error) {
@@ -132,9 +118,9 @@ function createAuthRoutes(config, authenticateToken) {
         }
     });
 
-    router.post('/updateuserinfo', authenticateToken, async function (req, res) {
+    router.post('/updateuserinfo', authenticateSession, async function (req, res) {
         try {
-            let user = await UserDetails.findOne({ username: req.user.id });
+            let user = await UserDetails.findOne({ username: req.user.username });
 
             if (!req.user || !user) {
                 return res.send(returnFailure('Not logged in'));

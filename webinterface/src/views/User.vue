@@ -215,7 +215,6 @@ export default {
     async connectCalendar() {
       try {
         const response = await this.$http.get("api/connectGoogle");
-        console.log(response.data.authUrl);
         window.location.href = response.data.authUrl;
       } catch (error) {
         console.error(error);

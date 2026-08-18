@@ -35,8 +35,8 @@ const UserDetail = new Schema({
     workingEndMinutes: { type: Number, default: 1020 },
     temporalDataVersion: { type: Number, default: 0 },
     workingDays: [String],
-    googleAccessToken: String,
-    googleRefreshToken: String,
+    googleAccessTokenEncrypted: String,
+    googleRefreshTokenEncrypted: String,
     selectedCalendars: [String],
 }, { collection: 'usercollection' });
 
@@ -168,6 +168,15 @@ const EventDetail = new Schema({
     taskRef: { type: Schema.Types.ObjectId, ref: 'taskInfo' },
 });
 
+const GoogleOAuthStateDetail = new Schema({
+    stateDigest: { type: String, required: true, unique: true },
+    userRef: { type: Schema.Types.ObjectId, ref: 'userInfo', required: true, index: true },
+    sessionDigest: { type: String, required: true },
+    expiresAt: { type: Date, required: true, expires: 0 },
+}, { collection: 'googleOAuthState' });
+
+GoogleOAuthStateDetail.index({ userRef: 1, sessionDigest: 1 }, { unique: true });
+
 UserDetail.plugin(passportLocalMongoose);
 
 const UserDetails = mongoose.model('userInfo', UserDetail, 'userInfo');
@@ -176,6 +185,11 @@ const EventDetails = mongoose.model('eventInfo', EventDetail, 'eventInfo');
 const RoleDetails = mongoose.model('roleInfo', RoleDetail, 'roleInfo');
 const GoalDetails = mongoose.model('goalInfo', GoalDetail, 'goalInfo');
 const ProjectDetails = mongoose.model('projectInfo', ProjectDetail, 'projectInfo');
+const GoogleOAuthStateDetails = mongoose.model(
+    'googleOAuthState',
+    GoogleOAuthStateDetail,
+    'googleOAuthState'
+);
 
 module.exports = {
     UserDetails,
@@ -183,5 +197,6 @@ module.exports = {
     EventDetails,
     RoleDetails,
     GoalDetails,
-    ProjectDetails
+    ProjectDetails,
+    GoogleOAuthStateDetails
 };

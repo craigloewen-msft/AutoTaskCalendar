@@ -11,8 +11,11 @@ test.describe('auth', () => {
         const loginBody = await login.json();
 
         expect(loginBody.success).toBe(true);
-        expect(loginBody.token).toBeTruthy();
+        expect(loginBody.token).toBeUndefined();
         expect(loginBody.user.username).toBe(data.primary.username);
+
+        const session = await apiAnon.get('/api/user');
+        expect((await session.json()).user.username).toBe(data.primary.username);
 
         const wrongPassword = await apiAnon.post('/api/login', {
             data: { username: data.primary.username, password: 'wrong' },
@@ -56,7 +59,7 @@ test.describe('auth', () => {
         expect(duplicateBody.log).toContain('already exists');
     });
 
-    test('protected endpoints reject missing and invalid tokens', async ({ seed, apiAnon, playwright }) => {
+    test('protected endpoints reject missing sessions and old authorization tokens', async ({ seed, apiAnon, playwright }) => {
         await seed();
 
         const anonymous = await apiAnon.get('/api/getUserTasks');
@@ -64,12 +67,40 @@ test.describe('auth', () => {
 
         const context = await playwright.request.newContext({
             baseURL,
-            extraHTTPHeaders: { Authorization: 'not-a-real-token' },
+            extraHTTPHeaders: { Authorization: 'old-style-jwt' },
         });
-        const garbage = await context.get('/api/getUserTasks');
+        const oldToken = await context.get('/api/getUserTasks');
         await context.dispose();
 
-        expect(garbage.status()).toBe(401);
+        expect(oldToken.status()).toBe(401);
+    });
+
+    test('account reads are self-scoped and logout destroys the session', async ({ seed, api }) => {
+        const data = await seed();
+
+        const self = await api.get('/api/user');
+        expect((await self.json()).user.username).toBe(data.primary.username);
+
+        const foreignPath = await api.get(`/api/user/${data.other.username}`);
+        expect(foreignPath.status()).toBe(404);
+
+        expect((await api.get('/api/getUserTasks')).status()).toBe(200);
+        const logout = await api.post('/api/logout');
+        expect((await logout.json()).success).toBe(true);
+        expect((await api.get('/api/getUserTasks')).status()).toBe(401);
+    });
+
+    test('rejects cross-site account requests', async ({ seed, playwright }) => {
+        const data = await seed();
+        const context = await playwright.request.newContext({
+            baseURL,
+            extraHTTPHeaders: { Origin: 'https://attacker.example' },
+        });
+        const login = await context.post('/api/login', {
+            data: { username: data.primary.username, password: data.primary.password },
+        });
+        expect(login.status()).toBe(403);
+        await context.dispose();
     });
 
     test('updateuserinfo validates and persists working hours and timezone', async ({ seed, api }) => {

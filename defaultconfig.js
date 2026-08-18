@@ -1,7 +1,7 @@
 // Copy this file to config.js to override these locally; config.js is gitignored and
 // takes precedence. In production these come from environment variables instead.
 module.exports = {
-    // secret is for jwt
+    // Used to derive application encryption keys.
     'secret': 'mysecret',
     // https://www.npmjs.com/package/express-session#user-content-secret
     'sessionSecret': 'somesessionsecret',

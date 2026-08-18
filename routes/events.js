@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { google } = require('googleapis');
-const { UserDetails } = require('../models');
+const { UserDetails, GoogleOAuthStateDetails } = require('../models');
+const { readGoogleCredentials, writeGoogleCredentials } = require('../utils/googleCredentials');
 const { returnFailure } = require('../utils/helpers');
 const { parseInstant, localWeekBounds } = require('../utils/temporal');
 const {
@@ -13,10 +15,20 @@ const {
   syncCalendarsToDatabase
 } = require('../controllers/eventController');
 
-function createEventRoutes(config, authenticateToken) {
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
-  router.post('/createEvent', authenticateToken, async (req, res) => {
-    let user = await UserDetails.findOne({ username: req.user.id });
+function digest(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function invalidStateRedirect(res, config) {
+  return res.redirect(`${config.appUrl}?error=invalid_state`);
+}
+
+function createEventRoutes(config, authenticateSession) {
+
+  router.post('/createEvent', authenticateSession, async (req, res) => {
+    let user = await UserDetails.findOne({ username: req.user.username });
 
     if (!req.user || !user) {
       return res.send(returnFailure('Not logged in'));
@@ -44,8 +56,8 @@ function createEventRoutes(config, authenticateToken) {
     }
   });
 
-  router.post('/updateEvent', authenticateToken, async (req, res) => {
-    let user = await UserDetails.findOne({ username: req.user.id });
+  router.post('/updateEvent', authenticateSession, async (req, res) => {
+    let user = await UserDetails.findOne({ username: req.user.username });
 
     if (!user) {
       return res.send(returnFailure('Not logged in'));
@@ -81,8 +93,8 @@ function createEventRoutes(config, authenticateToken) {
     }
   });
 
-  router.post('/deleteEvent', authenticateToken, async (req, res) => {
-    let user = await UserDetails.findOne({ username: req.user.id });
+  router.post('/deleteEvent', authenticateSession, async (req, res) => {
+    let user = await UserDetails.findOne({ username: req.user.username });
 
     if (!req.user || !user) {
       return res.send(returnFailure('Not logged in'));
@@ -96,15 +108,15 @@ function createEventRoutes(config, authenticateToken) {
     try {
       await deleteEvent(eventId, user._id);
       // Return the updated event list
-      const returnEventList = await getEventListFromUsername(req.user.id);
+      const returnEventList = await getEventListFromUsername(req.user.username);
       return res.json({ success: true, eventList: returnEventList });
     } catch (err) {
       res.send(returnFailure(err.message));
     }
   });
 
-  router.get('/getUserEvents/:date', authenticateToken, async (req, res) => {
-    let user = await UserDetails.findOne({ username: req.user.id });
+  router.get('/getUserEvents/:date', authenticateSession, async (req, res) => {
+    let user = await UserDetails.findOne({ username: req.user.username });
 
     if (!req.user || !user) {
       return res.send(returnFailure('Not logged in'));
@@ -129,21 +141,13 @@ function createEventRoutes(config, authenticateToken) {
     }
   });
 
-  router.get('/connectGoogle', authenticateToken, async (req, res) => {
-    let user = await UserDetails.findOne({ username: req.user.id });
+  router.get('/connectGoogle', authenticateSession, async (req, res) => {
+    let user = await UserDetails.findOne({ username: req.user.username });
 
-    if (!req.user || !user) {
-      console.error('[Google OAuth] User not logged in or not found');
-      return res.send(returnFailure('Not logged in'));
-    }
+    if (!req.user || !user) return res.send(returnFailure('Not logged in'));
 
-    // Check for missing configuration
-    if (!config.appUrl) {
-      console.error('[Google OAuth] ERROR: config.appUrl is not set! This will cause OAuth to fail.');
-      return res.send(returnFailure('Server configuration error: appUrl not set'));
-    }
+    if (!config.appUrl) return res.send(returnFailure('Server configuration error: appUrl not set'));
     if (!config.googleOAuthClientID || !config.googleOAuthClientSecret) {
-      console.error('[Google OAuth] ERROR: Google OAuth credentials not configured');
       return res.send(returnFailure('Server configuration error: Google OAuth not configured'));
     }
 
@@ -160,47 +164,51 @@ function createEventRoutes(config, authenticateToken) {
       'https://www.googleapis.com/auth/calendar.readonly',
     ];
 
+    const state = crypto.randomBytes(32).toString('base64url');
+    const sessionDigest = digest(req.sessionID);
+    await GoogleOAuthStateDetails.findOneAndUpdate(
+      { userRef: user._id, sessionDigest },
+      {
+        $set: {
+          stateDigest: digest(state),
+          expiresAt: new Date(Date.now() + OAUTH_STATE_TTL_MS),
+        },
+        $setOnInsert: { userRef: user._id, sessionDigest },
+      },
+      { upsert: true }
+    );
+
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       scope: scopes,
-      state: user._id.toString(),
+      state,
       prompt: 'consent',
     });
 
-    console.log('[Google OAuth] Generated auth URL (first 100 chars):', authUrl.substring(0, 100) + '...');
     return res.send({ authUrl });
   });
 
   router.get('/connectGoogleCallback', async (req, res) => {
-
-    // Check if Google returned an error
-    if (req.query.error) {
-      console.error('[Google OAuth] ERROR: Google returned error:', req.query.error);
-      console.error('[Google OAuth] Error description:', req.query.error_description || 'none provided');
-      return res.redirect(`${config.appUrl}?error=oauth_error`);
+    if (!req.isAuthenticated || !req.isAuthenticated() || !req.user || !req.sessionID) {
+      return invalidStateRedirect(res, config);
+    }
+    if (typeof req.query.state !== 'string' || req.query.state.length === 0) {
+      return invalidStateRedirect(res, config);
     }
 
-    // Check if authorization code is present
-    if (!req.query.code) {
-      console.error('[Google OAuth] ERROR: Missing authorization code in callback');
-      return res.redirect(`${config.appUrl}?error=missing_code`);
-    }
+    const state = await GoogleOAuthStateDetails.findOneAndDelete({
+      stateDigest: digest(req.query.state),
+      userRef: req.user._id,
+      sessionDigest: digest(req.sessionID),
+      expiresAt: { $gt: new Date() },
+    });
+    if (!state) return invalidStateRedirect(res, config);
 
-    // Get the user's ID from the state parameter
-    const userId = req.query.state;
+    if (req.query.error) return res.redirect(`${config.appUrl}?error=oauth_error`);
+    if (!req.query.code) return res.redirect(`${config.appUrl}?error=missing_code`);
 
-    if (!userId) {
-      console.error('[Google OAuth] ERROR: Missing state parameter in callback');
-      return res.redirect(`${config.appUrl}?error=invalid_state`);
-    }
-
-    // Check if user exists
-    let user = await UserDetails.findById(userId);
-
-    if (!user) {
-      console.error('[Google OAuth] ERROR: User not found for ID:', userId);
-      return res.redirect(`${config.appUrl}?error=user_not_found`);
-    }
+    const user = await UserDetails.findById(req.user._id);
+    if (!user) return invalidStateRedirect(res, config);
 
     const redirectUri = `${config.appUrl}/api/connectGoogleCallback`;
 
@@ -214,43 +222,40 @@ function createEventRoutes(config, authenticateToken) {
     try {
       const { tokens } = await oauth2Client.getToken(req.query.code);
 
-      // Save the access and refresh tokens in the user's document
-      user.googleAccessToken = tokens.access_token;
-      user.googleRefreshToken = tokens.refresh_token;
+      writeGoogleCredentials(user, config, {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+      });
       await user.save();
 
-      console.log('[Google OAuth] Tokens saved to user document, redirecting to:', config.appUrl);
       return res.redirect(`${config.appUrl}`);
     } catch (err) {
-      console.error('[Google OAuth] ERROR: Failed to exchange authorization code for tokens');
-      console.error('[Google OAuth] Error message:', err.message);
-      console.error('[Google OAuth] Error details:', JSON.stringify(err.response?.data || err, null, 2));
+      console.error('[Google OAuth] Token exchange failed');
       return res.redirect(`${config.appUrl}?error=token_exchange_failed`);
     }
   });
 
-  router.get('/getCalendars', authenticateToken, async (req, res) => {
-    console.log('[Google OAuth] /getCalendars called');
+  router.get('/getCalendars', authenticateSession, async (req, res) => {
     try {
-      const user = await UserDetails.findOne({ username: req.user.id });
-      if (!user || !user.googleAccessToken) {
-        console.error('[Google OAuth] ERROR: User not authenticated with Google or no access token');
+      const user = await UserDetails.findOne({ username: req.user.username });
+      if (!user) return res.send(returnFailure('User is not authenticated with Google'));
+      const credentials = readGoogleCredentials(user, config);
+      if (!credentials.accessToken) {
         return res.send(returnFailure('User is not authenticated with Google'));
       }
 
       const auth = new google.auth.OAuth2();
-      auth.setCredentials({ access_token: user.googleAccessToken });
+      auth.setCredentials({ access_token: credentials.accessToken });
       const calendar = google.calendar({ version: 'v3', auth });
 
       let calendarListResponse = null;
       try {
         calendarListResponse = await calendar.calendarList.list();
       } catch (err) {
-        console.error('[Google OAuth] Calendar list failed with error code:', err.code);
-        console.error('[Google OAuth] Error message:', err.message);
         if (err.code == 401) {
           await refreshGoogleCalendarAccessToken(user, config);
-          auth.setCredentials({ access_token: user.googleAccessToken });
+          const refreshed = readGoogleCredentials(user, config);
+          auth.setCredentials({ access_token: refreshed.accessToken });
           calendarListResponse = await calendar.calendarList.list();
         } else {
           throw err;
@@ -260,14 +265,14 @@ function createEventRoutes(config, authenticateToken) {
 
       return res.json({ success: true, calendars });
     } catch (err) {
-      console.error('[Google OAuth] ERROR in /getCalendars:', err.message);
-      return res.send(returnFailure(err.message));
+      console.error('[Google OAuth] Calendar listing failed');
+      return res.send(returnFailure('Could not load Google calendars'));
     }
   });
 
-  router.get('/synccalendar', authenticateToken, async (req, res) => {
+  router.get('/synccalendar', authenticateSession, async (req, res) => {
     try {
-      let user = await UserDetails.findOne({ username: req.user.id });
+      let user = await UserDetails.findOne({ username: req.user.username });
 
       if (!req.user || !user) {
         return res.send(returnFailure('Not logged in'));
@@ -280,14 +285,15 @@ function createEventRoutes(config, authenticateToken) {
       let calendarTimeZones = {};
       try {
         const auth = new google.auth.OAuth2();
-        auth.setCredentials({ access_token: user.googleAccessToken });
+        const credentials = readGoogleCredentials(user, config);
+        auth.setCredentials({ access_token: credentials.accessToken });
         const calendar = google.calendar({ version: 'v3', auth });
         const entries = await calendar.calendarList.list();
         calendarTimeZones = Object.fromEntries(
           (entries.data.items || []).map((entry) => [entry.id, entry.timeZone])
         );
       } catch (error) {
-        console.error('[Google OAuth] Could not load calendar timezones:', error.message);
+        console.error('[Google OAuth] Could not load calendar timezones');
       }
 
       await syncCalendarsToDatabase(
@@ -300,8 +306,8 @@ function createEventRoutes(config, authenticateToken) {
 
       return res.send({ success: true });
     } catch (err) {
-      console.error(err);
-      return res.send(returnFailure(err.message));
+      console.error('[Google OAuth] Calendar sync request failed');
+      return res.send(returnFailure('Could not sync Google calendars'));
     }
   });
 

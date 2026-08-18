@@ -68,29 +68,18 @@ export default {
     },
   },
   created: function () {
-    // Handle expired tokens case
     const storeRef = this.$store;
     const routerRef = this.$router;
-    this.$http.defaults.headers.common["Authorization"] =
-      this.$store.state.token;
 
-    var errorResponseFunc = function (err) {
-      var returnPromiseFunc = function (storeRef, routerRef) {
-        return new Promise(function (resolve, reject) {
-          if (err.response.status === 401) {
-            storeRef.dispatch("logout");
-            routerRef.push("/");
-          }
-        });
-      };
-
-      return returnPromiseFunc(storeRef, routerRef);
-    };
-
-    this.$http.interceptors.response.use(
-      undefined,
-      errorResponseFunc.bind(this)
-    );
+    this.$http.interceptors.response.use(undefined, async function (error) {
+      if (error.response?.status === 401) {
+        await storeRef.dispatch('clearSession');
+        if (routerRef.currentRoute.value.meta.requiresAuth) {
+          await routerRef.push('/login');
+        }
+      }
+      return Promise.reject(error);
+    });
   },
   metaInfo: {
     title: "AutoTaskCalendar - Intelligent Task Scheduling & Management",
