@@ -13,17 +13,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    services:
-      mongo:
-        image: mongo:8.0.12
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\")'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
 
@@ -44,8 +33,6 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Build and test
-        env:
-          AUTOTASKCALENDAR_TEST_MONGO_URL: mongodb://127.0.0.1:27017/autotaskcalendar_ci_test
         run: |
           echo "Building with GA Measurement ID configured"
           npm run build --if-present

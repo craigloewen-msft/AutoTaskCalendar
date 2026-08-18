@@ -215,7 +215,8 @@ test.describe('calendar page', () => {
         const data = await seed();
         await seed.clearTasks();
         const today = todayInZone('UTC');
-        const later = addDateOnlyDays(today, 20);
+        const later = addDateOnlyDays(today, 22);
+        await page.clock.install({ time: new Date(`${today}T12:00:00.000Z`) });
 
         await withDb(async () => {
             const series = await TaskDetails.create({
