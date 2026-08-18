@@ -137,6 +137,58 @@
             </div>
           </BCard>
 
+          <BCard class="modern-card mb-4" data-test="completed-task-export">
+            <h3 class="section-title">
+              <span class="title-icon">📄</span>
+              Completed task export
+            </h3>
+            <p class="section-description">
+              Download completed task titles, notes, dates, and Compass context as Markdown for
+              yearly reviews or an LLM conversation.
+            </p>
+
+            <BRow>
+              <BCol md="6" class="mb-3">
+                <BFormGroup label="From" label-for="completedExportFrom">
+                  <BFormInput
+                    id="completedExportFrom"
+                    v-model="completedExport.from"
+                    type="date"
+                    class="modern-input"
+                  />
+                </BFormGroup>
+              </BCol>
+              <BCol md="6" class="mb-3">
+                <BFormGroup label="To" label-for="completedExportTo">
+                  <BFormInput
+                    id="completedExportTo"
+                    v-model="completedExport.to"
+                    type="date"
+                    class="modern-input"
+                  />
+                </BFormGroup>
+              </BCol>
+            </BRow>
+
+            <p
+              v-if="completedExport.message"
+              class="export-message"
+              :class="{ error: completedExport.error }"
+              :role="completedExport.error ? 'alert' : 'status'"
+              data-test="completed-task-export-status"
+            >
+              {{ completedExport.message }}
+            </p>
+            <BButton
+              variant="outline-primary"
+              :disabled="completedExport.downloading"
+              data-test="download-completed-tasks"
+              @click="downloadCompletedTasks"
+            >
+              {{ completedExport.downloading ? "Preparing download…" : "Download Markdown" }}
+            </BButton>
+          </BCard>
+
           <!-- Save Button -->
           <div class="text-center">
             <BButton
@@ -156,7 +208,7 @@
 </template>
 
 <script>
-import router from "../router";
+import { dateOnlyInTimeZone } from "../utils/temporal";
 import { BContainer, BRow, BCol, BCard, BButton, BFormGroup, BFormCheckbox, BFormInput } from 'bootstrap-vue-next';
 
 export default {
@@ -172,10 +224,19 @@ export default {
     BFormInput
   },
   data() {
+    const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
+
     return {
       user: this.$store.state.user,
       userCalendarList: [],
       weekdays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+      completedExport: {
+        from: today ? `${today.slice(0, 4)}-01-01` : "",
+        to: today,
+        downloading: false,
+        error: false,
+        message: "",
+      },
       input: {
         startTime: null,
         endTime: null,
@@ -188,6 +249,53 @@ export default {
     };
   },
   methods: {
+    async downloadCompletedTasks() {
+      const form = this.completedExport;
+      form.error = false;
+      form.message = "";
+
+      if (!form.from || !form.to) {
+        form.error = true;
+        form.message = "Choose both a From and To date.";
+        return;
+      }
+      if (form.from > form.to) {
+        form.error = true;
+        form.message = "From must be on or before To.";
+        return;
+      }
+
+      form.downloading = true;
+      try {
+        const response = await this.$http.get("/api/exportCompletedTasks", {
+          params: { completedFrom: form.from, completedTo: form.to },
+        });
+        if (typeof response.data !== "string") {
+          form.error = true;
+          form.message = response.data?.log || "Completed task export could not be created.";
+          return;
+        }
+
+        const filename = `completed-tasks-${form.from}-to-${form.to}.md`;
+        const url = URL.createObjectURL(new Blob([response.data], { type: "text/markdown;charset=utf-8" }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        form.message = "Markdown report downloaded.";
+      } catch (error) {
+        form.error = true;
+        const responseMessage = typeof error.response?.data === "object"
+          ? error.response.data?.log
+          : "";
+        form.message = responseMessage || "Completed task export could not be created.";
+      } finally {
+        form.downloading = false;
+      }
+    },
     async submitUserUpdates() {
       const workingHours = {
         workingStartTime: this.input.startTime,
@@ -261,6 +369,15 @@ export default {
 </script>
 
 <style scoped>
+.export-message {
+  margin-bottom: 1rem;
+  color: #8bd49c;
+}
+
+.export-message.error {
+  color: #ff8f8f;
+}
+
 .user-profile-header {
   text-align: center;
   padding: 40px 20px;

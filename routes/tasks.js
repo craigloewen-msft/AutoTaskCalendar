@@ -11,6 +11,7 @@ const {
 const { validateRecurrence, normaliseRecurrence, expandRecurrences } = require('../controllers/recurrence');
 const { SCHEDULING_HORIZON_DAYS } = require('../controllers/scheduling');
 const { parseDateOnly } = require('../utils/temporal');
+const { createCompletedTaskReport } = require('../controllers/completedTaskExport');
 
 function parseTaskDate(value, label, { required = false } = {}) {
     const parsed = parseDateOnly(value);
@@ -409,6 +410,41 @@ function createTaskRoutes(config, authenticateToken) {
 
         const returnTaskList = await getTaskListFromUsername(req.user.id);
         return res.json({ success: true, taskList: returnTaskList });
+    });
+
+    router.get('/exportCompletedTasks', authenticateToken, async (req, res) => {
+        try {
+            const user = await UserDetails.findOne({ username: req.user.id });
+
+            if (!req.user || !user) {
+                return res.send(returnFailure('Not logged in'));
+            }
+
+            const from = parseDateOnly(req.query.completedFrom);
+            const to = parseDateOnly(req.query.completedTo);
+            if (!from.provided || !to.provided) {
+                return res.send(returnFailure('completedFrom and completedTo are required'));
+            }
+            if (!from.valid || !to.valid) {
+                return res.send(returnFailure('Completion dates must use YYYY-MM-DD'));
+            }
+            if (from.value > to.value) {
+                return res.send(returnFailure('completedFrom must be on or before completedTo'));
+            }
+
+            const report = await createCompletedTaskReport(user, from.value, to.value);
+            const filename = `completed-tasks-${from.value}-to-${to.value}.md`;
+            res.set({
+                'Content-Type': 'text/markdown; charset=utf-8',
+                'Content-Disposition': `attachment; filename="${filename}"`,
+                'Cache-Control': 'no-store',
+                Pragma: 'no-cache',
+            });
+            return res.send(report);
+        } catch (error) {
+            console.error(error);
+            return res.send(returnFailure('Completed task export could not be created'));
+        }
     });
 
     router.get('/getProjectCompletions', authenticateToken, async (req, res) => {

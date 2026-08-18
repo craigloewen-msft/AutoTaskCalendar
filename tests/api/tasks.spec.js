@@ -1,5 +1,5 @@
 const { test, expect, withDb } = require('../fixtures');
-const { TaskDetails, UserDetails, EventDetails } = require('../../models');
+const { TaskDetails, UserDetails, EventDetails, ProjectDetails } = require('../../models');
 const { parseDateOnly } = require('../../utils/temporal');
 
 function titles(taskList) {
@@ -204,6 +204,135 @@ test.describe('tasks', () => {
         })).json();
         expect(final.success).toBe(true);
         expect(final.taskList.find((item) => item._id === task._id.toString())).toBeUndefined();
+    });
+
+    test('exports owned completed work as LLM-ready Markdown in the saved timezone', async ({
+        seed,
+        api,
+        apiAnon,
+    }) => {
+        const data = await seed();
+        await withDb(async () => {
+            await UserDetails.updateOne(
+                { _id: data.primary.user._id },
+                { $set: { timeZone: 'America/New_York' } }
+            );
+            const orphanProject = await ProjectDetails.create({
+                title: 'Surviving project context',
+                description: 'Project remains after its hierarchy changed',
+                userRef: data.primary.user._id,
+            });
+            await TaskDetails.create([
+                completedTask(data, {
+                    title: 'Before export range',
+                    completedDate: new Date('2024-03-04T04:59:59.999Z'),
+                }),
+                completedTask(data, {
+                    title: 'At first local midnight',
+                    notes: 'Impact *and* <private-looking-tag>\nsecond line',
+                    completedDate: new Date('2024-03-04T05:00:00.000Z'),
+                    dueDate: parseDateOnly('2030-12-31').date,
+                }),
+                completedTask(data, {
+                    title: 'Recurring review 🚀',
+                    completedDate: new Date('2024-03-11T03:59:59.999Z'),
+                    occurrenceDate: parseDateOnly('2024-03-10').date,
+                    seriesRef: data.named.weekdaysSeries._id,
+                    projectRef: null,
+                }),
+                completedTask(data, {
+                    title: 'Partial hierarchy completion',
+                    completedDate: new Date('2024-03-08T16:00:00.000Z'),
+                    projectRef: orphanProject._id,
+                }),
+                completedTask(data, {
+                    title: 'Unavailable project completion',
+                    completedDate: new Date('2024-03-09T12:00:00.000Z'),
+                    projectRef: data.named.otherProject._id,
+                }),
+                completedTask(data, {
+                    title: 'At next local midnight',
+                    completedDate: new Date('2024-03-11T04:00:00.000Z'),
+                }),
+                completedTask(data, {
+                    title: 'Incomplete secret',
+                    completed: false,
+                    completedDate: new Date('2024-03-08T12:00:00.000Z'),
+                }),
+                completedTask(data, {
+                    title: 'OTHER USER SECRET COMPLETION',
+                    userRef: data.other.user._id,
+                    projectRef: data.named.otherProject._id,
+                    completedDate: new Date('2024-03-08T12:00:00.000Z'),
+                }),
+            ]);
+        });
+
+        const query = '?completedFrom=2024-03-04&completedTo=2024-03-10';
+        expect((await apiAnon.get(`/api/exportCompletedTasks${query}`)).status()).toBe(401);
+
+        const response = await api.get(`/api/exportCompletedTasks${query}`);
+        const report = await response.text();
+
+        expect(response.headers()['content-type']).toContain('text/markdown');
+        expect(response.headers()['cache-control']).toBe('no-store');
+        expect(response.headers()['content-disposition']).toBe(
+            'attachment; filename="completed-tasks-2024-03-04-to-2024-03-10.md"'
+        );
+        expect(report).toContain('# Completed task report');
+        expect(report).toContain('America/New\\_York');
+        expect(report).toContain('Completed tasks: **4**');
+        expect(report).toContain('Engineer → Ship v2 by June → Migration plan');
+        expect(report).toContain('Build and ship good software');
+        expect(report).toContain('Plan and execute the data migration');
+        expect(report).toContain('### Surviving project context');
+        expect(report).toContain('Project remains after its hierarchy changed');
+        expect(report).toContain('Partial hierarchy completion');
+        expect(report).toContain('2024-03-04 00:00 EST — At first local midnight');
+        expect(report).toContain('Impact \\*and\\* &lt;private-looking-tag&gt; second line');
+        expect(report).toContain('Due date: 2030-12-31');
+        expect(report).toContain('### Unaligned or unavailable project context');
+        expect(report).toContain('Unavailable project completion');
+        expect(report).toContain('2024-03-10 23:59 EDT — Recurring review 🚀');
+        expect(report).toContain('Recurring occurrence: 2024-03-10');
+        expect(report.indexOf('At first local midnight')).toBeLessThan(
+            report.indexOf('Partial hierarchy completion')
+        );
+        expect(report.indexOf('Partial hierarchy completion')).toBeLessThan(
+            report.indexOf('Unavailable project completion')
+        );
+        expect(report.indexOf('Unavailable project completion')).toBeLessThan(
+            report.indexOf('Recurring review 🚀')
+        );
+        expect(report).not.toContain('Before export range');
+        expect(report).not.toContain('At next local midnight');
+        expect(report).not.toContain('Incomplete secret');
+        expect(report).not.toContain('OTHER USER SECRET');
+        expect(report).not.toContain('userRef');
+        expect(report).not.toContain('priority');
+        expect(report).not.toContain('duration');
+    });
+
+    test('validates completed task export date bounds and returns an empty report', async ({ seed, api }) => {
+        await seed.clearTasks();
+
+        for (const [query, message] of [
+            ['', 'completedFrom and completedTo are required'],
+            ['?completedFrom=2024-03-01&completedTo=not-a-date', 'Completion dates must use YYYY-MM-DD'],
+            ['?completedFrom=2024-03-02&completedTo=2024-03-01', 'completedFrom must be on or before completedTo'],
+        ]) {
+            const body = await (await api.get(`/api/exportCompletedTasks${query}`)).json();
+            expect(body.success).toBe(false);
+            expect(body.log).toContain(message);
+        }
+
+        const response = await api.get(
+            '/api/exportCompletedTasks?completedFrom=2024-03-01&completedTo=2024-03-31'
+        );
+        const report = await response.text();
+        expect(report).toContain('Completed tasks: **0**');
+        expect(report).toContain('No tasks were completed in this range.');
+        expect(report).toContain('No completed work to list.');
     });
 
     test('returns authenticated, owned project completions from the local completion window', async ({
