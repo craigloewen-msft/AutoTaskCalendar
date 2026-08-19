@@ -79,7 +79,9 @@ Each project that had committed work shows a progress block above its live tasks
 | `moved` | Due date now outside Monday–Sunday | live plan date outside the week |
 | `removed` | The task no longer exists | no live task for `taskRef` |
 
-A committed item is shown even when the live task is gone from the page entirely.
+A committed item is shown even when the live task is gone from the page entirely. A committed
+task whose due date moved outside the week is reported once, as `moved` — it is deliberately
+kept out of the project's **Other active tasks** list so the same work is never counted twice.
 
 **Added since commit** lists this week's project-linked tasks that are not in the snapshot.
 **Update commitment** folds them in; each item records its own `addedAt`, so the review can

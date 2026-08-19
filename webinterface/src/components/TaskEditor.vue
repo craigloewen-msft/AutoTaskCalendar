@@ -188,7 +188,12 @@
           <button class="btn btn-outline-success" type="button" :disabled="busy" @click="completeTask">
             Complete
           </button>
-          <button class="btn btn-outline-danger" type="button" :disabled="busy" @click="deleteTask">
+          <button
+            class="btn btn-outline-danger"
+            type="button"
+            :disabled="busy || confirmingDelete"
+            @click="confirmingDelete = true"
+          >
             {{ isSeriesTask ? "Delete series" : "Delete" }}
           </button>
         </div>
@@ -198,6 +203,29 @@
           </button>
           <button class="btn btn-primary" type="submit" form="task-editor-form" :disabled="busy">
             {{ busy ? "Saving…" : isEdit ? "Save changes" : "Add task" }}
+          </button>
+        </div>
+      </footer>
+      <footer v-if="confirmingDelete" class="editor-actions confirm-delete" data-test="task-delete-confirm">
+        <p class="confirm-message">{{ deleteMessage }}</p>
+        <div class="save-actions">
+          <button
+            class="btn btn-secondary"
+            type="button"
+            :disabled="busy"
+            data-test="task-delete-cancel"
+            @click="confirmingDelete = false"
+          >
+            Keep task
+          </button>
+          <button
+            class="btn btn-danger"
+            type="button"
+            :disabled="busy"
+            data-test="task-delete-confirm-button"
+            @click="deleteTask"
+          >
+            {{ busy ? "Deleting…" : "Delete" }}
           </button>
         </div>
       </footer>
@@ -229,6 +257,7 @@ export default {
       draft: this.buildDraft(this.task),
       error: "",
       busy: false,
+      confirmingDelete: false,
       recommendation: null,
       recommendationTimer: null,
       recommendationRequest: 0,
@@ -241,6 +270,11 @@ export default {
     },
     isSeriesTask() {
       return !!this.task?.seriesRef;
+    },
+    deleteMessage() {
+      return this.isSeriesTask
+        ? "Delete this repeating series? Completed occurrences will be kept."
+        : `Delete “${this.task?.title}”? This cannot be undone.`;
     },
     currentProjectOutsideCompass() {
       if (!this.draft.projectRef) return false;
@@ -432,11 +466,6 @@ export default {
       }
     },
     async deleteTask() {
-      const message = this.isSeriesTask
-        ? "Delete this repeating series? Completed occurrences will be kept."
-        : `Delete “${this.task.title}”?`;
-      if (!window.confirm(message)) return;
-
       this.error = "";
       this.busy = true;
       try {
@@ -461,7 +490,9 @@ export default {
       this.$emit("changed", response.data.taskList || []);
     },
     close() {
-      if (!this.busy) this.$emit("close");
+      if (this.busy) return;
+      this.confirmingDelete = false;
+      this.$emit("close");
     },
   },
 };
@@ -621,6 +652,22 @@ function clone(value) {
 .save-actions {
   display: flex;
   gap: 8px;
+}
+
+.confirm-delete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.confirm-delete .confirm-message {
+  margin: 0;
+  color: #fca5a5;
 }
 
 .date-input {

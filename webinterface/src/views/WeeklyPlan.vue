@@ -50,6 +50,9 @@
           >
             {{ commitLabel }}
           </button>
+          <p v-if="!loading && !loadError" class="commit-note" data-test="commit-note">
+            {{ commitNote }}
+          </p>
           <router-link class="btn btn-link calendar-link" to="/calendar">Go to calendar</router-link>
         </div>
       </header>
@@ -188,7 +191,7 @@
                 :key="project._id"
                 :project="project"
                 :week-tasks="tasksForProject(project._id, true)"
-                :other-tasks="tasksForProject(project._id, false)"
+                :other-tasks="otherTasksForProject(project._id)"
                 :completions="completionsForProject(project._id)"
                 :committed-items="committedItemsForProject(project._id)"
                 :added-tasks="addedTasksForProject(project._id)"
@@ -473,6 +476,12 @@ export default {
       if (this.committing) return "Saving…";
       if (this.isCommitted) return "Update commitment";
       return `Commit to this week · ${this.selectedTasks.length} ${this.taskNoun(this.selectedTasks.length)}`;
+    },
+    // Committing only ever adds, so say so before the click rather than after.
+    commitNote() {
+      return this.isCommitted
+        ? "Adds new work to the record. Committed items are never removed."
+        : "Records what you promised this week. You can add more later, but not un-promise.";
     },
     tasksById() {
       const map = {};
@@ -805,6 +814,12 @@ export default {
           && this.isDueThisWeek(task) === thisWeek;
       }));
     },
+    // Out-of-week work, minus anything the commitment already reports as "moved".
+    otherTasksForProject(projectId) {
+      return this.tasksForProject(projectId, false).filter(
+        (task) => !this.committedTaskIds.has(String(task._id))
+      );
+    },
     committedItemsForProject(projectId) {
       return this.committedItemsByProject[projectId] || [];
     },
@@ -1129,6 +1144,13 @@ export default {
 
 .commit-button {
   white-space: nowrap;
+}
+
+.commit-note {
+  margin: 0;
+  color: #8b949e;
+  font-size: 0.72rem;
+  text-align: center;
 }
 
 .calendar-link {

@@ -141,6 +141,17 @@ MongoClient.connect(process.argv[1], { serverSelectionTimeoutMS: 2000 })
     .catch(() => process.exit(1));
 `;
 
+// The ping runs in a subprocess that requires the driver, so a missing install would
+// otherwise look exactly like a database that never answers.
+function pingDriverInstalled(root = path.join(__dirname, '..')) {
+    try {
+        require.resolve('mongodb', { paths: [root] });
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
 /** Connect through the published port, exactly the route the app uses. */
 function respondsToPing(port) {
     const result = spawnSync(process.execPath, ['-e', PING, `mongodb://127.0.0.1:${port}/admin`], {
@@ -247,6 +258,13 @@ function start() {
  * Also exports AUTOTASKCALENDAR_MONGO_PORT so instance.js and every child process agree.
  */
 function ensureDatabase() {
+    if (!pingDriverInstalled()) {
+        fail(
+            'Cannot check MongoDB: the "mongodb" package is not installed.\n' +
+            'Install dependencies first:  npm install'
+        );
+    }
+
     startDaemon();
 
     const port = withLock(() => {
@@ -268,7 +286,14 @@ function ensureDatabase() {
     return port;
 }
 
-module.exports = { ensureDatabase, CONTAINER_NAME, VOLUME_NAME, IMAGE, PORT_FILE };
+module.exports = {
+    ensureDatabase,
+    pingDriverInstalled,
+    CONTAINER_NAME,
+    VOLUME_NAME,
+    IMAGE,
+    PORT_FILE,
+};
 
 if (require.main === module) {
     console.log(`MongoDB ready on port ${ensureDatabase()}`);

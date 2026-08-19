@@ -224,6 +224,9 @@ test.describe('weekly plan page', () => {
 
         await openPlan(page);
 
+        // The button says what committing does before it is pressed.
+        await expect(page.locator('[data-test=commit-note]')).toContainText('not un-promise');
+
         // Unchecking excludes work from the commitment without changing the task.
         await page.locator(`[data-test="select-task-${drop._id}"] input`).uncheck();
         await page.locator('[data-test=commit-week]').click();
@@ -266,6 +269,13 @@ test.describe('weekly plan page', () => {
         await expect(
             commitment.locator(`[data-test="commitment-item-${keep._id}"]`)
         ).toHaveAttribute('data-status', 'moved');
+
+        // A moved task is reported once, not also as anonymous "other active" work.
+        await expect(
+            page.locator(`[data-test="other-tasks-${projectId}"] .task-row`, {
+                hasText: keep.title,
+            })
+        ).toHaveCount(0);
     });
 
     test('folds work added after the commitment into it', async ({

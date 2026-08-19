@@ -51,4 +51,28 @@ test.describe('login page', () => {
 
         await expect(page).toHaveURL(/#\/login/);
     });
+
+    test('returns to the page that required a login', async ({ seed, page }) => {
+        const data = await seed();
+
+        await page.goto('/#/weekly-plan');
+        await expect(page).toHaveURL(/next=\/weekly-plan/);
+
+        await page.fill('input[name="username"]', data.primary.username);
+        await page.fill('input[name="password"]', data.primary.password);
+        await page.click('button:has-text("Sign in")');
+
+        await expect(page).toHaveURL(/#\/weekly-plan$/);
+    });
+
+    test('ignores an off-site next target', async ({ seed, page }) => {
+        const data = await seed();
+
+        await page.goto('/#/login?next=//evil.example.com');
+        await page.fill('input[name="username"]', data.primary.username);
+        await page.fill('input[name="password"]', data.primary.password);
+        await page.click('button:has-text("Sign in")');
+
+        await expect(page).toHaveURL(new RegExp(`#/user/${data.primary.username}$`));
+    });
 });

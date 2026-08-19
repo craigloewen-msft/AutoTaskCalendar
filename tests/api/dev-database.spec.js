@@ -169,4 +169,21 @@ test.describe('dev environment', () => {
 
         await dropDatabase(a.mongoUrl);
     });
+
+    test('names a missing driver instead of blaming the database', async () => {
+        const { pingDriverInstalled } = require('../../scripts/db');
+        const os = require('os');
+        const fs = require('fs');
+
+        // The readiness ping requires the driver in a subprocess, so its absence must be
+        // reported as an install problem rather than a 90s "not ready" timeout.
+        expect(pingDriverInstalled()).toBe(true);
+
+        const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'atc-no-deps-'));
+        try {
+            expect(pingDriverInstalled(bare)).toBe(false);
+        } finally {
+            fs.rmSync(bare, { recursive: true, force: true });
+        }
+    });
 });

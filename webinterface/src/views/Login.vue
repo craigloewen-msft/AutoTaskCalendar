@@ -46,6 +46,14 @@ export default {
     };
   },
   methods: {
+    // Return to the page that bounced us to login, ignoring anything off-site.
+    redirectTarget: function (username) {
+      const next = this.$route.query.next;
+      if (typeof next === "string" && next.startsWith("/") && !next.startsWith("//")) {
+        return next;
+      }
+      return "/user/" + username;
+    },
     login: function () {
       this.userdata = "Loading!";
       this.$http
@@ -69,7 +77,7 @@ export default {
                     value: 1
                   });
                 }
-                this.$router.push("/user/" + response.data.user.username);
+                this.$router.push(this.redirectTarget(response.data.user.username));
               });
           } else {
             // Failure login

@@ -544,6 +544,37 @@ test.describe('calendar page', () => {
         await expect(page.locator('.task-list')).not.toContainText(createdTitle);
     });
 
+    test('confirms deletion in the page rather than a browser dialog', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        const title = data.named.proposal.title;
+
+        // A native confirm() would hang the run instead of being answered in the DOM.
+        page.on('dialog', () => { throw new Error('unexpected browser dialog'); });
+
+        await page.goto('/#/calendar');
+        await page.locator('.task-item', { hasText: title }).first().click();
+
+        const editor = page.locator('[data-test=task-editor]');
+        await editor.getByRole('button', { name: 'Delete', exact: true }).click();
+
+        const confirm = page.locator('[data-test=task-delete-confirm]');
+        await expect(confirm).toContainText('cannot be undone');
+
+        // Backing out keeps the task.
+        await page.locator('[data-test=task-delete-cancel]').click();
+        await expect(confirm).toHaveCount(0);
+        expect(await withDb(() => TaskDetails.countDocuments({ _id: data.named.proposal._id }))).toBe(1);
+
+        await editor.getByRole('button', { name: 'Delete', exact: true }).click();
+        await page.locator('[data-test=task-delete-confirm-button]').click();
+
+        await expect(page.locator('.task-list')).not.toContainText(title);
+        expect(await withDb(() => TaskDetails.countDocuments({ _id: data.named.proposal._id }))).toBe(0);
+    });
+
     test('offers but does not silently apply a project recommendation', async ({
         seed,
         loggedInPage: page,
