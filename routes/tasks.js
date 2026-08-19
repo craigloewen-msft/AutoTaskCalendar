@@ -85,8 +85,13 @@ function createTaskRoutes(config, authenticateSession) {
                 return res.send(returnFailure('Not logged in'));
             }
 
-            const recommendation = await recommendTaskProject(user, req.body);
-            return res.json({ success: true, recommendation });
+            const recommendations = await recommendTaskProject(user, req.body);
+            // `recommendation` stays for compatibility with clients reading a single suggestion.
+            return res.json({
+                success: true,
+                recommendations,
+                recommendation: recommendations[0] || null,
+            });
         } catch (error) {
             console.error(error);
             return res.json({ success: false });

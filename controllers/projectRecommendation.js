@@ -16,7 +16,8 @@ const CACHE_LIMIT_BYTES = 64 * 1024 * 1024;
 const CACHE_TTL_MS = 30 * 60 * 1_000;
 const MAX_GENERATION_ENTRIES = 10_000;
 const MIN_SCORE = 0.16;
-const MIN_MARGIN = 0.035;
+const MAX_RECOMMENDATIONS = 3;
+const RELATIVE_BAND = 0.75; // Keep near-ties; drop clearly weaker candidates.
 
 const modelCache = new Map();
 const pendingBuilds = new Map();
@@ -440,18 +441,21 @@ function historyFallback(model, candidates) {
         })[0] || null;
 }
 
+/**
+ * Rank the caller's candidate projects, returning the strong near-ties or one fallback.
+ */
 async function recommendTaskProject(user, input = {}) {
     const title = boundedText(input.title, MAX_TITLE_LENGTH).trim();
-    if (title.length < 2) return null;
+    if (title.length < 2) return [];
 
     const candidates = new Set(candidateIds(input.candidateProjectIds));
-    if (!candidates.size) return null;
+    if (!candidates.size) return [];
 
     const model = await getModel(user._id);
     for (const projectId of [...candidates]) {
         if (!model.projects.has(projectId)) candidates.delete(projectId);
     }
-    if (!candidates.size) return null;
+    if (!candidates.size) return [];
 
     const queryVector = sparseVector(
         textFeatures(title, boundedText(input.notes, MAX_NOTES_LENGTH)),
@@ -459,26 +463,25 @@ async function recommendTaskProject(user, input = {}) {
     );
     const scored = scoreProjects(model, queryVector, candidates);
     const best = scored[0];
-    const runnerUp = scored[1];
-    const ambiguous = best?.score >= MIN_SCORE
-        && runnerUp
-        && best.score - runnerUp.score < MIN_MARGIN;
-    if (ambiguous) return null;
 
+    // Near-ties are shown together rather than hidden; only clearly weaker candidates drop out.
     if (best?.score >= MIN_SCORE) {
-        return {
-            projectId: best.projectId,
-            confidence: 'high',
-            evidenceCount: best.evidenceCount,
-        };
+        return scored
+            .filter((entry) => entry.score >= MIN_SCORE && entry.score >= best.score * RELATIVE_BAND)
+            .slice(0, MAX_RECOMMENDATIONS)
+            .map((entry) => ({
+                projectId: entry.projectId,
+                confidence: 'high',
+                evidenceCount: entry.evidenceCount,
+            }));
     }
 
     const fallback = historyFallback(model, candidates);
-    return fallback ? {
+    return fallback ? [{
         projectId: fallback.projectId,
         confidence: 'likely',
         evidenceCount: fallback.historyCount,
-    } : null;
+    }] : [];
 }
 
 function pruneGenerations() {
@@ -511,6 +514,8 @@ module.exports = {
     _internals: {
         FEATURE_SPACE,
         CACHE_LIMIT_BYTES,
+        MAX_RECOMMENDATIONS,
+        RELATIVE_BAND,
         textFeatures,
         buildIdf,
         sparseVector,

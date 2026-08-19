@@ -119,14 +119,23 @@
               </optgroup>
             </select>
             <div
-              v-if="recommendationLabel"
+              v-if="recommendationOptions.length"
               class="project-recommendation"
               data-test="project-recommendation"
               role="status"
             >
-              <span><strong>Suggested:</strong> {{ recommendationLabel }}</span>
-              <button class="btn btn-sm btn-outline-primary" type="button" @click="useRecommendation">
-                Use this project
+              <span><strong>Suggested:</strong></span>
+              <button
+                v-for="option in recommendationOptions"
+                :key="option.projectId"
+                class="btn btn-sm btn-outline-primary"
+                data-test="project-recommendation-option"
+                type="button"
+                :title="`Use ${option.label}`"
+                :aria-label="`Use ${option.label}`"
+                @click="useRecommendation(option)"
+              >
+                {{ option.label }}
               </button>
             </div>
           </div>
@@ -208,6 +217,7 @@
 <script>
 import RepeatEditor from "./RepeatEditor.vue";
 import { apiDateOnly, dateOnlyInTimeZone } from "../utils/temporal";
+import { readRecommendations, recommendationOptions } from "../utils/projectSuggestions";
 
 export default {
   name: "TaskEditor",
@@ -229,7 +239,7 @@ export default {
       draft: this.buildDraft(this.task),
       error: "",
       busy: false,
-      recommendation: null,
+      recommendations: [],
       recommendationTimer: null,
       recommendationRequest: 0,
       projectChoiceMade: !!this.task?._id,
@@ -254,13 +264,9 @@ export default {
     projectIds() {
       return this.projectGroups.flatMap((group) => group.projects.map((project) => project._id));
     },
-    recommendationLabel() {
-      if (this.isEdit || this.projectChoiceMade || !this.recommendation?.projectId) return "";
-      for (const group of this.projectGroups) {
-        const project = group.projects.find(({ _id }) => _id === this.recommendation.projectId);
-        if (project) return `${group.label} → ${project.title}`;
-      }
-      return "";
+    recommendationOptions() {
+      if (this.isEdit || this.projectChoiceMade) return [];
+      return recommendationOptions(this.recommendations, this.projectGroups);
     },
   },
   watch: {
@@ -342,24 +348,23 @@ export default {
     chooseProject() {
       if (this.isEdit) return;
       this.projectChoiceMade = this.draft.projectRef !== "";
-      this.recommendation = null;
+      this.recommendations = [];
       clearTimeout(this.recommendationTimer);
       this.recommendationRequest++;
     },
-    useRecommendation() {
-      if (!this.recommendationLabel) return;
-      this.draft.projectRef = this.recommendation.projectId;
+    useRecommendation(option) {
+      if (!option?.projectId) return;
+      this.draft.projectRef = option.projectId;
       this.projectChoiceMade = true;
-      this.recommendation = null;
+      this.recommendations = [];
       clearTimeout(this.recommendationTimer);
       this.recommendationRequest++;
     },
     scheduleRecommendation() {
       clearTimeout(this.recommendationTimer);
       this.recommendationRequest++;
-      this.recommendation = null;
+      this.recommendations = [];
       if (this.isEdit || this.projectChoiceMade || this.draft.title.trim().length < 2) {
-        this.recommendation = null;
         return;
       }
       this.recommendationTimer = setTimeout(() => this.loadRecommendation(), 1000);
@@ -376,9 +381,9 @@ export default {
           candidateProjectIds: this.projectIds,
         });
         if (request !== this.recommendationRequest || this.projectChoiceMade) return;
-        this.recommendation = response.data.success ? response.data.recommendation : null;
+        this.recommendations = readRecommendations(response.data);
       } catch (error) {
-        if (request === this.recommendationRequest) this.recommendation = null;
+        if (request === this.recommendationRequest) this.recommendations = [];
       }
     },
     async save() {
@@ -574,8 +579,8 @@ function clone(value) {
 .project-recommendation {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 8px;
   padding: 9px 10px;
   border: 1px solid rgba(102, 126, 234, 0.42);

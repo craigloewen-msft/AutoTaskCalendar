@@ -22,17 +22,17 @@ Existing tasks are unaffected. There is no legacy migration and no completion or
 
 ## Recommendation interaction
 
-After the user stops typing a meaningful title for one second, the client automatically calls the recommendation API. A result appears beneath the selector:
+After the user stops typing a meaningful title for one second, the client automatically calls the recommendation API. Every project with strong evidence appears beneath the selector, up to three:
 
 ```text
 Project*
 [ Choose a project or Unassigned…                         ▾ ]
-Suggested: Engineer → Ship v2 → Migration plan   [Use this project]
+Suggested: [ Engineer → Ship v2 → Migration plan ] [ Engineer → Grow the team → Hiring loop ]
 ```
 
-The suggestion is not a default value. The user must click **Use this project** or make a manual selection. Manual selection cancels outstanding recommendation work, and stale responses cannot overwrite it.
+Each suggestion is a button labelled with its Role → Goal → Project path; clicking one selects that project. Nothing is preselected. The user may also ignore the row and choose manually. Manual selection cancels outstanding recommendation work, and stale responses cannot overwrite it.
 
-Strong text matches use the sparse model. When text evidence is weak, the service offers the most frequently used available project, breaking ties by recent use, as a `likely` fallback so the helper normally remains useful. A genuinely ambiguous strong match, unavailable history, or recommendation failure produces no suggestion. Manual project selection and Unassigned always remain usable.
+Strong text matches use the sparse model. Comparably scoring projects are all offered rather than hidden, so a genuine near-tie becomes a short menu instead of an abstention. When text evidence is weak, the service offers the single most frequently used available project, breaking ties by recent use, as a `likely` fallback. Unavailable history or recommendation failure produces no suggestion. Manual project selection and Unassigned always remain usable.
 
 ## API
 
@@ -48,20 +48,20 @@ Strong text matches use the sparse model. When text evidence is weak, the servic
 
 The candidate ids come from the Compass picker already visible to the client. The service limits the list, drops malformed ids, and intersects it with the authenticated user's project model. It never reveals whether a foreign id exists.
 
-A strong match returns one candidate:
+Strong matches return every qualifying candidate, best first:
 
 ```json
 {
   "success": true,
-  "recommendation": {
-    "projectId": "...",
-    "confidence": "high",
-    "evidenceCount": 3
-  }
+  "recommendations": [
+    { "projectId": "...", "confidence": "high", "evidenceCount": 3 },
+    { "projectId": "...", "confidence": "high", "evidenceCount": 2 }
+  ],
+  "recommendation": { "projectId": "...", "confidence": "high", "evidenceCount": 3 }
 }
 ```
 
-An abstention is successful and returns `"recommendation": null`. Scores are similarities, not calibrated probabilities, so the response exposes a confidence band rather than a percentage. The client derives the readable Role → Goal → Project path from its existing Compass data.
+`recommendation` repeats the first entry so older single-suggestion clients keep working; new clients read `recommendations`. An abstention is successful and returns `"recommendations": []` with `"recommendation": null`. Scores are similarities, not calibrated probabilities, so the response exposes a confidence band rather than a percentage. The client derives the readable Role → Goal → Project path from its existing Compass data and silently drops any project its picker cannot show.
 
 Input is bounded to 240 title characters, 2,000 notes characters, and 500 candidate ids.
 
@@ -87,7 +87,7 @@ The score combines:
 2. a centroid summarizing the vocabulary of each project; and
 3. low-weight project, goal, and role metadata for cold start.
 
-A strong text result must clear an absolute threshold and lead the runner-up. Weak text falls back to the most frequently used available project, breaking ties by recent use; a strong tie still abstains instead of inventing a winner.
+A candidate is offered when it clears both an absolute threshold (0.16) and a relative band: at least 75% of the best score. A clear leader is therefore offered alone, while near-ties are all offered, ordered by score and capped at three. Equal scores break by project id so repeated requests rank identically. Weak text falls back to the single most frequently used available project, breaking ties by recent use.
 
 ### Training rules
 
@@ -148,10 +148,12 @@ Use focused synthetic performance tests to catch large regressions, but do not m
 
 - rare-name and broader-vocabulary learning;
 - metadata cold start;
-- metadata and recent-history fallbacks plus tied abstention;
+- multiple comparably strong projects offered together, capped at three and deterministically ordered;
+- indistinguishable projects offered together rather than abstaining;
+- a single `likely` fallback for weak text;
 - null-task exclusion and recurring-series deduplication;
 - tenant isolation and malformed candidates;
 - stale-cache clearing after task mutations;
 - deterministic input and memory bounds.
 
-Calendar UI coverage verifies the explicit new-task choice, Unassigned persistence, recommendation confirmation, standalone follow-up choice, and existing edit/completion behavior. Weekly Plan remains covered by its project-scoped creation specs.
+Calendar UI coverage verifies the explicit new-task choice, Unassigned persistence, multi- and single-suggestion rendering, accepting a suggestion other than the top one, standalone follow-up choice, and existing edit/completion behavior. Weekly Plan remains covered by its project-scoped creation specs.

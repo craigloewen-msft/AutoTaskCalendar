@@ -255,18 +255,23 @@
                 </optgroup>
               </select>
               <div
-                v-if="followUpRecommendationLabel"
+                v-if="followUpRecommendationOptions.length"
                 class="followup-recommendation"
                 data-test="followup-project-recommendation"
                 role="status"
               >
-                <span><strong>Suggested:</strong> {{ followUpRecommendationLabel }}</span>
+                <span><strong>Suggested:</strong></span>
                 <button
+                  v-for="option in followUpRecommendationOptions"
+                  :key="option.projectId"
                   class="btn btn-sm btn-outline-primary"
+                  data-test="project-recommendation-option"
                   type="button"
-                  @click="useFollowUpRecommendation"
+                  :title="`Use ${option.label}`"
+                  :aria-label="`Use ${option.label}`"
+                  @click="useFollowUpRecommendation(option)"
                 >
-                  Use this project
+                  {{ option.label }}
                 </button>
               </div>
             </template>
@@ -298,6 +303,7 @@ import {
   instantPartsInTimeZone,
   localDateOnly,
 } from "../utils/temporal";
+import { readRecommendations, recommendationOptions } from "../utils/projectSuggestions";
 
 // The sidebar shows this far ahead; the scheduler materialises 60 days of occurrences.
 const SIDEBAR_WINDOW_DAYS = 21;
@@ -433,7 +439,7 @@ export default {
         projectRef: "",
         error: null,
       },
-      followUpRecommendation: null,
+      followUpRecommendations: [],
       followUpRecommendationTimer: null,
       followUpRecommendationRequest: 0,
       followUpProjectChoiceMade: false,
@@ -652,28 +658,27 @@ export default {
     },
     chooseFollowUpProject() {
       this.followUpProjectChoiceMade = this.input.projectRef !== "";
-      this.followUpRecommendation = null;
+      this.followUpRecommendations = [];
       clearTimeout(this.followUpRecommendationTimer);
       this.followUpRecommendationRequest++;
     },
-    useFollowUpRecommendation() {
-      if (!this.followUpRecommendationLabel) return;
-      this.input.projectRef = this.followUpRecommendation.projectId;
+    useFollowUpRecommendation(option) {
+      if (!option?.projectId) return;
+      this.input.projectRef = option.projectId;
       this.followUpProjectChoiceMade = true;
-      this.followUpRecommendation = null;
+      this.followUpRecommendations = [];
       clearTimeout(this.followUpRecommendationTimer);
       this.followUpRecommendationRequest++;
     },
     scheduleFollowUpRecommendation() {
       clearTimeout(this.followUpRecommendationTimer);
       this.followUpRecommendationRequest++;
-      this.followUpRecommendation = null;
+      this.followUpRecommendations = [];
       if (
         this.selectedTask
         || this.followUpProjectChoiceMade
         || String(this.input.taskTitle || "").trim().length < 2
       ) {
-        this.followUpRecommendation = null;
         return;
       }
       this.followUpRecommendationTimer = setTimeout(
@@ -695,11 +700,9 @@ export default {
           candidateProjectIds,
         });
         if (request !== this.followUpRecommendationRequest || this.followUpProjectChoiceMade) return;
-        this.followUpRecommendation = response.data.success
-          ? response.data.recommendation
-          : null;
+        this.followUpRecommendations = readRecommendations(response.data);
       } catch (error) {
-        if (request === this.followUpRecommendationRequest) this.followUpRecommendation = null;
+        if (request === this.followUpRecommendationRequest) this.followUpRecommendations = [];
       }
     },
     async createFollowUp(bvModalEvent) {
@@ -811,7 +814,7 @@ export default {
       };
       this.followUpProjectChoiceMade = !!inputTask;
       this.followUpSaving = false;
-      this.followUpRecommendation = null;
+      this.followUpRecommendations = [];
       clearTimeout(this.followUpRecommendationTimer);
       this.followUpRecommendationRequest++;
       this.$nextTick(() => this.$refs.followupmodal.show());
@@ -832,7 +835,7 @@ export default {
     resetFollowUpModal() {
       this.selectedTask = null;
       this.selectedEvent = null;
-      this.followUpRecommendation = null;
+      this.followUpRecommendations = [];
       this.followUpProjectChoiceMade = false;
       this.followUpSaving = false;
       clearTimeout(this.followUpRecommendationTimer);
@@ -906,17 +909,9 @@ export default {
 
       return groups;
     },
-    followUpRecommendationLabel() {
-      if (this.selectedTask || this.followUpProjectChoiceMade || !this.followUpRecommendation) {
-        return "";
-      }
-      for (const group of this.projectOptionGroups) {
-        const project = group.projects.find(({ _id }) => {
-          return _id === this.followUpRecommendation.projectId;
-        });
-        if (project) return `${group.label} → ${project.title}`;
-      }
-      return "";
+    followUpRecommendationOptions() {
+      if (this.selectedTask || this.followUpProjectChoiceMade) return [];
+      return recommendationOptions(this.followUpRecommendations, this.projectOptionGroups);
     },
     userWorkingDays() {
       return this.$store.state.user?.workingDays || [];
@@ -1743,8 +1738,8 @@ export default {
 .followup-recommendation {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 8px;
   padding: 9px 10px;
   border: 1px solid rgba(102, 126, 234, 0.42);
