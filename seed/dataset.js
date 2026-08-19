@@ -391,6 +391,74 @@ module.exports = {
         await b.alignTasks(active.slice(0, 6), trainingProject);
         await b.alignTasks(completed.slice(0, 12), migrationProject);
 
+        // --- Weekly Plan: a committed current week and a finished previous one ------------
+        // Tasks due inside the current Monday-Sunday, so the seeded account opens Weekly
+        // Plan already in Review mode with a mix of statuses to look at.
+        const weekOpen = await b.createTask(user, {
+            title: 'Write the cutover runbook',
+            dueDate: b.civilDate(b.thisMonday, 4),
+            startDate: b.civilDate(b.thisMonday, 0),
+            duration: 45,
+            projectRef: migrationProject._id,
+        });
+        const weekDone = await b.createTask(user, {
+            title: 'Confirm the migration window',
+            dueDate: b.civilDate(b.thisMonday, 1),
+            startDate: b.civilDate(b.thisMonday, 0),
+            duration: 30,
+            completed: true,
+            completedDate: b.at(b.thisMonday, { days: 1, hours: 14 }),
+            projectRef: migrationProject._id,
+        });
+        // Committed, then pushed out of the week: shows as `moved` in the review.
+        const weekMoved = await b.createTask(user, {
+            title: 'Book the maintenance window',
+            dueDate: b.civilDate(b.thisMonday, 4),
+            startDate: b.civilDate(b.thisMonday, 0),
+            duration: 20,
+            projectRef: migrationProject._id,
+        });
+        const currentPlan = await b.commitWeek(
+            user,
+            b.thisMondayDate,
+            [weekOpen, weekDone, weekMoved]
+        );
+        await b.moveTaskDueDate(weekMoved, b.civilDate(b.thisMonday, 9));
+
+        // Added after the commitment, so "Added since commit" has a subject.
+        const weekAdded = await b.createTask(user, {
+            title: 'Handle the rollback question',
+            dueDate: b.civilDate(b.thisMonday, 3),
+            startDate: b.civilDate(b.thisMonday, 0),
+            duration: 30,
+            projectRef: migrationProject._id,
+        });
+
+        // Last week's record stays exactly as it was committed. One of its tasks was
+        // deleted afterwards, which the review must still report as `removed`.
+        const lastWeekDone = await b.createTask(user, {
+            title: 'Draft the migration plan',
+            dueDate: b.civilDate(b.lastMonday, 3),
+            startDate: b.civilDate(b.lastMonday, 0),
+            duration: 60,
+            completed: true,
+            completedDate: b.at(b.lastMonday, { days: 3, hours: 11 }),
+            projectRef: migrationProject._id,
+        });
+        const lastWeekDropped = await b.createTask(user, {
+            title: 'Spike the rollback tooling',
+            dueDate: b.civilDate(b.lastMonday, 4),
+            startDate: b.civilDate(b.lastMonday, 0),
+            duration: 90,
+            projectRef: migrationProject._id,
+        });
+        const previousPlan = await b.commitWeek(
+            user,
+            b.lastMondayDate,
+            [lastWeekDone, lastWeekDropped]
+        );
+        await b.deleteTask(lastWeekDropped);
+
         // --- Second user: data that must never appear in the primary user's responses -----
         const other = await b.createUser({
             username: 'otheruser',
@@ -592,6 +660,15 @@ module.exports = {
                 somedayProject,
                 endedProject,
                 emptyProject,
+                // Weekly Plan
+                currentPlan,
+                previousPlan,
+                weekOpen,
+                weekDone,
+                weekMoved,
+                weekAdded,
+                lastWeekDone,
+                lastWeekDropped,
                 otherRole,
                 otherGoal,
                 otherProject,

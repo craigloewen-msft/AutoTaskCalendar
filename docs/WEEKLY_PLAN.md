@@ -1,145 +1,150 @@
 # Weekly Plan
 
-Weekly Plan is the beginning-of-week workflow for turning Compass direction into tasks. Open
-`/weekly-plan`, review each active **Role → Goal → Project** branch, and create ordinary tasks
-for the current Monday–Sunday week.
+Weekly Plan is the beginning-of-week workflow for turning Compass direction into tasks, and
+the rest-of-week workflow for reviewing how that week is actually going. Open `/weekly-plan`,
+review each active **Role → Goal → Project** branch, create the tasks you intend to do, and
+commit to them.
 
-It is deliberately a **stateless lens**. There is no weekly-plan collection, selected-task
-flag, archived plan, or separate completion lifecycle. The existing task remains the source
-of truth:
+The page has **two modes over one hierarchy**, and only the calendar moves between them:
 
 ```mermaid
 flowchart LR
-  R["Role"] --> G["Goal"] --> P["Project"] --> T["Task with projectRef"]
-  T --> D["dueDate inside Monday–Sunday"]
-  D --> W["Shown in Weekly Plan"]
+  A["Plan mode<br/>build the week"] -->|"Commit to this week"| B["Review mode<br/>progress vs commitment"]
+  B -->|"add more work"| B
+  B -->|"next Monday arrives"| A
 ```
 
-That makes task dates the history: if you want to know what work was created for a past
-week, the task's normal dates provide that record without maintaining a second planning
-system.
+There is no save, no close, no archive, and no "mark week done". **The only thing that ends a
+week is time.** When the Monday boundary passes in your saved timezone there is no commitment
+for the new week, so the page is back in Plan mode. Last week's record stays in the database
+exactly as it was.
 
 ---
 
-## Use the page
+## The two sources of truth
 
-Choose **Weekly Plan** in the authenticated navigation, between Calendar and Compass.
+Weekly Plan reads two different things and must not confuse them:
 
-The header shows the current Monday–Sunday range, number of incomplete tasks due during the
-range, and their total duration. **Go to calendar** only navigates; opening or leaving Weekly
-Plan never runs the scheduler.
+| | What it answers | Where it lives |
+| --- | --- | --- |
+| **The task** | What is true *now* — title, dates, duration, completion | `taskInfo` |
+| **The commitment** | What you *said you would do* on Monday | `weeklyPlanInfo` |
 
-Each card walks through the live Compass hierarchy:
+The commitment is a **snapshot**. It is what makes the review honest: a task you promised and
+then deleted still appears, because deleting the task does not un-promise the work. If the
+page rendered only live tasks, a week could be "cleaned up" into looking successful.
 
-1. Read the role description and dates.
-2. Review each goal and its description.
-3. Review each started project.
-4. Check the tasks already due this week.
-5. Open **Other active tasks** to avoid duplicating work that is due outside the week.
-6. If present, open **Completed last week** for context from the previous Monday–Sunday.
-7. Click any active task to edit or manage it without leaving Weekly Plan.
-8. Add the concrete tasks that should be due this week.
-
-Compass continues to own hierarchy changes. Empty branches link there rather than embedding
-role, goal, or project editing in the planning page.
-
-### Review what was completed last week
-
-A started project shows a quiet, collapsed **Completed last week** disclosure only when it has
-matching history. It sits after active work and immediately before **Quick task**, so recent
-progress can inform the next plan without competing with this week's tasks. Expanding it shows
-static task titles and local completion dates, newest first; completed rows do not reopen the
-active task editor.
-
-“Last week” means the previous complete Monday–Sunday period, not a rolling seven days. A task
-belongs to that period when its `completedDate` instant falls between local Monday midnight
-(inclusive) and the following Monday midnight (exclusive) in the user's saved IANA timezone.
-Its due, start, and recurrence occurrence dates do not decide inclusion.
-
-Duration is intentionally absent. Chunk completion reduces the task's mutable `duration`, so
-that field is not a trustworthy record of historical effort. Count and task identity remain
-accurate.
-
-Completion history is optional context. A failed history read leaves the hierarchy, active
-tasks, and quick forms available and displays a small retry status instead of pretending the
-week had no completions. Returning to the page after a Monday rollover recomputes and reloads
-the previous-week window.
-
-### Edit and manage tasks
-
-Every active task row is a keyboard-accessible button. Selecting one opens the shared task editor
-over the Weekly Plan page, with title, dates, duration, priority, project, notes, backlog,
-chunking, recurrence, and dependency controls. Calendar uses this exact same editor for Add
-Task and task editing. The same view can complete or delete the task.
-
-Saving reloads the incomplete task list and closes the editor. Because Weekly Plan is derived
-from normal task fields, a changed due date or project immediately moves the task to its new
-weekly, other-active, unaligned, Someday, or outside-Compass section. Completion and deletion
-remove it from the plan immediately.
-
-A materialised recurring occurrence shows a warning that edits and deletion apply to its
-whole series, matching Calendar behavior. Its generated occurrence dates are not editable.
-
-### Someday projects
-
-A project with no `startDate` is parked. Parked projects appear in the collapsed **Someday**
-section with their Role → Goal context, but they have no quick-task form. Existing tasks due
-this week remain visible there, since Calendar may have linked work before the project was
-parked. Start the project in Compass before planning new work beneath it.
-
-Tasks linked to a project outside the active Compass payload, such as an archived project's
-remaining task, appear in **Outside active Compass** so header totals never hide work.
-
-### Unaligned tasks
-
-Incomplete unaligned tasks due this week appear in a collapsed section at the bottom. You can
-leave them unaligned or assign one to a started project. Assignment uses the existing
-`POST /api/setTaskProject` ownership checks and immediately moves the task into its project on
-the page.
-
-Alignment remains optional. The page never blocks planning because unaligned work exists.
+Status is **derived, never stored** — the same rule Compass uses for active/ended. Completing
+a task on Calendar is therefore immediately correct here, with nothing to keep in sync.
 
 ---
 
-## Create a task quickly
+## Plan mode
 
-Every started project has a compact form:
+Before this week has a commitment:
 
-- **Task title** — required.
-- **Minutes** — a positive duration, default 30.
-- **Due date** — constrained to the displayed Monday–Sunday range, default Friday.
-- **Project** — shown by the surrounding project card and sent as `projectRef`.
+1. Read each role's description and its goals.
+2. Review each started project and the tasks already due this week.
+3. Open **Other active tasks** to avoid duplicating work due outside the week.
+4. Open **Completed last week** for context from the previous Monday–Sunday.
+5. Add the concrete tasks that should be due this week.
+6. Uncheck anything you do not actually intend to commit to.
+7. Choose **Commit to this week**.
 
-The task's start date defaults to today in the user's saved timezone. Submitting calls the
-normal `POST /api/createTask` endpoint with a one-off, non-backlog task. On success, the
-endpoint's refreshed `taskList` updates the project list and page totals immediately.
+Every in-week project task is checked by default. Unchecking excludes it from the commitment
+and changes nothing about the task itself.
 
-If validation or the request fails, the message stays beside that form and its title,
-duration, and due date remain available to correct and retry.
+Committing records the snapshot and switches the page to Review mode without a reload.
 
-Quick creation stays intentionally compact. Click the created task afterward to manage
-recurrence, dependencies, notes, chunking, priority, backlog state, project, or dates outside
-the current week in the full in-page editor.
+## Review mode
+
+Each project that had committed work shows a progress block above its live tasks:
+
+```text
+     Migration plan                        3 of 5 done · 2h of 3h 30m
+       ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░
+       ✓ Draft migration plan              done Tue
+       ● Write the cutover runbook         due Fri · 45m
+       ↷ Book the maintenance window       moved to Apr 24
+       ✗ Old spike task                    removed
+       ─────────────────────────────────────────────────
+       added since commit    [Update commitment]
+       + Handle the rollback question      Thu · 30m
+```
+
+| Status | Meaning | Derived from |
+| --- | --- | --- |
+| `open` | Still due this week and not finished | live task inside the week |
+| `done` | Completed | `completed` is true |
+| `moved` | Due date now outside Monday–Sunday | live plan date outside the week |
+| `removed` | The task no longer exists | no live task for `taskRef` |
+
+A committed item is shown even when the live task is gone from the page entirely.
+
+**Added since commit** lists this week's project-linked tasks that are not in the snapshot.
+**Update commitment** folds them in; each item records its own `addedAt`, so the review can
+always distinguish the original promise from work added later.
+
+Quick add stays available in both modes. Adding a task after committing is normal.
+
+### Amending is additive
+
+Re-committing **only ever adds**. Existing items are kept exactly as snapshotted, and
+re-sending an already-committed id is a no-op that neither duplicates the item nor rewrites
+its `addedAt`. This is deliberate: a commitment is a promise, so amending the plan must not
+be a way to quietly delete a promise you did not keep.
+
+`committedAt` is preserved across amendments; `amendedAt` records the most recent change.
+
+### Previous-week recap
+
+When a plan exists for the previous Monday–Sunday, Review mode opens with a one-line recap:
+**Last week: committed 7, finished 5, 2 slipped**. Expanding it shows the same status list,
+read-only. When no previous plan exists the band is absent rather than showing zeros.
+
+This is distinct from the per-project **Completed last week** disclosure, which answers a
+different question: what actually got finished, whether or not it was planned.
+
+---
+
+## The layout
+
+One column, capped at 1100px, with depth carried by rhythm and colour rather than nested
+boxes:
+
+- **Roles are sections**, introduced by their derived colour bar. Separation is spacing and a
+  hairline rule, not a raised panel.
+- **Goals are labelled dividers**, not containers.
+- **Projects are the only panels**, and they are uniform — identical width, padding, and
+  radius, so a column of them reads as one rhythm. This is the level you act on.
+- **Tasks are dense rows** with right-aligned tabular due day and duration, so they line up
+  vertically down the whole page.
+- The header is a **sticky week bar** carrying the range, totals, a seven-segment Mon–Sun load
+  strip, and the primary action.
+- **Quick add is collapsed** to `+ Add a task` per project and expands in place.
+
+Do not reintroduce a multi-column `auto-fit` grid. Role cards sized independently produce a
+ragged staggered page whose column heights depend on how many goals each role happens to have.
+
+The quick-add form uses seven day chips for the due date, backed by a visually hidden native
+`type="date"` input that remains the accessible source of truth and enforces the week range.
 
 ---
 
 ## What counts as this week
 
-A task appears in the main weekly list when its civil `dueDate` is inclusively between the
-current Monday and Sunday. Incomplete tasks outside that range, including backlog tasks with
-no due date, remain under their project's **Other active tasks** disclosure.
+A task belongs to the week when its civil plan date is inclusively between the current Monday
+and Sunday. For an ordinary task that is `dueDate`; for a generated recurrence occurrence the
+server uses `occurrenceDate` and the client uses its scheduled date.
 
-The range is based on the user's persisted IANA timezone, not the browser's current timezone.
-The client first derives today's strict `YYYY-MM-DD` date in that saved zone and then performs
-calendar-date arithmetic.
+The range is based on the user's persisted IANA timezone, not the browser's. The client first
+derives today's strict `YYYY-MM-DD` date in that zone and then performs calendar-date
+arithmetic.
 
-`mondayWeekBounds()` exists in both temporal utility modules:
+`mondayWeekBounds()` exists in both temporal modules:
 
-- `utils/temporal.js` returns civil bounds and timezone-aware start/end instants for server
-  tests and future server consumers.
+- `utils/temporal.js` returns civil bounds plus timezone-aware instants for the server.
 - `webinterface/src/utils/temporal.js` returns civil bounds for the page.
-
-The returned civil bounds are:
 
 | Field | Meaning |
 | --- | --- |
@@ -148,91 +153,111 @@ The returned civil bounds are:
 | `nextStartDate` | Following Monday, useful as an exclusive upper bound |
 
 The backend's older `localWeekBounds()` keeps Sunday as its default because
-`GET /api/getUserEvents/:date` and the Calendar week already rely on that contract. Passing a
-Monday start, or using `mondayWeekBounds()`, does not alter event retrieval.
+`GET /api/getUserEvents/:date` and the Calendar week rely on that contract.
 
 Never compare these dates by inventing UTC offsets or advance them with fixed milliseconds.
-Use the temporal helpers so month ends, year ends, and daylight-saving transitions stay
-correct.
 
 ---
 
-## Data and endpoints
+## Data model
 
-The page starts these reads in parallel:
+One document per user per week, in `weeklyPlanInfo`, keyed on the Monday civil marker:
+
+```js
+WeeklyPlanDetail {
+  userRef, weekStart, weekEnd, timeZone, committedAt, amendedAt,
+  items: [{ taskRef, projectRef, title, duration, dueDate, seriesRef, addedAt }]
+}
+```
+
+`WeeklyPlanDetail.index({ userRef: 1, weekStart: 1 }, { unique: true })` enforces one plan per
+week. `weekStart`, `weekEnd`, and each item's `dueDate` are civil-date markers written through
+`parseDateOnly()` and serialised back with `dateOnlyFromMarker()`, exactly like task dates.
+
+No status field exists, and `taskInfo` gained no new field. Deleting a task never touches a
+plan document.
+
+---
+
+## Endpoints
+
+House conventions apply: mounted under `/api`, `authenticateSession`, failures are HTTP 200
+with `{ success: false, log }`.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/api/getWeeklyPlans?from=&to=` | Plans in a bounded Monday range, items resolved to a live status. |
+| POST | `/api/commitWeeklyPlan` | `{ weekStart, taskIds }` — create or additively amend the current week. |
+
+Both return the same `plans` shape, so the client applies one reducer to a read and to a
+commit response.
+
+`getWeeklyPlans` requires both bounds, requires each to be a Monday, and refuses a range wider
+than 8 weeks — bounded like `getProjectCompletions`, because plans accumulate forever. The page
+asks for the previous and current Monday in one call.
+
+`commitWeeklyPlan` accepts **only the current week's Monday** for the caller's saved timezone.
+Committing a past or future week is refused, which is what removes the need for week
+navigation and makes last week's record permanent. Every new `taskId` must belong to the
+caller and be due inside the week; anything else is refused with a clear `log` rather than
+silently omitted. Omitting `taskIds` snapshots every project-linked task currently in the week.
+
+The page also reads:
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/getCompass` | Live roles with goals and projects nested beneath them. |
-| `GET /api/getUserTasks` | Incomplete tasks and materialised recurrence occurrences. |
-| `GET /api/getProjectCompletions?completedFrom=&completedTo=` | Minimal project-linked completion history for the previous week. |
+| `GET /api/getCompass` | Live roles with goals and projects. |
+| `GET /api/getUserTasks` | Incomplete tasks and materialised occurrences. |
+| `GET /api/getProjectCompletions` | Previous-week completion history. |
 
-Compass and incomplete tasks are required page data. Completion history is a separate,
-non-blocking read because `getUserTasks` intentionally excludes completed work and `getCompass`
-does not carry task rollups. Its required bounds are strict inclusive civil dates; the server
-converts them to timezone-aware instants and returns only `_id`, `title`, `projectRef`,
-`completedDate`, and `seriesRef`, newest first.
+and writes through `POST /api/createTask` and `POST /api/setTaskProject`.
 
-All grouping and totals are client-side derivations over these payloads. No Weekly Plan
-endpoint or model exists.
-
-Writes reuse:
-
-| Endpoint | Purpose |
-| --- | --- |
-| `POST /api/createTask` | Create a normal task under the surrounding project. |
-| `POST /api/setTaskProject` | Optionally align an existing unaligned task. |
-
-A Compass or active-task read failure is shown explicitly with a full-page retry. The page must
-not present a failed task load as though every project has no work. A completion-history failure
-uses its smaller inline retry and does not block planning.
+A Compass or task read failure is shown with a full-page retry. A plan read failure gets its
+own inline retry and **must not present a committed week as uncommitted**. A completion-history
+failure is likewise non-blocking.
 
 ---
 
 ## Relationship to scheduling
 
-Weekly Plan controls what tasks you author and what due dates you choose. It does not:
-
-- select tasks into a separate commitment set;
-- rewrite existing task dates;
-- run the scheduler;
-- weight roles, goals, or projects;
-- reserve capacity per role;
-- mark planning complete.
-
-After creation, a task behaves exactly like one created on Calendar. The scheduler continues
-to use normal start dates, due dates, priority, dependencies, working hours, and calendar
-availability. Future Compass scheduling influence remains a separate, higher-risk feature.
+Committing records intent. It does not reschedule, reprioritise, reserve capacity, rewrite
+task dates, or run the scheduler. After creation a task behaves exactly like one created on
+Calendar. Compass scheduling influence remains a separate, higher-risk feature.
 
 ---
 
 ## Work on Weekly Plan
 
-The page is `webinterface/src/views/WeeklyPlan.vue`; the shared modern editor is
-`webinterface/src/components/TaskEditor.vue` and is used by both Weekly Plan and Calendar.
-Its route and navigation live in
-`webinterface/src/router/index.js` and `webinterface/src/App.vue`. Authentication remains in
-the normal router guard, and page state stays local rather than expanding the auth-focused
-Vuex store.
+| File | Role |
+| --- | --- |
+| `webinterface/src/views/WeeklyPlan.vue` | The page. Owns all state and every mutation. |
+| `webinterface/src/components/WeeklyProjectCard.vue` | One project panel. Presentation only; emits events. |
+| `webinterface/src/components/WeeklyCommitmentProgress.vue` | Committed items, progress bar, added-since list. |
+| `webinterface/src/components/TaskEditor.vue` | The shared editor, used by Calendar too. |
+| `controllers/weeklyPlanController.js` | Commit and status derivation. |
+| `routes/weeklyPlan.js` | The two endpoints. |
 
-The UI intentionally uses project-keyed form state. A failed form under one project must not
-clear a draft under another project.
+Page state stays local rather than expanding the auth-focused Vuex store. Quick-task form
+state is keyed by project id so one draft cannot clear another; the child components never
+mutate the form prop, they emit `update-field`.
+
+The client sends **only additions** when committing. It never re-sends already-committed ids,
+because a `removed` item has no live task and a `moved` item would fail the in-week check.
 
 Tests:
 
-- `tests/api/temporal.spec.js` pins Monday bounds across DST and year boundaries while
-  preserving Sunday-based event bounds.
-- `tests/api/compass.spec.js` pins project-linked quick-create fields and ownership behavior.
-- `tests/ui/weeklyPlan.spec.js` covers hierarchy review, active and completed task grouping,
-  quick creation, failure recovery, Someday, unaligned work, saved-timezone behavior, and
-  narrow screens.
-- `tests/api/tasks.spec.js` pins the bounded completion-history query, ownership, validation,
-  and timezone-aware completion boundaries.
+- `tests/api/weeklyPlan.spec.js` — two specs covering what is unique to commitments: status
+  derivation from the live task (including ownership), and additive amendment.
+- `tests/ui/weeklyPlan.spec.js` — hierarchy review, quick creation, commit and review, folding
+  in later work, the previous-week recap, plan-read failure, narrow screens, saved timezone.
+- `tests/api/temporal.spec.js` — Monday bounds across DST and year boundaries.
+- `tests/api/tasks.spec.js` — the bounded completion-history query.
 
-Run a focused UI check while iterating:
+Run a focused check while iterating:
 
 ```bash
 npm test -- --project=ui tests/ui/weeklyPlan.spec.js
+npm test -- tests/api/weeklyPlan.spec.js
 ```
 
 Run `npm test` before shipping.

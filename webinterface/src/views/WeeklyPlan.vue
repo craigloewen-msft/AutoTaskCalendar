@@ -1,37 +1,115 @@
 <template>
   <div class="weekly-plan-page">
-    <BContainer class="py-4">
-      <header class="plan-header">
-        <div>
-          <p class="eyebrow">Compass review</p>
-          <h1>Weekly plan</h1>
-          <p
+    <div class="plan-shell">
+      <header class="week-bar" :class="{ committed: isCommitted }">
+        <div class="week-identity">
+          <p class="eyebrow">{{ isCommitted ? "Committed week" : "Week of" }}</p>
+          <h1
             class="week-range"
             data-test="week-range"
             :data-week-start="week.startDate"
             :data-week-end="week.endDate"
           >
             {{ formattedWeekRange }}
-          </p>
-          <p class="header-copy">
-            Review your direction, then create ordinary tasks for the week. They will be
-            auto-scheduled using their normal dates and priority.
+          </h1>
+          <p class="week-totals" data-test="weekly-overview">
+            <template v-if="isCommitted">
+              <strong>{{ committedDoneCount }} of {{ committedItems.length }} done</strong>
+              <span>{{ formatDuration(committedDoneMinutes) }} of {{ formatDuration(committedMinutes) }}</span>
+            </template>
+            <template v-else>
+              <strong>{{ selectedTasks.length }} {{ taskNoun(selectedTasks.length) }}</strong>
+              <span>{{ formatDuration(selectedMinutes) }} selected</span>
+            </template>
           </p>
         </div>
-        <div v-if="!loading && !loadError" class="plan-overview" data-test="weekly-overview">
-          <strong>{{ weeklyTasks.length }} {{ taskNoun(weeklyTasks.length) }}</strong>
-          <span>{{ formatDuration(weeklyDuration) }} due this week</span>
-          <router-link class="btn btn-outline-primary" to="/calendar">Go to calendar</router-link>
+
+        <div class="week-strip" aria-hidden="true">
+          <span
+            v-for="day in weekDays"
+            :key="day.date"
+            class="strip-day"
+            :class="{ today: day.date === today }"
+          >
+            <span class="strip-bar">
+              <span class="strip-fill" :style="{ height: `${dayLoadPercent(day.date)}%` }"></span>
+            </span>
+            <span class="strip-label">{{ day.label }}</span>
+          </span>
+        </div>
+
+        <div class="week-actions">
+          <button
+            v-if="!loading && !loadError"
+            class="btn commit-button"
+            :class="isCommitted ? 'btn-outline-primary' : 'btn-primary'"
+            type="button"
+            data-test="commit-week"
+            :disabled="committing"
+            @click="commitWeek()"
+          >
+            {{ commitLabel }}
+          </button>
+          <router-link class="btn btn-link calendar-link" to="/calendar">Go to calendar</router-link>
         </div>
       </header>
 
+      <p v-if="commitError" class="bar-message error" role="alert" data-test="commit-error">
+        {{ commitError }}
+      </p>
+
+      <div
+        v-if="!loading && !loadError && planError"
+        class="bar-message"
+        role="status"
+        data-test="weekly-plans-error"
+      >
+        <span>This week's commitment could not be loaded.</span>
+        <button
+          class="btn btn-sm btn-outline-secondary"
+          type="button"
+          :disabled="planLoading"
+          @click="loadPlans"
+        >
+          {{ planLoading ? "Retrying…" : "Retry" }}
+        </button>
+      </div>
+
+      <details
+        v-if="!loading && !loadError && previousPlan"
+        class="recap"
+        data-test="previous-week-recap"
+      >
+        <summary>
+          <strong>Last week:</strong>
+          committed {{ previousPlan.items.length }},
+          finished {{ previousDoneCount }},
+          {{ previousSlippedCount }} slipped
+        </summary>
+        <ul class="recap-list">
+          <li
+            v-for="item in previousPlan.items"
+            :key="item.taskRef"
+            class="recap-row"
+            :class="`is-${item.status}`"
+            :data-status="item.status"
+          >
+            <span class="recap-title">
+              <span class="status-glyph" aria-hidden="true">{{ statusGlyph(item.status) }}</span>
+              {{ item.title }}
+            </span>
+            <span class="recap-meta">{{ item.status }}</span>
+          </li>
+        </ul>
+      </details>
+
       <div
         v-if="!loading && !loadError && roles.length && completionError"
-        class="completion-error"
+        class="bar-message"
         role="status"
         data-test="project-completions-error"
       >
-        <span>Last week’s completions could not be loaded.</span>
+        <span>Last week's completions could not be loaded.</span>
         <button
           class="btn btn-sm btn-outline-secondary"
           type="button"
@@ -42,18 +120,18 @@
         </button>
       </div>
 
-      <div v-if="loading" class="loading-state" role="status">
+      <div v-if="loading" class="panel-state" role="status">
         <span class="spinner-border text-primary" aria-hidden="true"></span>
         <span>Loading your weekly plan…</span>
       </div>
 
-      <div v-else-if="loadError" class="error-state" role="alert" data-test="weekly-plan-error">
+      <div v-else-if="loadError" class="panel-state" role="alert" data-test="weekly-plan-error">
         <h2>Weekly plan could not be loaded</h2>
         <p>{{ loadError }}</p>
         <button class="btn btn-primary" type="button" @click="load">Try again</button>
       </div>
 
-      <div v-else-if="!roles.length" class="empty-state">
+      <div v-else-if="!roles.length" class="panel-state">
         <h2>Start with your Compass</h2>
         <p>Add a role, a goal, and a project before planning tasks around them.</p>
         <router-link class="btn btn-primary" to="/compass">Set up Compass</router-link>
@@ -62,287 +140,184 @@
       <main
         v-else
         ref="weeklyHierarchy"
-        class="role-grid"
+        class="role-stream"
         data-test="weekly-hierarchy"
         tabindex="-1"
       >
-        <article
+        <section
           v-for="role in roles"
           :key="role._id"
-          class="role-card"
+          class="role"
+          data-test="role-section"
           :data-role-id="role._id"
         >
-          <header class="role-heading">
-            <span class="role-swatch" :style="{ backgroundColor: roleColors[role._id] }"></span>
-            <div>
+          <header class="role-head">
+            <span class="role-bar" :style="{ backgroundColor: roleColors[role._id] }"></span>
+            <div class="role-identity">
               <h2>{{ role.title }}</h2>
               <p v-if="role.description" class="description">{{ role.description }}</p>
-              <p class="date-range">{{ compassDateRange(role) }}</p>
+            </div>
+            <div class="role-meta">
+              <span class="role-total">{{ roleSummary(role) }}</span>
+              <span class="date-range">{{ compassDateRange(role) }}</span>
             </div>
           </header>
 
-          <div v-if="!(role.goalList || []).length" class="hierarchy-empty">
+          <p v-if="!(role.goalList || []).length" class="hierarchy-empty">
             No active goals. <router-link to="/compass">Add one in Compass</router-link>.
-          </div>
+          </p>
 
-          <section v-for="goal in role.goalList || []" :key="goal._id" class="goal-card">
-            <header class="goal-heading">
-              <div>
-                <h3>{{ goal.title }}</h3>
-                <p v-if="goal.description" class="description">{{ goal.description }}</p>
-              </div>
+          <div v-for="goal in role.goalList || []" :key="goal._id" class="goal">
+            <div class="goal-rule">
+              <h3>{{ goal.title }}</h3>
+              <span class="rule-line"></span>
               <span class="date-range">{{ compassDateRange(goal) }}</span>
-            </header>
-
-            <div v-if="!startedProjects(goal).length" class="hierarchy-empty">
-              No started projects. <router-link to="/compass">Review this goal in Compass</router-link>.
             </div>
+            <p v-if="goal.description" class="description goal-description">
+              {{ goal.description }}
+            </p>
 
-            <section
-              v-for="project in startedProjects(goal)"
-              :key="project._id"
-              class="project-card"
-              :data-project-id="project._id"
-            >
-              <header class="project-heading">
-                <div>
-                  <h4>{{ project.title }}</h4>
-                  <p v-if="project.description" class="description">{{ project.description }}</p>
-                  <span class="date-range">{{ compassDateRange(project) }}</span>
-                </div>
-                <div class="project-total">
-                  {{ tasksForProject(project._id, true).length }}
-                  {{ taskNoun(tasksForProject(project._id, true).length) }} ·
-                  {{ formatDuration(durationFor(tasksForProject(project._id, true))) }}
-                </div>
-              </header>
+            <p v-if="!startedProjects(goal).length" class="hierarchy-empty">
+              No started projects.
+              <router-link to="/compass">Review this goal in Compass</router-link>.
+            </p>
 
-              <ul
-                v-if="tasksForProject(project._id, true).length"
-                class="task-list"
-                :data-test="`week-tasks-${project._id}`"
-              >
+            <div v-else class="project-stack">
+              <WeeklyProjectCard
+                v-for="project in startedProjects(goal)"
+                :key="project._id"
+                :project="project"
+                :week-tasks="tasksForProject(project._id, true)"
+                :other-tasks="tasksForProject(project._id, false)"
+                :completions="completionsForProject(project._id)"
+                :committed-items="committedItemsForProject(project._id)"
+                :added-tasks="addedTasksForProject(project._id)"
+                :tasks-by-id="tasksById"
+                :form="forms[project._id]"
+                :week="week"
+                :week-days="weekDays"
+                :previous-week="previousWeek"
+                :previous-range-label="formattedPreviousWeekRange"
+                :selectable="!isCommitted"
+                :selected-ids="selection"
+                :folding-in="committing"
+                :committed="isCommitted"
+                :time-zone="timeZone"
+                :plan-date-for="weeklyPlanDate"
+                @open-task="openTask"
+                @toggle-task="toggleTask"
+                @open-form="openForm(project._id)"
+                @close-form="closeForm(project._id)"
+                @update-field="(field, value) => updateForm(project._id, field, value)"
+                @submit="createTask(project)"
+                @fold-in="commitWeek()"
+              />
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div v-if="!loading && !loadError" class="loose-ends">
+        <details v-if="somedayProjects.length" class="drawer" data-test="someday-projects">
+          <summary>
+            Someday · {{ somedayProjects.length }} parked projects<span v-if="somedayWeeklyTasks.length">
+              · {{ somedayWeeklyTasks.length }} {{ taskNoun(somedayWeeklyTasks.length) }} due this week</span>
+          </summary>
+          <p class="drawer-copy">
+            Start these projects in Compass before creating new weekly work beneath them.
+          </p>
+          <ul class="parked-list">
+            <li v-for="project in somedayProjects" :key="project._id" class="parked-item">
+              <div class="parked-head">
+                <strong>{{ project.title }}</strong>
+                <span class="date-range">{{ project.parentLabel }}</span>
+              </div>
+              <p v-if="project.description" class="description">{{ project.description }}</p>
+              <ul v-if="tasksForProject(project._id, true).length" class="loose-task-list">
                 <li v-for="task in tasksForProject(project._id, true)" :key="task._id">
-                  <button
-                    class="task-row task-button"
-                    type="button"
-                    :data-test="`edit-weekly-task-${task._id}`"
-                    @click="openTask(task, $event)"
-                  >
-                    <span>
-                      <span v-if="task.seriesRef" class="task-marker" title="Repeating task" aria-label="Repeating task">↻</span>
-                      <strong>{{ task.title }}</strong>
-                      <span v-if="task.isBacklog" class="task-badge">Backlog</span>
-                    </span>
-                    <span class="task-meta">
-                      <span>{{ dueLabel(task) }}</span>
-                      <span>{{ formatDuration(Number(task.duration) || 0) }}</span>
+                  <button class="loose-task" type="button" @click="openTask(task, $event)">
+                    <span>{{ task.title }}</span>
+                    <span class="loose-meta">
+                      {{ dueLabel(task) }} · {{ formatDuration(Number(task.duration) || 0) }}
                     </span>
                   </button>
                 </li>
               </ul>
-              <p v-else class="nothing-planned">Nothing planned for this week yet.</p>
+            </li>
+          </ul>
+          <router-link to="/compass">Manage Someday projects in Compass</router-link>
+        </details>
 
-              <details v-if="tasksForProject(project._id, false).length" class="other-tasks">
-                <summary>
-                  Other active tasks · {{ tasksForProject(project._id, false).length }}
-                </summary>
-                <ul class="task-list compact">
-                  <li v-for="task in tasksForProject(project._id, false)" :key="task._id">
-                    <button class="task-row task-button" type="button" @click="openTask(task, $event)">
-                      <span>
-                        <span v-if="task.seriesRef" class="task-marker" title="Repeating task" aria-label="Repeating task">↻</span>
-                        <strong>{{ task.title }}</strong>
-                        <span v-if="task.isBacklog" class="task-badge">Backlog</span>
-                      </span>
-                      <span class="task-meta">
-                        <span>{{ dueLabel(task) }}</span>
-                        <span>{{ formatDuration(Number(task.duration) || 0) }}</span>
-                      </span>
-                    </button>
-                  </li>
-                </ul>
-              </details>
-
-              <details
-                v-if="completionsForProject(project._id).length"
-                class="completed-last-week"
-                :data-test="`completed-last-week-${project._id}`"
-                :data-completed-from="previousWeek.startDate"
-                :data-completed-to="previousWeek.endDate"
-              >
-                <summary>
-                  <span class="completion-check" aria-hidden="true">✓</span>
-                  {{ completionsForProject(project._id).length }}
-                  {{ taskNoun(completionsForProject(project._id).length) }} completed last week ·
-                  {{ formattedPreviousWeekRange }}
-                </summary>
-                <ul class="completed-task-list">
-                  <li
-                    v-for="task in completionsForProject(project._id)"
-                    :key="task._id"
-                    :data-test="`completed-last-week-row-${task._id}`"
-                  >
-                    <span class="completed-task-title">
-                      <span class="completion-check" aria-hidden="true">✓</span>
-                      <span v-if="task.seriesRef" class="task-marker" title="Repeating task" aria-label="Repeating task">↻</span>
-                      <strong>{{ task.title }}</strong>
-                    </span>
-                    <span class="completed-task-date">{{ completionLabel(task) }}</span>
-                  </li>
-                </ul>
-              </details>
-
-              <form
-                class="quick-task-form"
-                :data-test="`quick-task-${project._id}`"
-                @submit.prevent="createTask(project)"
-              >
-                <div class="quick-task-title">
-                  <strong>Quick task</strong>
-                  <span>for {{ project.title }}</span>
-                </div>
-                <div class="quick-fields">
-                  <div class="field title-field">
-                    <label :for="`quick-title-${project._id}`">Task title</label>
-                    <input
-                      :id="`quick-title-${project._id}`"
-                      v-model="forms[project._id].title"
-                      class="form-control"
-                      type="text"
-                      required
-                    />
-                  </div>
-                  <div class="field duration-field">
-                    <label :for="`quick-duration-${project._id}`">Minutes</label>
-                    <input
-                      :id="`quick-duration-${project._id}`"
-                      v-model.number="forms[project._id].duration"
-                      class="form-control"
-                      type="number"
-                      min="1"
-                      step="1"
-                      required
-                    />
-                  </div>
-                  <div class="field due-field">
-                    <label :for="`quick-due-${project._id}`">Due date</label>
-                    <input
-                      :id="`quick-due-${project._id}`"
-                      v-model="forms[project._id].dueDate"
-                      class="form-control date-input"
-                      type="date"
-                      :min="week.startDate"
-                      :max="week.endDate"
-                      required
-                    />
-                  </div>
-                  <button class="btn btn-primary add-task-button" type="submit" :disabled="forms[project._id].saving">
-                    {{ forms[project._id].saving ? "Adding…" : "Add task" }}
-                  </button>
-                </div>
-                <p
-                  v-if="forms[project._id].message"
-                  class="form-message"
-                  :class="{ error: forms[project._id].error }"
-                  :role="forms[project._id].error ? 'alert' : 'status'"
-                  :data-test="`quick-status-${project._id}`"
-                >
-                  {{ forms[project._id].message }}
-                </p>
-              </form>
-            </section>
-          </section>
-        </article>
-      </main>
-
-      <details
-        v-if="!loading && !loadError && somedayProjects.length"
-        class="lower-section someday-section"
-        data-test="someday-projects"
-      >
-        <summary>
-          Someday · {{ somedayProjects.length }} parked projects<span v-if="somedayWeeklyTasks.length">
-            · {{ somedayWeeklyTasks.length }} {{ taskNoun(somedayWeeklyTasks.length) }} due this week</span>
-        </summary>
-        <p>Start these projects in Compass before creating new weekly work beneath them.</p>
-        <ul>
-          <li v-for="project in somedayProjects" :key="project._id">
-            <strong>{{ project.title }}</strong>
-            <span>{{ project.parentLabel }}</span>
-            <p v-if="project.description">{{ project.description }}</p>
-            <ul v-if="tasksForProject(project._id, true).length" class="parked-task-list">
-              <li v-for="task in tasksForProject(project._id, true)" :key="task._id">
-                <button class="task-row task-button" type="button" @click="openTask(task, $event)">
-                  <strong>{{ task.title }}</strong>
-                  <span>{{ dueLabel(task) }} · {{ formatDuration(Number(task.duration) || 0) }}</span>
-                </button>
-              </li>
-            </ul>
-          </li>
-        </ul>
-        <router-link to="/compass">Manage Someday projects in Compass</router-link>
-      </details>
-
-      <details
-        v-if="!loading && !loadError && outsideCompassWeeklyTasks.length"
-        class="lower-section"
-        data-test="outside-compass-tasks"
-      >
-        <summary>
-          Outside active Compass · {{ outsideCompassWeeklyTasks.length }}
-          {{ taskNoun(outsideCompassWeeklyTasks.length) }} due this week
-        </summary>
-        <p>These tasks belong to a project that is no longer in the active Compass hierarchy.</p>
-        <ul class="task-list">
-          <li v-for="task in outsideCompassWeeklyTasks" :key="task._id">
-            <button class="task-row task-button" type="button" @click="openTask(task, $event)">
-              <strong>{{ task.title }}</strong>
-              <span class="task-meta">{{ dueLabel(task) }} · {{ formatDuration(Number(task.duration) || 0) }}</span>
-            </button>
-          </li>
-        </ul>
-      </details>
-
-      <details
-        v-if="!loading && !loadError && unalignedWeeklyTasks.length"
-        class="lower-section"
-        data-test="unaligned-tasks"
-      >
-        <summary>Unaligned tasks · {{ unalignedWeeklyTasks.length }} due this week</summary>
-        <p>Older tasks without a project can be assigned here when their project is clear.</p>
-        <ul class="unaligned-list">
-          <li v-for="task in unalignedWeeklyTasks" :key="task._id" class="unaligned-row">
-            <button class="unaligned-task-button" type="button" @click="openTask(task, $event)">
-              <strong>{{ task.title }}</strong>
-              <span>{{ dueLabel(task) }} · {{ formatDuration(Number(task.duration) || 0) }}</span>
-            </button>
-            <div class="align-controls">
-              <label :for="`align-${task._id}`" class="visually-hidden">Project for {{ task.title }}</label>
-              <select :id="`align-${task._id}`" v-model="alignmentSelections[task._id]" class="form-control">
-                <option value="">Choose a project</option>
-                <optgroup v-for="group in projectOptionGroups" :key="group.label" :label="group.label">
-                  <option v-for="project in group.projects" :key="project._id" :value="project._id">
-                    {{ project.title }}
-                  </option>
-                </optgroup>
-              </select>
-              <button
-                class="btn btn-outline-primary"
-                type="button"
-                :disabled="!alignmentSelections[task._id] || aligningTaskId === task._id"
-                @click="alignTask(task)"
-              >
-                {{ aligningTaskId === task._id ? "Assigning…" : "Assign" }}
+        <details
+          v-if="outsideCompassWeeklyTasks.length"
+          class="drawer"
+          data-test="outside-compass-tasks"
+        >
+          <summary>
+            Outside active Compass · {{ outsideCompassWeeklyTasks.length }}
+            {{ taskNoun(outsideCompassWeeklyTasks.length) }} due this week
+          </summary>
+          <p class="drawer-copy">
+            These tasks belong to a project that is no longer in the active Compass hierarchy.
+          </p>
+          <ul class="loose-task-list">
+            <li v-for="task in outsideCompassWeeklyTasks" :key="task._id">
+              <button class="loose-task" type="button" @click="openTask(task, $event)">
+                <span>{{ task.title }}</span>
+                <span class="loose-meta">
+                  {{ dueLabel(task) }} · {{ formatDuration(Number(task.duration) || 0) }}
+                </span>
               </button>
-            </div>
-            <p v-if="alignmentMessages[task._id]" class="form-message error" role="alert">
-              {{ alignmentMessages[task._id] }}
-            </p>
-          </li>
-        </ul>
-      </details>
-    </BContainer>
+            </li>
+          </ul>
+        </details>
+
+        <details v-if="unalignedWeeklyTasks.length" class="drawer" data-test="unaligned-tasks">
+          <summary>Unaligned tasks · {{ unalignedWeeklyTasks.length }} due this week</summary>
+          <p class="drawer-copy">
+            Older tasks without a project can be assigned here when their project is clear.
+          </p>
+          <ul class="unaligned-list">
+            <li v-for="task in unalignedWeeklyTasks" :key="task._id" class="unaligned-row">
+              <button class="loose-task" type="button" @click="openTask(task, $event)">
+                <span>{{ task.title }}</span>
+                <span class="loose-meta">
+                  {{ dueLabel(task) }} · {{ formatDuration(Number(task.duration) || 0) }}
+                </span>
+              </button>
+              <div class="align-controls">
+                <label :for="`align-${task._id}`" class="visually-hidden">
+                  Project for {{ task.title }}
+                </label>
+                <select
+                  :id="`align-${task._id}`"
+                  v-model="alignmentSelections[task._id]"
+                  class="form-control"
+                >
+                  <option value="">Choose a project</option>
+                  <optgroup v-for="group in projectOptionGroups" :key="group.label" :label="group.label">
+                    <option v-for="project in group.projects" :key="project._id" :value="project._id">
+                      {{ project.title }}
+                    </option>
+                  </optgroup>
+                </select>
+                <button
+                  class="btn btn-outline-primary"
+                  type="button"
+                  :disabled="!alignmentSelections[task._id] || aligningTaskId === task._id"
+                  @click="alignTask(task)"
+                >
+                  {{ aligningTaskId === task._id ? "Assigning…" : "Assign" }}
+                </button>
+              </div>
+              <p v-if="alignmentMessages[task._id]" class="form-message error" role="alert">
+                {{ alignmentMessages[task._id] }}
+              </p>
+            </li>
+          </ul>
+        </details>
+      </div>
+    </div>
 
     <TaskEditor
       v-if="selectedTask"
@@ -358,8 +333,8 @@
 </template>
 
 <script>
-import { BContainer } from "bootstrap-vue-next";
 import TaskEditor from "../components/TaskEditor.vue";
+import WeeklyProjectCard from "../components/WeeklyProjectCard.vue";
 import { buildRoleColorMap } from "../utils/roleColors";
 import {
   addCalendarDays,
@@ -369,9 +344,16 @@ import {
   mondayWeekBounds,
 } from "../utils/temporal";
 
+/**
+ * Weekly Plan. See docs/WEEKLY_PLAN.md.
+ *
+ * Two modes over one hierarchy. Before a commitment exists for the current week the page
+ * builds it; afterwards the same page reviews progress against it. Nothing but the calendar
+ * rolling to a new Monday moves it back, so there is no save, close, or archive action.
+ */
 export default {
   name: "WeeklyPlan",
-  components: { BContainer, TaskEditor },
+  components: { TaskEditor, WeeklyProjectCard },
   data() {
     const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
 
@@ -379,9 +361,16 @@ export default {
       roles: [],
       taskList: [],
       projectCompletions: [],
+      plans: [],
       completionError: "",
       completionLoading: false,
       completionRequestId: 0,
+      planError: "",
+      planLoading: false,
+      planRequestId: 0,
+      committing: false,
+      commitError: "",
+      selection: {},
       selectedTask: null,
       lastTaskTrigger: null,
       forms: {},
@@ -399,6 +388,9 @@ export default {
     loadError() {
       return this.compassError || this.taskError;
     },
+    timeZone() {
+      return this.$store.state.user?.timeZone || "UTC";
+    },
     roleColors() {
       return buildRoleColorMap(this.roles);
     },
@@ -406,6 +398,14 @@ export default {
       if (!this.week) return "";
       const options = { weekday: "short", month: "short", day: "numeric" };
       return `${formatCivilDate(this.week.startDate, options)} – ${formatCivilDate(this.week.endDate, options)}`;
+    },
+    // Mon-Sun, used by both the header strip and the quick-add day chips.
+    weekDays() {
+      if (!this.week?.startDate) return [];
+      return Array.from({ length: 7 }, (unused, index) => {
+        const date = addCalendarDays(this.week.startDate, index);
+        return { date, label: formatCivilDate(date, { weekday: "short" }) };
+      });
     },
     previousWeek() {
       const currentMonday = this.week?.startDate;
@@ -419,31 +419,77 @@ export default {
       const { startDate, endDate } = this.previousWeek;
       if (!startDate || !endDate) return "";
       const sameYear = startDate.slice(0, 4) === endDate.slice(0, 4);
-      const startOptions = { month: "short", day: "numeric" };
-      if (!sameYear) startOptions.year = "numeric";
-      const endOptions = { month: "short", day: "numeric" };
-      if (!sameYear) endOptions.year = "numeric";
-      return `${formatCivilDate(startDate, startOptions)} – ${formatCivilDate(endDate, endOptions)}`;
+      const options = { month: "short", day: "numeric" };
+      if (!sameYear) options.year = "numeric";
+      return `${formatCivilDate(startDate, options)} – ${formatCivilDate(endDate, options)}`;
     },
-    projectCompletionsByProject() {
+    currentPlan() {
+      return this.plans.find((plan) => plan.weekStart === this.week?.startDate) || null;
+    },
+    previousPlan() {
+      return this.plans.find((plan) => plan.weekStart === this.previousWeek.startDate) || null;
+    },
+    isCommitted() {
+      return !!this.currentPlan;
+    },
+    committedItems() {
+      return this.currentPlan?.items || [];
+    },
+    committedItemsByProject() {
       const grouped = {};
-      for (const task of this.projectCompletions) {
-        if (!grouped[task.projectRef]) grouped[task.projectRef] = [];
-        grouped[task.projectRef].push(task);
-      }
-      for (const tasks of Object.values(grouped)) {
-        tasks.sort((left, right) => {
-          return new Date(right.completedDate) - new Date(left.completedDate)
-            || String(left.title || "").localeCompare(String(right.title || ""));
-        });
+      for (const item of this.committedItems) {
+        const key = item.projectRef || "";
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(item);
       }
       return grouped;
+    },
+    committedTaskIds() {
+      return new Set(this.committedItems.map((item) => item.taskRef));
+    },
+    committedDoneCount() {
+      return this.committedItems.filter((item) => item.status === "done").length;
+    },
+    committedMinutes() {
+      return this.committedItems.reduce(
+        (total, item) => total + (Number(item.duration) || 0),
+        0
+      );
+    },
+    committedDoneMinutes() {
+      return this.committedItems
+        .filter((item) => item.status === "done")
+        .reduce((total, item) => total + (Number(item.duration) || 0), 0);
+    },
+    previousDoneCount() {
+      return (this.previousPlan?.items || []).filter((item) => item.status === "done").length;
+    },
+    previousSlippedCount() {
+      return (this.previousPlan?.items || []).filter(
+        (item) => item.status !== "done"
+      ).length;
+    },
+    commitLabel() {
+      if (this.committing) return "Saving…";
+      if (this.isCommitted) return "Update commitment";
+      return `Commit to this week · ${this.selectedTasks.length} ${this.taskNoun(this.selectedTasks.length)}`;
+    },
+    tasksById() {
+      const map = {};
+      for (const task of this.taskList) map[task._id] = task;
+      return map;
     },
     weeklyTasks() {
       return this.sortTasks(this.taskList.filter((task) => this.isDueThisWeek(task)));
     },
-    weeklyDuration() {
-      return this.durationFor(this.weeklyTasks);
+    // Every in-week project task is committed unless explicitly unchecked.
+    selectedTasks() {
+      return this.weeklyTasks.filter(
+        (task) => task.projectRef && this.selection[task._id] !== false
+      );
+    },
+    selectedMinutes() {
+      return this.durationFor(this.selectedTasks);
     },
     unalignedWeeklyTasks() {
       return this.weeklyTasks.filter((task) => !task.projectRef);
@@ -479,6 +525,20 @@ export default {
       }
       return projects;
     },
+    projectCompletionsByProject() {
+      const grouped = {};
+      for (const task of this.projectCompletions) {
+        if (!grouped[task.projectRef]) grouped[task.projectRef] = [];
+        grouped[task.projectRef].push(task);
+      }
+      for (const tasks of Object.values(grouped)) {
+        tasks.sort((left, right) => {
+          return new Date(right.completedDate) - new Date(left.completedDate)
+            || String(left.title || "").localeCompare(String(right.title || ""));
+        });
+      }
+      return grouped;
+    },
     projectOptionGroups() {
       const groups = [];
       for (const role of this.roles) {
@@ -512,6 +572,7 @@ export default {
       this.projectCompletions = [];
       this.completionError = "";
       this.loadProjectCompletions();
+      this.loadPlans();
 
       const [compassResult, taskResult] = await Promise.allSettled([
         this.$http.get("/api/getCompass"),
@@ -536,6 +597,46 @@ export default {
       }
 
       this.loading = false;
+    },
+    /**
+     * The current and previous week in one bounded read.
+     *
+     * A failure here must not present a committed week as uncommitted, so the error is
+     * surfaced with its own retry rather than falling back to Plan mode.
+     */
+    async loadPlans() {
+      const from = this.previousWeek.startDate;
+      const to = this.week?.startDate;
+      if (!from || !to) return;
+
+      const requestId = ++this.planRequestId;
+      this.planLoading = true;
+
+      try {
+        const response = await this.$http.get("/api/getWeeklyPlans", { params: { from, to } });
+        if (requestId !== this.planRequestId) return;
+        if (!response.data.success) {
+          this.planError = response.data.log || "Weekly plans could not be loaded.";
+          return;
+        }
+        this.applyPlans(response.data.plans);
+      } catch (error) {
+        if (requestId === this.planRequestId) {
+          this.planError = "Weekly plans could not be loaded.";
+        }
+      } finally {
+        if (requestId === this.planRequestId) this.planLoading = false;
+      }
+    },
+    // Commit and read return the same shape, so one reducer serves both.
+    applyPlans(plans) {
+      const incoming = plans || [];
+      const replaced = new Set(incoming.map((plan) => plan.weekStart));
+      this.plans = [
+        ...this.plans.filter((plan) => !replaced.has(plan.weekStart)),
+        ...incoming,
+      ];
+      this.planError = "";
     },
     async loadProjectCompletions() {
       const { startDate, endDate } = this.previousWeek;
@@ -573,6 +674,46 @@ export default {
         if (requestId === this.completionRequestId) this.completionLoading = false;
       }
     },
+    /**
+     * Record or amend this week's commitment.
+     *
+     * Amending is additive on the server, so this only ever sends work that is not in the
+     * snapshot yet. Already-committed items are never re-sent: they must keep their
+     * recorded status even when the task has since been deleted or moved out of the week.
+     */
+    async commitWeek() {
+      if (this.refreshTemporal()) {
+        this.loadProjectCompletions();
+        await this.loadPlans();
+      }
+
+      this.committing = true;
+      this.commitError = "";
+
+      const taskIds = this.selectedTasks
+        .map((task) => task._id)
+        .filter((id) => !this.committedTaskIds.has(String(id)));
+
+      try {
+        const response = await this.$http.post("/api/commitWeeklyPlan", {
+          weekStart: this.week.startDate,
+          taskIds,
+        });
+
+        if (!response.data.success) {
+          this.commitError = response.data.log || "This week could not be committed.";
+          return;
+        }
+        this.applyPlans(response.data.plans);
+      } catch (error) {
+        this.commitError = "This week could not be committed.";
+      } finally {
+        this.committing = false;
+      }
+    },
+    toggleTask(task) {
+      this.selection[task._id] = this.selection[task._id] === false;
+    },
     refreshTemporal() {
       const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
       const nextWeek = mondayWeekBounds(today);
@@ -581,6 +722,9 @@ export default {
       this.week = nextWeek;
 
       if (weekChanged) {
+        // A new week starts uncommitted and with a fresh selection.
+        this.selection = {};
+        this.commitError = "";
         for (const form of Object.values(this.forms)) {
           form.dueDate = this.quickTaskDueDate(nextWeek);
           form.error = false;
@@ -589,9 +733,13 @@ export default {
       }
       return weekChanged;
     },
+    // A tab left open over the weekend must land in Plan mode for the new week.
     handleVisibilityChange() {
       if (document.visibilityState !== "visible") return;
-      if (this.refreshTemporal()) this.loadProjectCompletions();
+      if (this.refreshTemporal()) {
+        this.loadProjectCompletions();
+        this.loadPlans();
+      }
     },
     initializeForms() {
       const next = {};
@@ -609,6 +757,7 @@ export default {
     },
     blankForm() {
       return {
+        open: false,
         title: "",
         duration: 30,
         dueDate: this.quickTaskDueDate(),
@@ -616,6 +765,18 @@ export default {
         error: false,
         message: "",
       };
+    },
+    openForm(projectId) {
+      this.forms[projectId].open = true;
+      this.forms[projectId].message = "";
+      this.forms[projectId].error = false;
+    },
+    closeForm(projectId) {
+      this.forms[projectId].open = false;
+    },
+    // Form state stays here and keyed by project, so one draft cannot clear another.
+    updateForm(projectId, field, value) {
+      this.forms[projectId][field] = value;
     },
     startedProjects(goal) {
       return (goal.projectList || []).filter((project) => !!project.startDate);
@@ -644,8 +805,57 @@ export default {
           && this.isDueThisWeek(task) === thisWeek;
       }));
     },
+    committedItemsForProject(projectId) {
+      return this.committedItemsByProject[projectId] || [];
+    },
+    // In-week work that is not part of the snapshot yet.
+    addedTasksForProject(projectId) {
+      if (!this.isCommitted) return [];
+      return this.tasksForProject(projectId, true).filter(
+        (task) => !this.committedTaskIds.has(String(task._id))
+      );
+    },
     completionsForProject(projectId) {
       return this.projectCompletionsByProject[projectId] || [];
+    },
+    roleSummary(role) {
+      const projectIds = [];
+      for (const goal of role.goalList || []) {
+        for (const project of goal.projectList || []) projectIds.push(project._id);
+      }
+      const ids = new Set(projectIds);
+
+      if (this.isCommitted) {
+        const items = this.committedItems.filter((item) => ids.has(item.projectRef));
+        if (!items.length) return "nothing committed";
+        const done = items.filter((item) => item.status === "done").length;
+        return `${done}/${items.length} done`;
+      }
+
+      const tasks = this.weeklyTasks.filter((task) => ids.has(task.projectRef));
+      if (!tasks.length) return "nothing planned";
+      return `${tasks.length} ${this.taskNoun(tasks.length)} · ${this.formatDuration(this.durationFor(tasks))}`;
+    },
+    // Relative load for the header strip, scaled against the busiest day.
+    dayLoadPercent(date) {
+      const minutesOn = (day) => {
+        if (this.isCommitted) {
+          return this.committedItems
+            .filter((item) => (item.liveDueDate || item.dueDate) === day)
+            .reduce((total, item) => total + (Number(item.duration) || 0), 0);
+        }
+        return this.selectedTasks
+          .filter((task) => this.weeklyPlanDate(task) === day)
+          .reduce((total, task) => total + (Number(task.duration) || 0), 0);
+      };
+
+      const loads = this.weekDays.map((day) => minutesOn(day.date));
+      const peak = Math.max(...loads, 0);
+      if (!peak) return 0;
+      return Math.round((minutesOn(date) / peak) * 100);
+    },
+    statusGlyph(status) {
+      return { done: "✓", moved: "↷", removed: "✗" }[status] || "●";
     },
     sortTasks(tasks) {
       return [...tasks].sort((left, right) => {
@@ -677,17 +887,6 @@ export default {
         day: "numeric",
       });
     },
-    completionLabel(task) {
-      const date = dateOnlyInTimeZone(
-        this.$store.state.user?.timeZone,
-        new Date(task.completedDate)
-      );
-      return `Completed ${formatCivilDate(date, {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-      })}`;
-    },
     compassDateRange(item) {
       const start = item.startDate
         ? formatCivilDate(item.startDate, { month: "short", year: "numeric" })
@@ -708,9 +907,11 @@ export default {
       this.selectedTask = null;
       this.$nextTick(() => this.lastTaskTrigger?.focus());
     },
+    // Editing can complete, delete, or move a task, so the commitment view must resync.
     applyTaskChanges(taskList) {
       this.taskList = taskList;
       this.closeTaskEditor();
+      if (this.isCommitted) this.loadPlans();
     },
     async createTask(project) {
       if (this.refreshTemporal()) this.loadProjectCompletions();
@@ -761,7 +962,10 @@ export default {
         form.title = "";
         form.duration = 30;
         form.dueDate = this.quickTaskDueDate();
-        form.message = "Task added to this week.";
+        form.open = false;
+        form.message = this.isCommitted
+          ? "Task added since commit."
+          : "Task added to this week.";
       } catch (error) {
         form.error = true;
         form.message = "Task could not be created.";
@@ -805,88 +1009,232 @@ export default {
 <style scoped>
 .weekly-plan-page {
   min-height: calc(100vh - 56px);
+  padding: 0 20px 60px;
   text-align: left;
   background:
-    radial-gradient(circle at 10% 0%, rgba(102, 126, 234, 0.13), transparent 34rem),
+    radial-gradient(circle at 12% 0%, rgba(102, 126, 234, 0.13), transparent 34rem),
     #0d1117;
 }
 
-.plan-header {
+/* One column, capped so lines stay readable on wide screens. */
+.plan-shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding-top: 20px;
+}
+
+.week-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 28px;
-  align-items: end;
-  margin-bottom: 28px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 24px;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: rgba(13, 17, 23, 0.93);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.week-bar.committed {
+  border-color: rgba(110, 231, 183, 0.24);
 }
 
 .eyebrow {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   color: #8da2fb;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
 }
 
-.plan-header h1 {
-  margin: 0;
-  color: #f0f3f6;
-  font-size: clamp(2rem, 5vw, 3.25rem);
-  line-height: 1;
+.week-bar.committed .eyebrow {
+  color: #6ee7b7;
 }
 
 .week-range {
-  margin: 10px 0 0;
-  color: #c8d1da;
-  font-size: 1.15rem;
-  font-weight: 600;
-}
-
-.header-copy {
-  max-width: 680px;
-  margin: 8px 0 0;
-  color: #8b949e;
-}
-
-.plan-overview {
-  display: grid;
-  min-width: 220px;
-  gap: 3px;
-  padding: 16px;
-  border: 1px solid rgba(141, 162, 251, 0.28);
-  border-radius: 12px;
-  background: rgba(22, 27, 34, 0.88);
-}
-
-.plan-overview strong {
+  margin: 0;
   color: #f0f3f6;
-  font-size: 1.15rem;
+  font-size: clamp(1.15rem, 2.4vw, 1.6rem);
+  font-weight: 600;
+  line-height: 1.15;
 }
 
-.plan-overview span {
-  margin-bottom: 10px;
+.week-totals {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+}
+
+.week-totals strong {
+  color: #d7dde4;
+}
+
+.week-totals span {
   color: #8b949e;
 }
 
-.completion-error {
+.week-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.strip-day {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+}
+
+.strip-bar {
+  display: flex;
+  width: 14px;
+  height: 30px;
+  align-items: flex-end;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.strip-fill {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #8da2fb, #667eea);
+  transition: height 0.3s ease;
+}
+
+.strip-label {
+  color: #6f7883;
+  font-size: 0.6rem;
+  letter-spacing: 0.02em;
+}
+
+.strip-day.today .strip-label {
+  color: #c8d1da;
+  font-weight: 700;
+}
+
+.week-actions {
+  display: grid;
+  gap: 4px;
+  justify-items: stretch;
+}
+
+.commit-button {
+  white-space: nowrap;
+}
+
+.calendar-link {
+  padding: 0;
+  color: #8b949e;
+  font-size: 0.78rem;
+  text-decoration: none;
+}
+
+.calendar-link:hover {
+  color: #8da2fb;
+}
+
+.bar-message {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: -12px 0 20px;
-  padding: 10px 12px;
-  border: 1px solid rgba(139, 148, 158, 0.24);
-  border-radius: 9px;
-  background: rgba(22, 27, 34, 0.72);
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px solid rgba(139, 148, 158, 0.22);
+  border-radius: 10px;
+  background: rgba(22, 27, 34, 0.75);
   color: #9ca7b2;
   font-size: 0.84rem;
 }
 
-.loading-state,
-.error-state,
-.empty-state {
+.bar-message.error {
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #fca5a5;
+}
+
+.recap {
+  margin-bottom: 18px;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 11px;
+  background: rgba(22, 27, 34, 0.6);
+}
+
+.recap summary {
+  color: #a8b4c0;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.recap summary strong {
+  color: #d7dde4;
+}
+
+.recap-list {
+  display: grid;
+  gap: 2px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recap-row {
   display: flex;
-  min-height: 280px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.025);
+  color: #b6c0ca;
+  font-size: 0.82rem;
+}
+
+.recap-title {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.recap-meta {
+  flex: 0 0 auto;
+  color: #77818d;
+  font-size: 0.74rem;
+  text-transform: capitalize;
+}
+
+.status-glyph {
+  width: 12px;
+  color: #8b949e;
+  text-align: center;
+}
+
+.recap-row.is-done .status-glyph {
+  color: #6ee7b7;
+}
+
+.recap-row.is-moved .status-glyph {
+  color: #fbbf24;
+}
+
+.recap-row.is-removed .status-glyph {
+  color: #f87171;
+}
+
+.panel-state {
+  display: flex;
+  min-height: 260px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -898,386 +1246,210 @@ export default {
   text-align: center;
 }
 
-.role-grid {
+.role-stream {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
-  gap: 22px;
-  align-items: start;
+  gap: 34px;
 }
 
-.role-grid:focus {
+.role-stream:focus {
   outline: none;
 }
 
-.role-card {
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  background: rgba(22, 27, 34, 0.9);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
-}
-
-.role-heading {
+/* A role is a band in the stream, not a raised card. */
+.role {
   display: grid;
-  grid-template-columns: 6px minmax(0, 1fr);
-  gap: 14px;
-  padding: 20px 22px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 18px;
 }
 
-.role-swatch {
-  width: 6px;
-  min-height: 48px;
+.role-head {
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.role-bar {
+  height: 100%;
+  min-height: 34px;
   border-radius: 999px;
 }
 
-.role-heading h2,
-.goal-heading h3,
-.project-heading h4 {
+.role-identity h2 {
   margin: 0;
   color: #f0f3f6;
-}
-
-.role-heading h2 {
-  font-size: 1.35rem;
-}
-
-.goal-card {
-  padding: 18px 22px 22px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.goal-card:last-child {
-  border-bottom: 0;
-}
-
-.goal-heading,
-.project-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.goal-heading h3 {
   font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 
-.project-card {
-  margin-top: 14px;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 10px;
-  background: rgba(13, 17, 23, 0.72);
+.role-meta {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  text-align: right;
 }
 
-.project-heading h4 {
-  font-size: 1rem;
+.role-total {
+  color: #c8d1da;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .description {
   margin: 4px 0 0;
-  color: #9ca7b2;
-  font-size: 0.88rem;
-}
-
-.date-range,
-.project-total {
-  color: #77818d;
-  font-size: 0.78rem;
-  white-space: nowrap;
-}
-
-.project-total {
-  color: #a8b4c0;
-  font-weight: 600;
-}
-
-.hierarchy-empty,
-.nothing-planned {
-  margin: 14px 0 0;
-  color: #7d8792;
-  font-size: 0.87rem;
-}
-
-.task-list {
-  display: grid;
-  gap: 7px;
-  margin: 14px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.task-list.compact {
-  margin-top: 10px;
-}
-
-.task-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 9px 10px;
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.045);
-  color: #d7dde4;
-  font-size: 0.85rem;
-}
-
-.task-button {
-  width: 100%;
-  border: 1px solid transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.task-button:hover,
-.task-button:focus-visible {
-  border-color: rgba(141, 162, 251, 0.5);
-  outline: none;
-  background: rgba(102, 126, 234, 0.12);
-}
-
-.unaligned-task-button {
-  display: grid;
-  padding: 6px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-}
-
-.unaligned-task-button:hover,
-.unaligned-task-button:focus-visible {
-  border-color: rgba(141, 162, 251, 0.5);
-  outline: none;
-  background: rgba(102, 126, 234, 0.12);
-}
-
-.task-marker {
-  margin-right: 5px;
-  color: #9aa9ed;
-}
-
-.task-badge {
-  margin-left: 7px;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: rgba(139, 148, 158, 0.18);
-  color: #9ca7b2;
-  font-size: 0.65rem;
-  text-transform: uppercase;
-}
-
-.task-meta {
-  display: flex;
-  align-items: center;
-  gap: 9px;
   color: #8b949e;
+  font-size: 0.86rem;
+}
+
+.date-range {
+  color: #6f7883;
+  font-size: 0.74rem;
   white-space: nowrap;
 }
 
-.other-tasks {
-  margin-top: 12px;
+/* A goal is a labelled rule, not another box. */
+.goal {
+  display: grid;
+  gap: 10px;
+  padding-left: 18px;
+}
+
+.goal-rule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.goal-rule h3 {
+  margin: 0;
+  color: #d7dde4;
+  font-size: 0.94rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rule-line {
+  height: 1px;
+  flex: 1 1 auto;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.goal-description {
+  margin: -4px 0 0;
+}
+
+.project-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.hierarchy-empty {
+  margin: 0;
+  color: #6f7883;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.loose-ends {
+  display: grid;
+  gap: 10px;
+  margin-top: 34px;
+}
+
+.drawer {
+  padding: 14px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(22, 27, 34, 0.62);
+  color: #a8b4c0;
+}
+
+.drawer > summary {
+  color: #c8d1da;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.drawer-copy {
+  margin: 10px 0;
   color: #8b949e;
   font-size: 0.83rem;
 }
 
-.other-tasks summary,
-.lower-section summary {
-  cursor: pointer;
+.parked-list,
+.loose-task-list,
+.unaligned-list {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
 }
 
-.completed-last-week {
-  margin-top: 12px;
-  color: #91a79c;
-  font-size: 0.8rem;
+.parked-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
-.completed-last-week summary {
-  padding: 7px 8px;
+.parked-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.parked-item .loose-task-list {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.loose-task {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 9px;
   border: 1px solid transparent;
   border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #d7dde4;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-.completed-last-week summary:hover,
-.completed-last-week summary:focus-visible {
-  border-color: rgba(110, 231, 183, 0.32);
+.loose-task:hover,
+.loose-task:focus-visible {
+  border-color: rgba(141, 162, 251, 0.5);
   outline: none;
-  background: rgba(110, 231, 183, 0.06);
-  color: #b5c7bf;
+  background: rgba(102, 126, 234, 0.12);
 }
 
-.completion-check {
-  color: #6ee7b7;
-  font-weight: 700;
-}
-
-.completed-task-list {
-  display: grid;
-  gap: 5px;
-  margin: 7px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.completed-task-list li {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 10px;
-  border-left: 2px solid rgba(110, 231, 183, 0.3);
-  border-radius: 3px 7px 7px 3px;
-  background: rgba(110, 231, 183, 0.035);
-  color: #aab8b1;
-}
-
-.completed-task-title {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.completed-task-title .completion-check {
-  margin-right: 6px;
-}
-
-.completed-task-date {
+.loose-meta {
   flex: 0 0 auto;
-  color: #74867d;
-  white-space: nowrap;
-}
-
-.quick-task-form {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.quick-task-title {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 9px;
-  color: #d7dde4;
-  font-size: 0.82rem;
-}
-
-.quick-task-title span {
-  color: #77818d;
-}
-
-.quick-fields {
-  display: grid;
-  grid-template-columns: minmax(130px, 1fr) 88px minmax(138px, auto) auto;
-  gap: 8px;
-  align-items: end;
-}
-
-.field label {
-  display: block;
-  margin-bottom: 4px;
   color: #8b949e;
-  font-size: 0.72rem;
-}
-
-.quick-fields .form-control,
-.align-controls .form-control {
-  min-height: 40px;
-  padding: 7px 9px;
-  font-size: 0.84rem;
-}
-
-.add-task-button {
-  min-height: 40px;
+  font-size: 0.77rem;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-
-.form-message {
-  margin: 8px 0 0;
-  color: #6ee7b7;
-  font-size: 0.8rem;
-}
-
-.form-message.error {
-  color: #fca5a5;
-}
-
-.lower-section {
-  margin-top: 20px;
-  padding: 16px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  background: rgba(22, 27, 34, 0.85);
-  color: #a8b4c0;
-}
-
-.lower-section > summary {
-  color: #d7dde4;
-  font-weight: 600;
-}
-
-.someday-section ul,
-.unaligned-list {
-  display: grid;
-  gap: 8px;
-  padding: 0;
-  list-style: none;
-}
-
-.someday-section li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 9px 10px;
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.someday-section li span,
-.someday-section li p {
-  color: #7d8792;
-}
-
-.someday-section li p {
-  width: 100%;
-  margin: 0;
-}
-
-.someday-section .parked-task-list {
-  display: grid;
-  width: 100%;
-  gap: 6px;
-  padding: 0;
-  list-style: none;
-}
-
-.someday-section .parked-task-list .task-row {
-  display: flex;
 }
 
 .unaligned-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(280px, 0.7fr);
-  gap: 14px;
+  grid-template-columns: minmax(180px, 1fr) minmax(260px, 0.7fr);
+  gap: 12px;
   align-items: center;
-  padding: 12px;
+  padding: 10px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.unaligned-row > div:first-child,
-.unaligned-task-button {
-  display: grid;
-}
-
-.unaligned-row span {
-  color: #7d8792;
-  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .align-controls {
@@ -1285,76 +1457,88 @@ export default {
   gap: 8px;
 }
 
+.align-controls .form-control {
+  min-height: 38px;
+  padding: 6px 9px;
+  font-size: 0.83rem;
+}
+
+.form-message {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+}
+
+.form-message.error {
+  color: #fca5a5;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 @media (max-width: 900px) {
-  .plan-header {
-    grid-template-columns: 1fr;
+  .week-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .plan-overview {
-    width: 100%;
-  }
-
-  .quick-fields {
-    grid-template-columns: minmax(0, 1fr) 90px;
-  }
-
-  .title-field,
-  .due-field {
-    grid-column: span 1;
+  .week-strip {
+    display: none;
   }
 }
 
 @media (max-width: 620px) {
-  .plan-header {
-    gap: 18px;
+  .weekly-plan-page {
+    padding: 0 12px 40px;
   }
 
-  .role-card,
-  .project-card {
-    border-radius: 10px;
-  }
-
-  .role-heading,
-  .goal-card {
-    padding-left: 15px;
-    padding-right: 15px;
-  }
-
-  .completion-error,
-  .completed-task-list li {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .completed-task-date {
-    padding-left: 21px;
-    white-space: normal;
-  }
-
-  .goal-heading,
-  .project-heading,
-  .task-row {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .project-total,
-  .date-range {
-    white-space: normal;
-  }
-
-  .quick-fields,
-  .unaligned-row {
+  .week-bar {
+    position: static;
     grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px;
   }
 
-  .title-field,
-  .duration-field,
-  .due-field {
-    grid-column: 1;
+  .week-actions {
+    justify-items: start;
+  }
+
+  .role-head {
+    grid-template-columns: 4px minmax(0, 1fr);
+  }
+
+  .role-meta {
+    grid-column: 2;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .date-range,
+  .role-total {
+    white-space: normal;
+  }
+
+  .goal {
+    padding-left: 0;
+  }
+
+  .bar-message,
+  .loose-task,
+  .unaligned-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .unaligned-row {
+    display: flex;
   }
 
   .align-controls {
+    width: 100%;
     flex-direction: column;
   }
 }

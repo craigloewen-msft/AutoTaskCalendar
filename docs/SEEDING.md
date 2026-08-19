@@ -16,10 +16,10 @@ the dataset — a single thing to understand and a single thing to keep correct.
 npm run seed
 ```
 
-The `npm run seed` command **wipes** the users, tasks, events, roles, goals, and projects in
-your development instance first, so each run gives you a clean, known state. The test
-fixture instead namespaces its users and removes only that test's tenant, allowing native
-Playwright workers to seed concurrently.
+The `npm run seed` command **wipes** the users, tasks, events, roles, goals, projects, and
+weekly plans in your development instance first, so each run gives you a clean, known state.
+The test fixture instead namespaces its users and removes only that test's tenant, allowing
+native Playwright workers to seed concurrently.
 
 Log in with:
 
@@ -81,6 +81,18 @@ All of it belongs to `testuser` unless noted:
   - End dates are spread across quarters so `completedFrom`/`completedTo` has something to
     slice.
   - Roughly half the named tasks are linked to projects; the rest stay unaligned on purpose.
+- **Two weekly-plan commitments** (see `docs/WEEKLY_PLAN.md`), so `/weekly-plan` opens in
+  Review mode with every item status represented:
+  - The **current week** (`data.named.currentPlan`) commits three tasks under *Migration
+    plan* — `weekOpen` still open, `weekDone` completed on Tuesday, and `weekMoved`, whose
+    due date was pushed past the week afterwards so it resolves as `moved`. `weekAdded` is
+    due this week but deliberately left out of the snapshot, so **Added since commit** has a
+    subject.
+  - The **previous week** (`data.named.previousPlan`) commits two tasks: `lastWeekDone`,
+    completed, and `lastWeekDropped`, which was deleted after committing and therefore
+    resolves as `removed`. That combination is what the previous-week recap reads.
+  - Both anchor on real Mondays (`b.thisMondayDate` / `b.lastMondayDate`), so the fixture is
+    correct whichever day the seed runs on.
 - **A second user** with 5 tasks, 1 event, and a role/goal/project, all titled
   `OTHER USER SECRET ...`.
 
@@ -141,6 +153,8 @@ data.slip.isolatedTask  // the following week's isolated task
 data.slipBoundary.tasks // the six late-definition boundary tasks
 data.named.research     // named tasks, by key
 data.named.engineerRole // Compass roles, goals, and projects are named too
+data.named.currentPlan  // this week's commitment (likewise previousPlan)
+data.weeklyPlans        // every weekly plan created
 data.counts.completed   // 70 — prefer these over hard-coded numbers
 data.tasks              // every task created
 data.events             // every event created
