@@ -235,7 +235,6 @@
               class="form-control"
               id="task-title"
               placeholder="Enter task title"
-              @input="scheduleFollowUpRecommendation"
             />
             <template v-if="!selectedTask">
               <label for="followup-project">Project*</label>
@@ -254,26 +253,12 @@
                   </option>
                 </optgroup>
               </select>
-              <div
-                v-if="followUpRecommendationOptions.length"
-                class="followup-recommendation"
-                data-test="followup-project-recommendation"
-                role="status"
-              >
-                <span><strong>Suggested:</strong></span>
-                <button
-                  v-for="option in followUpRecommendationOptions"
-                  :key="option.projectId"
-                  class="btn btn-sm btn-outline-primary"
-                  data-test="project-recommendation-option"
-                  type="button"
-                  :title="`Use ${option.label}`"
-                  :aria-label="`Use ${option.label}`"
-                  @click="useFollowUpRecommendation(option)"
-                >
-                  {{ option.label }}
-                </button>
-              </div>
+              <ProjectSuggestions
+                :title="input.taskTitle"
+                :project-groups="projectOptionGroups"
+                :active="!selectedTask && !followUpProjectChoiceMade"
+                @select="useFollowUpRecommendation"
+              />
             </template>
             <label for="task-duration">Follow up after these many days:</label>
             <input
@@ -293,6 +278,7 @@
 import { DayPilot, DayPilotCalendar } from "@daypilot/daypilot-lite-vue";
 import { BButton, BModal } from 'bootstrap-vue-next';
 import TaskEditor from "../components/TaskEditor.vue";
+import ProjectSuggestions from "../components/ProjectSuggestions.vue";
 import {
   addCalendarDays,
   apiDateOnly,
@@ -303,7 +289,6 @@ import {
   instantPartsInTimeZone,
   localDateOnly,
 } from "../utils/temporal";
-import { readRecommendations, recommendationOptions } from "../utils/projectSuggestions";
 
 // The sidebar shows this far ahead; the scheduler materialises 60 days of occurrences.
 const SIDEBAR_WINDOW_DAYS = 21;
@@ -314,7 +299,8 @@ export default {
     DayPilotCalendar,
     BButton,
     BModal,
-    TaskEditor
+    TaskEditor,
+    ProjectSuggestions
   },
   data() {
     return {
@@ -439,9 +425,6 @@ export default {
         projectRef: "",
         error: null,
       },
-      followUpRecommendations: [],
-      followUpRecommendationTimer: null,
-      followUpRecommendationRequest: 0,
       followUpProjectChoiceMade: false,
       followUpSaving: false,
       highlightInterval: null,
@@ -601,7 +584,6 @@ export default {
       try {
         const response = await this.$http.get("/api/getCompass");
         this.compassRoles = response.data.success ? response.data.roles : [];
-        if (this.projectOptionGroups.length) this.scheduleFollowUpRecommendation();
       } catch (error) {
         // Compass is optional context for the task modal; never block the calendar.
         console.error(error);
@@ -658,52 +640,10 @@ export default {
     },
     chooseFollowUpProject() {
       this.followUpProjectChoiceMade = this.input.projectRef !== "";
-      this.followUpRecommendations = [];
-      clearTimeout(this.followUpRecommendationTimer);
-      this.followUpRecommendationRequest++;
     },
-    useFollowUpRecommendation(option) {
-      if (!option?.projectId) return;
-      this.input.projectRef = option.projectId;
+    useFollowUpRecommendation(projectId) {
+      this.input.projectRef = projectId;
       this.followUpProjectChoiceMade = true;
-      this.followUpRecommendations = [];
-      clearTimeout(this.followUpRecommendationTimer);
-      this.followUpRecommendationRequest++;
-    },
-    scheduleFollowUpRecommendation() {
-      clearTimeout(this.followUpRecommendationTimer);
-      this.followUpRecommendationRequest++;
-      this.followUpRecommendations = [];
-      if (
-        this.selectedTask
-        || this.followUpProjectChoiceMade
-        || String(this.input.taskTitle || "").trim().length < 2
-      ) {
-        return;
-      }
-      this.followUpRecommendationTimer = setTimeout(
-        () => this.loadFollowUpRecommendation(),
-        1000
-      );
-    },
-    async loadFollowUpRecommendation() {
-      const request = this.followUpRecommendationRequest;
-      const title = String(this.input.taskTitle || "").trim();
-      const candidateProjectIds = this.projectOptionGroups.flatMap((group) => {
-        return group.projects.map((project) => project._id);
-      });
-      if (!title || !candidateProjectIds.length) return;
-
-      try {
-        const response = await this.$http.post("/api/recommendTaskProject", {
-          title,
-          candidateProjectIds,
-        });
-        if (request !== this.followUpRecommendationRequest || this.followUpProjectChoiceMade) return;
-        this.followUpRecommendations = readRecommendations(response.data);
-      } catch (error) {
-        if (request === this.followUpRecommendationRequest) this.followUpRecommendations = [];
-      }
     },
     async createFollowUp(bvModalEvent) {
       // Prevent modal from closing
@@ -814,9 +754,6 @@ export default {
       };
       this.followUpProjectChoiceMade = !!inputTask;
       this.followUpSaving = false;
-      this.followUpRecommendations = [];
-      clearTimeout(this.followUpRecommendationTimer);
-      this.followUpRecommendationRequest++;
       this.$nextTick(() => this.$refs.followupmodal.show());
     },
     openEditTaskModal(inputTask) {
@@ -835,11 +772,8 @@ export default {
     resetFollowUpModal() {
       this.selectedTask = null;
       this.selectedEvent = null;
-      this.followUpRecommendations = [];
       this.followUpProjectChoiceMade = false;
       this.followUpSaving = false;
-      clearTimeout(this.followUpRecommendationTimer);
-      this.followUpRecommendationRequest++;
     },
     getTaskDaysBetweenDeadlineAndSchedule(inTask) {
       if (!inTask.dueDate || !this.hasValidScheduledDate(inTask)) return null;
@@ -908,10 +842,6 @@ export default {
       }
 
       return groups;
-    },
-    followUpRecommendationOptions() {
-      if (this.selectedTask || this.followUpProjectChoiceMade) return [];
-      return recommendationOptions(this.followUpRecommendations, this.projectOptionGroups);
     },
     userWorkingDays() {
       return this.$store.state.user?.workingDays || [];
@@ -988,9 +918,7 @@ export default {
     }, 1 * 5 * 1000); // 1 minutes in milliseconds
   },
   beforeUnmount() {
-    clearTimeout(this.followUpRecommendationTimer);
     clearInterval(this.highlightInterval);
-    this.followUpRecommendationRequest++;
   },
   metaInfo: {
     title: "My Calendar - Manage Your Tasks",
@@ -1735,19 +1663,4 @@ export default {
   }
 }
 
-.followup-recommendation {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 9px 10px;
-  border: 1px solid rgba(102, 126, 234, 0.42);
-  border-radius: 8px;
-  background: rgba(102, 126, 234, 0.1);
-}
-
-.followup-recommendation button {
-  flex: 0 0 auto;
-}
 </style>

@@ -52,82 +52,25 @@ test.describe('project recommendations', () => {
         const vocabulary = await recommend(api, 'Measure database migration throughput', candidates);
 
         expect(rareName.success).toBe(true);
-        expect(rareName.recommendation.projectId).toBe(String(migration));
-        expect(vocabulary.recommendation.projectId).toBe(String(migration));
-
-        // A clear winner stays alone: the relative band excludes the weaker project.
         expect(suggestedIds(rareName)).toEqual([String(migration)]);
+        expect(suggestedIds(vocabulary)).toEqual([String(migration)]);
     });
 
-    test('offers every comparably strong project, capped at three', async ({ seed, api }) => {
-        const data = await seed();
-        const phrase = 'Quarterly telemetry dashboard review';
-        const projects = await withDb(async () => {
-            const created = await ProjectDetails.create(
-                Array.from({ length: 4 }, (_, index) => ({
-                    title: `Telemetry workstream ${index}`,
-                    description: 'Quarterly telemetry dashboard review',
-                    goalRef: data.named.shipV2._id,
-                    userRef: data.primary.user._id,
-                }))
-            );
-            await TaskDetails.create(created.map((project) => task(data, project._id, phrase)));
-            return created;
-        });
-
-        const ids = projects.map((project) => String(project._id));
-        const result = await recommend(api, phrase, projects.map((project) => project._id));
-        expect(result.success).toBe(true);
-
-        // Equally strong candidates are all offered instead of abstaining, three at most.
-        expect(result.recommendations).toHaveLength(3);
-        for (const suggestion of result.recommendations) {
-            expect(ids).toContain(suggestion.projectId);
-            expect(suggestion.confidence).toBe('high');
-        }
-        expect(new Set(suggestedIds(result)).size).toBe(3);
-        expect(result.recommendation).toEqual(result.recommendations[0]);
-
-        // Identical evidence must rank deterministically across requests.
-        const repeat = await recommend(api, phrase, projects.map((project) => project._id));
-        expect(suggestedIds(repeat)).toEqual(suggestedIds(result));
-    });
-
-    test('uses metadata and recent-history fallbacks for weak text', async ({
+    test('uses metadata and history fallbacks and offers tied evidence together', async ({
         seed,
         api,
     }) => {
         const data = await seed();
-        const coldProject = await withDb(() => ProjectDetails.create({
-            title: 'Quasar orchard restoration',
-            description: 'Replant the celestial fruit grove',
-            goalRef: data.named.shipV2._id,
-            userRef: data.primary.user._id,
-        }));
         const competitor = data.named.hiringProject._id;
-
-        const coldStart = await recommend(
-            api,
-            'Restore the quasar fruit orchard',
-            [coldProject._id, competitor]
-        );
-        expect(coldStart.recommendation.projectId).toBe(String(coldProject._id));
-
-        const fallback = await recommend(api, 'zzqv wxjk', [coldProject._id, competitor]);
-        expect(fallback.recommendation.projectId).toBe(String(competitor));
-        expect(fallback.recommendation.confidence).toBe('likely');
-        // The weak-text fallback stays a single suggestion.
-        expect(fallback.recommendations).toHaveLength(1);
-    });
-
-    test('offers indistinguishable projects together instead of abstaining', async ({
-        seed,
-        api,
-    }) => {
-        const data = await seed();
-        // Seeded before the first request so the lazily built model sees both twins.
-        const twins = await withDb(async () => {
-            const projects = await ProjectDetails.create([
+        // All fixtures land before the first request so the lazily built model sees them.
+        const { coldProject, twins } = await withDb(async () => {
+            const cold = await ProjectDetails.create({
+                title: 'Quasar orchard restoration',
+                description: 'Replant the celestial fruit grove',
+                goalRef: data.named.shipV2._id,
+                userRef: data.primary.user._id,
+            });
+            const pair = await ProjectDetails.create([
                 {
                     title: 'Ambrosia correspondence',
                     description: 'Discuss Ambrosia with Rowan',
@@ -142,15 +85,32 @@ test.describe('project recommendations', () => {
                 },
             ]);
             await TaskDetails.create([
-                task(data, projects[0]._id, 'Discuss Ambrosia with Rowan'),
-                task(data, projects[1]._id, 'Discuss Ambrosia with Rowan'),
+                task(data, pair[0]._id, 'Discuss Ambrosia with Rowan'),
+                task(data, pair[1]._id, 'Discuss Ambrosia with Rowan'),
             ]);
-            return projects;
+            return { coldProject: cold, twins: pair };
         });
 
+        const coldStart = await recommend(
+            api,
+            'Restore the quasar fruit orchard',
+            [coldProject._id, competitor]
+        );
+        expect(suggestedIds(coldStart)).toEqual([String(coldProject._id)]);
+
+        const fallback = await recommend(api, 'zzqv wxjk', [coldProject._id, competitor]);
+        // The weak-text fallback stays a single suggestion.
+        expect(suggestedIds(fallback)).toEqual([String(competitor)]);
+        expect(fallback.recommendations[0].confidence).toBe('likely');
+
         const tied = await recommend(api, 'Discuss Ambrosia with Rowan', twins.map((item) => item._id));
+        // Indistinguishable projects are offered together rather than hidden.
         expect(suggestedIds(tied).sort()).toEqual(twins.map((item) => String(item._id)).sort());
         expect(tied.recommendations.every((entry) => entry.confidence === 'high')).toBe(true);
+
+        // Identical evidence must rank deterministically across requests.
+        const repeat = await recommend(api, 'Discuss Ambrosia with Rowan', twins.map((item) => item._id));
+        expect(suggestedIds(repeat)).toEqual(suggestedIds(tied));
     });
 
     test('ignores null tasks, collapses recurring evidence, and isolates tenants', async ({
@@ -191,11 +151,10 @@ test.describe('project recommendations', () => {
             'not-an-object-id',
         ]);
         expect(result.success).toBe(true);
-        expect(result.recommendation.projectId).toBe(String(migration));
-        expect(result.recommendation.evidenceCount).toBe(1);
+        expect(suggestedIds(result)).toEqual([String(migration)]);
+        expect(result.recommendations[0].evidenceCount).toBe(1);
 
         const foreignOnly = await recommend(api, 'OTHER USER SECRET', [data.named.otherProject._id]);
-        expect(foreignOnly.recommendation).toBeNull();
         expect(foreignOnly.recommendations).toEqual([]);
     });
 
@@ -205,7 +164,6 @@ test.describe('project recommendations', () => {
         const phrase = 'Flibbertigibbet xylophone rendezvous';
 
         const before = await recommend(api, phrase, [projectId]);
-        expect(before.recommendation).toBeNull();
         expect(before.recommendations).toEqual([]);
 
         const created = await (await api.post('/api/createTask', {
@@ -220,7 +178,7 @@ test.describe('project recommendations', () => {
         expect(created.success).toBe(true);
 
         const after = await recommend(api, phrase, [projectId]);
-        expect(after.recommendation.projectId).toBe(String(projectId));
+        expect(suggestedIds(after)).toEqual([String(projectId)]);
     });
 
     test('bounds feature and candidate input deterministically', async ({ seed, api }) => {

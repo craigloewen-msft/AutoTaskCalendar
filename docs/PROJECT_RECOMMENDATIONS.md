@@ -32,6 +32,8 @@ Suggested: [ Engineer → Ship v2 → Migration plan ] [ Engineer → Grow the t
 
 Each suggestion is a button labelled with its Role → Goal → Project path; clicking one selects that project. Nothing is preselected. The user may also ignore the row and choose manually. Manual selection cancels outstanding recommendation work, and stale responses cannot overwrite it.
 
+`webinterface/src/components/ProjectSuggestions.vue` is the single implementation of this row. It owns the debounce, request cancellation, stale-response handling, and label resolution; a creation form supplies `title`, `notes`, `project-groups`, and an `active` flag, and applies the emitted `select` id. Adding a suggestion row to another creation surface means mounting that component, not repeating the logic.
+
 Strong text matches use the sparse model. Comparably scoring projects are all offered rather than hidden, so a genuine near-tie becomes a short menu instead of an abstention. When text evidence is weak, the service offers the single most frequently used available project, breaking ties by recent use, as a `likely` fallback. Unavailable history or recommendation failure produces no suggestion. Manual project selection and Unassigned always remain usable.
 
 ## API
@@ -56,12 +58,11 @@ Strong matches return every qualifying candidate, best first:
   "recommendations": [
     { "projectId": "...", "confidence": "high", "evidenceCount": 3 },
     { "projectId": "...", "confidence": "high", "evidenceCount": 2 }
-  ],
-  "recommendation": { "projectId": "...", "confidence": "high", "evidenceCount": 3 }
+  ]
 }
 ```
 
-`recommendation` repeats the first entry so older single-suggestion clients keep working; new clients read `recommendations`. An abstention is successful and returns `"recommendations": []` with `"recommendation": null`. Scores are similarities, not calibrated probabilities, so the response exposes a confidence band rather than a percentage. `confidence` is a band, not a ranking: every strong entry reports `high` even though the last one may score only 75% of the first, so order by position and do not branch on it. The client derives the readable Role → Goal → Project path from its existing Compass data and silently drops any project its picker cannot show.
+An abstention is successful and returns `"recommendations": []`. Scores are similarities, not calibrated probabilities, so the response exposes a confidence band rather than a percentage. `confidence` is a band, not a ranking: every strong entry reports `high` even though the last one may score only 75% of the first, so order by position and do not branch on it. The client derives the readable Role → Goal → Project path from its existing Compass data and silently drops any project its picker cannot show.
 
 Input is bounded to 240 title characters, 2,000 notes characters, and 500 candidate ids.
 

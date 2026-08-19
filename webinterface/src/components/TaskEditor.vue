@@ -118,26 +118,13 @@
                 </option>
               </optgroup>
             </select>
-            <div
-              v-if="recommendationOptions.length"
-              class="project-recommendation"
-              data-test="project-recommendation"
-              role="status"
-            >
-              <span><strong>Suggested:</strong></span>
-              <button
-                v-for="option in recommendationOptions"
-                :key="option.projectId"
-                class="btn btn-sm btn-outline-primary"
-                data-test="project-recommendation-option"
-                type="button"
-                :title="`Use ${option.label}`"
-                :aria-label="`Use ${option.label}`"
-                @click="useRecommendation(option)"
-              >
-                {{ option.label }}
-              </button>
-            </div>
+            <ProjectSuggestions
+              :title="draft.title"
+              :notes="draft.notes"
+              :project-groups="projectGroups"
+              :active="!isEdit && !projectChoiceMade"
+              @select="useRecommendation"
+            />
           </div>
 
           <div class="form-group">
@@ -216,12 +203,12 @@
 
 <script>
 import RepeatEditor from "./RepeatEditor.vue";
+import ProjectSuggestions from "./ProjectSuggestions.vue";
 import { apiDateOnly, dateOnlyInTimeZone } from "../utils/temporal";
-import { readRecommendations, recommendationOptions } from "../utils/projectSuggestions";
 
 export default {
   name: "TaskEditor",
-  components: { RepeatEditor },
+  components: { RepeatEditor, ProjectSuggestions },
   props: {
     task: { type: Object, default: null },
     tasks: { type: Array, default: () => [] },
@@ -239,9 +226,6 @@ export default {
       draft: this.buildDraft(this.task),
       error: "",
       busy: false,
-      recommendations: [],
-      recommendationTimer: null,
-      recommendationRequest: 0,
       projectChoiceMade: !!this.task?._id,
     };
   },
@@ -261,24 +245,6 @@ export default {
     dependencyCandidates() {
       return this.tasks.filter((candidate) => candidate._id !== this.task?._id);
     },
-    projectIds() {
-      return this.projectGroups.flatMap((group) => group.projects.map((project) => project._id));
-    },
-    recommendationOptions() {
-      if (this.isEdit || this.projectChoiceMade) return [];
-      return recommendationOptions(this.recommendations, this.projectGroups);
-    },
-  },
-  watch: {
-    "draft.title"() {
-      this.scheduleRecommendation();
-    },
-    "draft.notes"() {
-      this.scheduleRecommendation();
-    },
-    projectIds(next, previous) {
-      if (next.length && !previous.length) this.scheduleRecommendation();
-    },
   },
   mounted() {
     document.body.classList.add("task-editor-open");
@@ -286,8 +252,6 @@ export default {
   },
   beforeUnmount() {
     document.body.classList.remove("task-editor-open");
-    clearTimeout(this.recommendationTimer);
-    this.recommendationRequest++;
   },
   methods: {
     buildDraft(task) {
@@ -348,43 +312,10 @@ export default {
     chooseProject() {
       if (this.isEdit) return;
       this.projectChoiceMade = this.draft.projectRef !== "";
-      this.recommendations = [];
-      clearTimeout(this.recommendationTimer);
-      this.recommendationRequest++;
     },
-    useRecommendation(option) {
-      if (!option?.projectId) return;
-      this.draft.projectRef = option.projectId;
+    useRecommendation(projectId) {
+      this.draft.projectRef = projectId;
       this.projectChoiceMade = true;
-      this.recommendations = [];
-      clearTimeout(this.recommendationTimer);
-      this.recommendationRequest++;
-    },
-    scheduleRecommendation() {
-      clearTimeout(this.recommendationTimer);
-      this.recommendationRequest++;
-      this.recommendations = [];
-      if (this.isEdit || this.projectChoiceMade || this.draft.title.trim().length < 2) {
-        return;
-      }
-      this.recommendationTimer = setTimeout(() => this.loadRecommendation(), 1000);
-    },
-    async loadRecommendation() {
-      const request = this.recommendationRequest;
-      const title = this.draft.title.trim();
-      if (!title || !this.projectIds.length) return;
-
-      try {
-        const response = await this.$http.post("/api/recommendTaskProject", {
-          title,
-          notes: this.draft.notes,
-          candidateProjectIds: this.projectIds,
-        });
-        if (request !== this.recommendationRequest || this.projectChoiceMade) return;
-        this.recommendations = readRecommendations(response.data);
-      } catch (error) {
-        if (request === this.recommendationRequest) this.recommendations = [];
-      }
     },
     async save() {
       this.error = this.validate();
@@ -574,28 +505,6 @@ function clone(value) {
   align-items: center;
   gap: 8px;
   margin: 4px 0 14px;
-}
-
-.project-recommendation {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 9px 10px;
-  border: 1px solid rgba(102, 126, 234, 0.42);
-  border-radius: 8px;
-  background: rgba(102, 126, 234, 0.1);
-  color: #d7dde4;
-  font-size: 0.86rem;
-}
-
-.project-recommendation span {
-  min-width: 0;
-}
-
-.project-recommendation button {
-  flex: 0 0 auto;
 }
 
 .chunk-field {

@@ -567,7 +567,6 @@ test.describe('calendar page', () => {
                 body: JSON.stringify({
                     success: true,
                     recommendations,
-                    recommendation: recommendations[0],
                 }),
             });
         });
@@ -606,11 +605,6 @@ test.describe('calendar page', () => {
                         confidence: 'high',
                         evidenceCount: 2,
                     }],
-                    recommendation: {
-                        projectId: String(data.named.migrationProject._id),
-                        confidence: 'high',
-                        evidenceCount: 2,
-                    },
                 }),
             });
         });
@@ -682,7 +676,6 @@ test.describe('calendar page', () => {
                 body: JSON.stringify({
                     success: true,
                     recommendations,
-                    recommendation: recommendations[0],
                 }),
             });
         });
@@ -692,7 +685,7 @@ test.describe('calendar page', () => {
         await page.fill('#task-title', 'Ask Priyanka about rehearsal');
 
         const options = page.locator(
-            '[data-test=followup-project-recommendation] [data-test=project-recommendation-option]'
+            '[data-test=project-recommendation-option]'
         );
         await expect(options).toHaveCount(2);
         await expect(page.locator('#followup-project')).toHaveValue('');

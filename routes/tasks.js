@@ -86,12 +86,7 @@ function createTaskRoutes(config, authenticateSession) {
             }
 
             const recommendations = await recommendTaskProjects(user, req.body);
-            // `recommendation` stays for compatibility with clients reading a single suggestion.
-            return res.json({
-                success: true,
-                recommendations,
-                recommendation: recommendations[0] || null,
-            });
+            return res.json({ success: true, recommendations });
         } catch (error) {
             console.error(error);
             return res.json({ success: false });
