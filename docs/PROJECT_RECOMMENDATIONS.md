@@ -61,7 +61,7 @@ Strong matches return every qualifying candidate, best first:
 }
 ```
 
-`recommendation` repeats the first entry so older single-suggestion clients keep working; new clients read `recommendations`. An abstention is successful and returns `"recommendations": []` with `"recommendation": null`. Scores are similarities, not calibrated probabilities, so the response exposes a confidence band rather than a percentage. The client derives the readable Role → Goal → Project path from its existing Compass data and silently drops any project its picker cannot show.
+`recommendation` repeats the first entry so older single-suggestion clients keep working; new clients read `recommendations`. An abstention is successful and returns `"recommendations": []` with `"recommendation": null`. Scores are similarities, not calibrated probabilities, so the response exposes a confidence band rather than a percentage. `confidence` is a band, not a ranking: every strong entry reports `high` even though the last one may score only 75% of the first, so order by position and do not branch on it. The client derives the readable Role → Goal → Project path from its existing Compass data and silently drops any project its picker cannot show.
 
 Input is bounded to 240 title characters, 2,000 notes characters, and 500 candidate ids.
 

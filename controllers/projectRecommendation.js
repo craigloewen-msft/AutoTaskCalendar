@@ -444,7 +444,7 @@ function historyFallback(model, candidates) {
 /**
  * Rank the caller's candidate projects, returning the strong near-ties or one fallback.
  */
-async function recommendTaskProject(user, input = {}) {
+async function recommendTaskProjects(user, input = {}) {
     const title = boundedText(input.title, MAX_TITLE_LENGTH).trim();
     if (title.length < 2) return [];
 
@@ -508,7 +508,7 @@ function clearProjectRecommendationCache(userId) {
 }
 
 module.exports = {
-    recommendTaskProject,
+    recommendTaskProjects,
     clearProjectRecommendationCache,
     // Export pure primitives for deterministic focused tests.
     _internals: {

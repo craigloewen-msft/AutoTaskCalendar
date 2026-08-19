@@ -13,7 +13,7 @@ const { SCHEDULING_HORIZON_DAYS } = require('../controllers/scheduling');
 const { parseDateOnly } = require('../utils/temporal');
 const { createCompletedTaskReport } = require('../controllers/completedTaskExport');
 const {
-    recommendTaskProject,
+    recommendTaskProjects,
     clearProjectRecommendationCache,
 } = require('../controllers/projectRecommendation');
 
@@ -85,7 +85,7 @@ function createTaskRoutes(config, authenticateSession) {
                 return res.send(returnFailure('Not logged in'));
             }
 
-            const recommendations = await recommendTaskProject(user, req.body);
+            const recommendations = await recommendTaskProjects(user, req.body);
             // `recommendation` stays for compatibility with clients reading a single suggestion.
             return res.json({
                 success: true,
