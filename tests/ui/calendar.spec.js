@@ -77,7 +77,7 @@ test.describe('calendar page', () => {
         await page.goto('/#/weekly-plan');
         const overview = page.locator('[data-test=weekly-overview]');
         await expect(overview).toContainText('10 tasks');
-        await expect(overview).toContainText('35h due this week');
+        await expect(overview).toContainText('35h selected');
         await expect(page.locator(`[data-test="week-tasks-${project._id}"] li`)).toHaveCount(10);
 
         await page.goto('/#/calendar');

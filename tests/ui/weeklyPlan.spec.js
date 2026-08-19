@@ -1,5 +1,5 @@
 const { test, expect, withDb, baseURL } = require('../fixtures');
-const { TaskDetails } = require('../../models');
+const { TaskDetails, WeeklyPlanDetails } = require('../../models');
 const { addDateOnlyDays, mondayWeekBounds, parseDateOnly, todayInZone } = require('../../utils/temporal');
 
 function currentWeek(timeZone = 'UTC') {
@@ -22,7 +22,7 @@ function formatCivil(value, options) {
 function previousRangeLabel(week) {
     const start = formatCivil(week.startDate, { month: 'short', day: 'numeric' });
     const end = formatCivil(week.endDate, { month: 'short', day: 'numeric' });
-    return `${start} – ${end}`;
+    return `${start} \u2013 ${end}`;
 }
 
 async function createTask(data, overrides) {
@@ -40,6 +40,11 @@ async function createTask(data, overrides) {
     }));
 }
 
+// The seeded account ships a committed week. Most specs want to drive the commit themselves.
+async function clearPlans(data) {
+    await withDb(() => WeeklyPlanDetails.deleteMany({ userRef: data.primary.user._id }));
+}
+
 async function openPlan(page) {
     await page.goto('/#/weekly-plan');
     await expect(page.locator('[data-test=weekly-hierarchy]')).toBeVisible();
@@ -51,6 +56,7 @@ test.describe('weekly plan page', () => {
         loggedInPage: page,
     }) => {
         const data = await seed();
+        await clearPlans(data);
         const week = currentWeek();
         const lastWeek = previousWeek();
         const current = currentWeek();
@@ -90,21 +96,23 @@ test.describe('weekly plan page', () => {
         await expect(range).toHaveAttribute('data-week-start', week.startDate);
         await expect(range).toHaveAttribute('data-week-end', week.endDate);
 
-        const engineer = page.locator('.role-card', { hasText: 'Engineer' });
+        const engineer = page.locator('[data-test=role-section]', { hasText: 'Engineer' });
         await expect(engineer).toContainText('Build and ship good software');
         await expect(engineer).toContainText('Ship v2 by June');
 
-        const experiment = page.locator(`[data-project-id="${data.named.emptyProject._id}"]`);
+        const projectId = String(data.named.emptyProject._id);
+        const experiment = page.locator(`[data-project-id="${projectId}"]`);
         await expect(experiment).toContainText('Current weekly experiment');
-        await expect(experiment.locator('.project-total')).toContainText('1 task · 1h 15m');
-        const laterTask = experiment.locator('.other-tasks .task-row', {
+        await expect(page.locator(`[data-test="project-total-${projectId}"]`)).toContainText(
+            '1 task \u00b7 1h 15m'
+        );
+        const laterTask = experiment.locator(`[data-test="other-tasks-${projectId}"] .task-row`, {
             hasText: 'Later experiment work',
         });
         await expect(laterTask).toBeHidden();
-        await experiment.locator('.other-tasks summary').click();
+        await experiment.locator(`[data-test="other-tasks-${projectId}"] summary`).click();
         await expect(laterTask).toBeVisible();
 
-        const projectId = String(data.named.emptyProject._id);
         const history = page.locator(`[data-test="completed-last-week-${projectId}"]`);
         await expect(history).toBeVisible();
         await expect(history).toHaveAttribute('data-completed-from', lastWeek.startDate);
@@ -135,6 +143,7 @@ test.describe('weekly plan page', () => {
         loggedInPage: page,
     }) => {
         const data = await seed();
+        await clearPlans(data);
         const week = currentWeek();
         const friday = addDateOnlyDays(week.startDate, 4);
 
@@ -142,20 +151,30 @@ test.describe('weekly plan page', () => {
 
         const projectId = String(data.named.migrationProject._id);
         const form = page.locator(`[data-test="quick-task-${projectId}"]`);
+
+        // Quick add is collapsed until asked for, then defaults to Friday.
+        await expect(form.locator('input[type=text]')).toHaveCount(0);
+        await form.locator(`[data-test="quick-add-open-${projectId}"]`).click();
         await expect(form.locator('input[type=date]')).toHaveValue(friday);
+
         await form.locator('input[type=text]').fill('Plan migration rehearsal');
         await form.locator('input[type=number]').fill('35');
-        await form.locator('input[type=date]').fill(week.startDate);
+        // Choosing a day chip drives the same civil date the native control holds.
+        await form.locator('.day-chip', { hasText: 'Mon' }).first().click();
+        await expect(form.locator('input[type=date]')).toHaveValue(week.startDate);
         await form.getByRole('button', { name: 'Add task' }).click();
 
         await expect(page.locator(`[data-test="quick-status-${projectId}"]`)).toContainText(
             'Task added to this week'
         );
-        await expect(form.locator('input[type=date]')).toHaveValue(friday);
-        const project = page.locator(`[data-project-id="${data.named.migrationProject._id}"]`);
+        const project = page.locator(`[data-project-id="${projectId}"]`);
         await expect(project.locator(`[data-test="week-tasks-${projectId}"]`)).toContainText(
             'Plan migration rehearsal'
         );
+
+        // The form resets to Friday for the next task.
+        await form.locator(`[data-test="quick-add-open-${projectId}"]`).click();
+        await expect(form.locator('input[type=date]')).toHaveValue(friday);
 
         await project.getByRole('button', { name: /Plan migration rehearsal/ }).click();
         const editor = page.locator('[data-test=task-editor]');
@@ -167,7 +186,7 @@ test.describe('weekly plan page', () => {
 
         await expect(editor).toHaveCount(0);
         await expect(project.getByRole('button', { name: /Edited from Weekly Plan/ })).toHaveCount(0);
-        await project.locator('.other-tasks summary').click();
+        await project.locator(`[data-test="other-tasks-${projectId}"] summary`).click();
         await expect(project.getByRole('button', { name: /Edited from Weekly Plan/ })).toBeVisible();
 
         const saved = await withDb(() => TaskDetails.findOne({
@@ -176,6 +195,153 @@ test.describe('weekly plan page', () => {
         }));
         expect(saved.duration).toBe(55);
         expect(saved.dueDate.toISOString().slice(0, 10)).toBe(week.nextStartDate);
+    });
+
+    test('commits the week and then reviews progress against it', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        await clearPlans(data);
+        const week = currentWeek();
+        const projectId = String(data.named.migrationProject._id);
+
+        const keep = await createTask(data, {
+            title: 'Committed and open',
+            startDate: week.startDate,
+            dueDate: week.endDate,
+        });
+        const finish = await createTask(data, {
+            title: 'Committed and finished',
+            startDate: week.startDate,
+            dueDate: week.endDate,
+        });
+        const drop = await createTask(data, {
+            title: 'Deliberately excluded',
+            startDate: week.startDate,
+            dueDate: week.endDate,
+        });
+
+        await openPlan(page);
+
+        // Unchecking excludes work from the commitment without changing the task.
+        await page.locator(`[data-test="select-task-${drop._id}"] input`).uncheck();
+        await page.locator('[data-test=commit-week]').click();
+
+        const commitment = page.locator(`[data-test="commitment-${projectId}"]`);
+        await expect(commitment).toBeVisible();
+        await expect(page.locator('[data-test=commit-week]')).toContainText('Update commitment');
+        await expect(commitment.locator(`[data-test="commitment-item-${keep._id}"]`)).toHaveAttribute(
+            'data-status',
+            'open'
+        );
+        await expect(
+            commitment.locator(`[data-test="commitment-item-${drop._id}"]`)
+        ).toHaveCount(0);
+
+        const stored = await withDb(() => WeeklyPlanDetails.findOne({
+            userRef: data.primary.user._id,
+            weekStart: parseDateOnly(week.startDate).date,
+        }));
+        // The commitment covers the whole week, but the unchecked task is not in it.
+        const storedIds = stored.items.map((item) => String(item.taskRef));
+        expect(storedIds).toContain(String(keep._id));
+        expect(storedIds).toContain(String(finish._id));
+        expect(storedIds).not.toContain(String(drop._id));
+
+        // Completing committed work updates the review immediately.
+        await commitment.getByRole('button', { name: /Committed and finished/ }).click();
+        const editor = page.locator('[data-test=task-editor]');
+        await editor.getByRole('button', { name: 'Complete' }).click();
+        await expect(editor).toHaveCount(0);
+        await expect(
+            commitment.locator(`[data-test="commitment-item-${finish._id}"]`)
+        ).toHaveAttribute('data-status', 'done');
+
+        // Moving committed work out of the week is reported, not silently forgotten.
+        await commitment.getByRole('button', { name: /Committed and open/ }).click();
+        await editor.locator('#task-due-date').fill(addDateOnlyDays(week.endDate, 14));
+        await editor.getByRole('button', { name: 'Save changes' }).click();
+        await expect(editor).toHaveCount(0);
+        await expect(
+            commitment.locator(`[data-test="commitment-item-${keep._id}"]`)
+        ).toHaveAttribute('data-status', 'moved');
+    });
+
+    test('folds work added after the commitment into it', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        await clearPlans(data);
+        const week = currentWeek();
+        const projectId = String(data.named.migrationProject._id);
+
+        await createTask(data, {
+            title: 'Originally committed',
+            startDate: week.startDate,
+            dueDate: week.endDate,
+        });
+
+        await openPlan(page);
+        await page.locator('[data-test=commit-week]').click();
+        const commitment = page.locator(`[data-test="commitment-${projectId}"]`);
+        await expect(commitment).toBeVisible();
+
+        // Adding a task after committing is normal, and lands in its own section.
+        const form = page.locator(`[data-test="quick-task-${projectId}"]`);
+        await form.locator(`[data-test="quick-add-open-${projectId}"]`).click();
+        await form.locator('input[type=text]').fill('Thought of later');
+        await form.getByRole('button', { name: 'Add task' }).click();
+        await expect(page.locator(`[data-test="quick-status-${projectId}"]`)).toContainText(
+            'Task added since commit'
+        );
+
+        const added = commitment.locator('[data-test^="added-item-"]', {
+            hasText: 'Thought of later',
+        });
+        await expect(added).toBeVisible();
+
+        await commitment.locator(`[data-test="fold-in-${projectId}"]`).click();
+        await expect(commitment.locator('[data-test^="added-item-"]')).toHaveCount(0);
+        await expect(
+            commitment.locator('[data-test^="commitment-item-"]', { hasText: 'Thought of later' })
+        ).toBeVisible();
+
+        const stored = await withDb(() => WeeklyPlanDetails.findOne({
+            userRef: data.primary.user._id,
+            weekStart: parseDateOnly(week.startDate).date,
+        }));
+        expect(stored.items.map((item) => item.title)).toContain('Thought of later');
+        // Amending keeps the one week, rather than starting a second one.
+        expect(stored.amendedAt).toBeTruthy();
+        const plans = await withDb(() => WeeklyPlanDetails.find({
+            userRef: data.primary.user._id,
+            weekStart: parseDateOnly(week.startDate).date,
+        }));
+        expect(plans).toHaveLength(1);
+    });
+
+    test('recaps the previous week from its stored commitment', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+
+        await openPlan(page);
+
+        // The seed commits last week with one finished task and one that was deleted.
+        const recap = page.locator('[data-test=previous-week-recap]');
+        await expect(recap).toBeVisible();
+        await expect(recap.locator('summary')).toContainText('committed 2');
+        await expect(recap.locator('summary')).toContainText('finished 1');
+        await expect(recap.locator('summary')).toContainText('1 slipped');
+
+        await recap.locator('summary').click();
+        await expect(recap.getByText('Draft the migration plan')).toBeVisible();
+        // A deleted task still appears: the snapshot is the record it was promised.
+        const dropped = recap.locator('.recap-row', { hasText: 'Spike the rollback tooling' });
+        await expect(dropped).toHaveAttribute('data-status', 'removed');
     });
 
     test('uses the saved timezone and stays usable on a narrow screen', async ({ seed, browser }) => {
@@ -210,6 +376,7 @@ test.describe('weekly plan page', () => {
         const mobileProjectId = String(data.named.migrationProject._id);
         const form = page.locator(`[data-test="quick-task-${mobileProjectId}"]`);
         await form.scrollIntoViewIfNeeded();
+        await form.locator(`[data-test="quick-add-open-${mobileProjectId}"]`).click();
         await expect(form.locator('input[type=text]')).toBeVisible();
         await expect(form.getByRole('button', { name: 'Add task' })).toBeVisible();
         const history = page.locator(`[data-test="completed-last-week-${data.named.emptyProject._id}"]`);
@@ -219,5 +386,20 @@ test.describe('weekly plan page', () => {
         await expect(history).toContainText('Completed Sun, Aug 16');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
         await context.close();
+    });
+
+    test('keeps the hierarchy usable when the commitment cannot be read', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        await seed();
+
+        await page.route('**/api/getWeeklyPlans*', (route) => route.abort());
+        await openPlan(page);
+
+        // A failed read must not present a committed week as uncommitted.
+        await expect(page.locator('[data-test=weekly-plans-error]')).toBeVisible();
+        await expect(page.locator('[data-test=weekly-hierarchy]')).toBeVisible();
+        await expect(page.locator('[data-test=weekly-hierarchy]')).toContainText('Migration plan');
     });
 });

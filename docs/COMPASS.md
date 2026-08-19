@@ -213,7 +213,8 @@ through finished goals the same way it pages through finished tasks.
 - **No per-project task rollups.** The client already loads `/api/getUserTasks`, which
   carries `projectRef` on every task, so per-project active counts are a `reduce` over data
   the page holds anyway. Weekly Plan gets its previous-week completion detail from the
-  separate, bounded `/api/getProjectCompletions` endpoint; do not extend `getCompass`.
+  separate, bounded `/api/getProjectCompletions` endpoint, and its weekly commitments from
+  `/api/getWeeklyPlans`; do not extend `getCompass` with either.
 
 ### Validation
 
@@ -320,16 +321,20 @@ events, and a failure there is logged but never blocks the calendar.
 
 ### On the Weekly Plan page
 
-`/weekly-plan` is the Monday–Sunday creation lens over Compass. It renders the same live
-Role → Goal → Project hierarchy with descriptions, groups existing incomplete tasks by
-`projectRef` and `dueDate`, and puts a compact normal-task form under every started project.
-When a project has matching history, a collapsed **Completed last week** disclosure uses the
-bounded `/api/getProjectCompletions` read to show task titles completed during the previous
-Monday–Sunday in the user's saved timezone. Clicking any active task opens the full task editor
-in place, so its details can be changed, completed, or deleted without leaving the review.
+`/weekly-plan` is the Monday–Sunday planning and review workflow over Compass. It renders the
+same live Role → Goal → Project hierarchy with descriptions, groups existing incomplete tasks
+by `projectRef` and `dueDate`, and offers a compact normal-task form under every started
+project. When a project has matching history, a collapsed **Completed last week** disclosure
+uses the bounded `/api/getProjectCompletions` read to show task titles completed during the
+previous Monday–Sunday in the user's saved timezone. Clicking any active task opens the full
+task editor in place, so its details can be changed, completed, or deleted without leaving the
+review.
 
-Weekly Plan does not add a planning model or selection field. Creating a task is the planning
-action, and the task's existing dates are the record of which week it was intended for. See
+Weekly Plan **does** own one model of its own: a per-week commitment in `weeklyPlanInfo`,
+recording the tasks you said you would do. That snapshot lives beside Compass rather than
+inside it — Compass still stores only roles, goals, and projects, and gains no planning field.
+Commitment item status (`open`/`done`/`moved`/`removed`) is derived on read from the live
+task, following the same rule that keeps Compass status out of the database. See
 [WEEKLY_PLAN.md](WEEKLY_PLAN.md) for the full workflow and date rules.
 
 ---

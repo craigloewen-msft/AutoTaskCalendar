@@ -61,7 +61,7 @@ dataset.
 - `scripts/` — `dev.js` (dev stack), `db.js` (MongoDB container), `test.js` (test stack).
 - `docs/` — one file per broad concept, each a standalone instruction manual.
   `docs/COMPASS.md` covers roles/goals/projects; `docs/WEEKLY_PLAN.md` covers the weekly
-  review workflow; `docs/TASK_SLIP_FORECAST.md` covers blocked-slot reschedule previews;
+  commit-and-review workflow; `docs/TASK_SLIP_FORECAST.md` covers blocked-slot reschedule previews;
   `docs/REFACTOR_OVERVIEW.md` is the small risk-driven refactor roadmap.
 
 ## Documenting your work

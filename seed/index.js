@@ -9,7 +9,7 @@
 
 const mongoose = require('mongoose');
 const moment = require('moment');
-const { parseDateOnly } = require('../utils/temporal');
+const { mondayWeekBounds, parseDateOnly } = require('../utils/temporal');
 
 function seedCivilDate(value) {
     if (!value) return null;
@@ -31,6 +31,7 @@ const {
     RoleDetails,
     GoalDetails,
     ProjectDetails,
+    WeeklyPlanDetails,
     GoogleOAuthStateDetails,
 } = require('../models');
 const instance = require('../instance');
@@ -63,6 +64,7 @@ async function wipe() {
         RoleDetails.deleteMany({}),
         GoalDetails.deleteMany({}),
         ProjectDetails.deleteMany({}),
+        WeeklyPlanDetails.deleteMany({}),
         GoogleOAuthStateDetails.deleteMany({}),
     ]);
 }
@@ -86,6 +88,7 @@ async function wipeNamespace(namespace) {
         RoleDetails.deleteMany(owned),
         GoalDetails.deleteMany(owned),
         ProjectDetails.deleteMany(owned),
+        WeeklyPlanDetails.deleteMany(owned),
         GoogleOAuthStateDetails.deleteMany(owned),
     ]);
     await UserDetails.deleteMany({ _id: { $in: userIds } });
@@ -96,7 +99,7 @@ async function wipeNamespace(namespace) {
  * reference real ObjectIds (task dependencies, event taskRefs) without extra plumbing.
  */
 function makeBuilder(anchor, namespace) {
-    const created = { users: [], tasks: [], events: [], roles: [], goals: [], projects: [] };
+    const created = { users: [], tasks: [], events: [], roles: [], goals: [], projects: [], weeklyPlans: [] };
 
     function namespaceUser(overrides) {
         if (!namespace) return overrides;
@@ -111,7 +114,20 @@ function makeBuilder(anchor, namespace) {
 
     const builder = {
         anchor,
+        // Monday anchors for the current and previous week, so weekly-plan seed data lands
+        // in the right week no matter which day the seed runs on.
+        thisMondayDate: mondayWeekBounds(moment(anchor).format('YYYY-MM-DD'), 'UTC').startDate,
+        lastMondayDate: mondayWeekBounds(
+            moment(anchor).subtract(7, 'days').format('YYYY-MM-DD'),
+            'UTC'
+        ).startDate,
         ...factories,
+    };
+
+    builder.thisMonday = moment.utc(builder.thisMondayDate, 'YYYY-MM-DD');
+    builder.lastMonday = moment.utc(builder.lastMondayDate, 'YYYY-MM-DD');
+
+    Object.assign(builder, {
 
         async createUser(overrides = {}) {
             const namespaced = namespaceUser(overrides);
@@ -174,7 +190,48 @@ function makeBuilder(anchor, namespace) {
             await TaskDetails.updateMany({ _id: { $in: ids } }, { $set: { projectRef: project._id } });
             return ids.length;
         },
-    };
+
+        // A committed week. Items snapshot the tasks exactly as commitWeeklyPlan would.
+        async commitWeek(user, weekStart, tasks, overrides = {}) {
+            const bounds = mondayWeekBounds(weekStart, user.timeZone);
+            const committedAt = overrides.committedAt
+                || parseDateOnly(bounds.startDate).date;
+            const plan = await WeeklyPlanDetails.create({
+                userRef: user._id,
+                weekStart: parseDateOnly(bounds.startDate).date,
+                weekEnd: parseDateOnly(bounds.endDate).date,
+                timeZone: user.timeZone,
+                committedAt,
+                amendedAt: overrides.amendedAt || null,
+                items: tasks.map((task) => ({
+                    taskRef: task._id,
+                    projectRef: task.projectRef || null,
+                    title: task.title,
+                    duration: task.duration,
+                    dueDate: task.seriesRef ? task.occurrenceDate : task.dueDate,
+                    seriesRef: task.seriesRef || null,
+                    addedAt: committedAt,
+                })),
+            });
+            created.weeklyPlans.push(plan);
+            return plan;
+        },
+
+        // Move a task after it was committed, so a plan item resolves as `moved`.
+        async moveTaskDueDate(task, dueDate) {
+            task.dueDate = seedCivilDate(dueDate);
+            await task.save();
+            return task;
+        },
+
+        // Delete a task after it was committed, so a plan item resolves as `removed`.
+        async deleteTask(task) {
+            await TaskDetails.deleteOne({ _id: task._id });
+            const index = created.tasks.findIndex((t) => String(t._id) === String(task._id));
+            if (index >= 0) created.tasks.splice(index, 1);
+            return task;
+        },
+    });
 
     return { builder, created };
 }

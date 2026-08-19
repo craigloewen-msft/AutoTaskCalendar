@@ -93,11 +93,13 @@ const authRoutes = require('./routes/auth')(
 const taskRoutes = require('./routes/tasks')(config, authenticateSession(config));
 const eventRoutes = require('./routes/events')(config, authenticateSession(config));
 const compassRoutes = require('./routes/compass')(config, authenticateSession(config));
+const weeklyPlanRoutes = require('./routes/weeklyPlan')(config, authenticateSession(config));
 
 app.use('/api', authRoutes);
 app.use('/api', taskRoutes);
 app.use('/api', eventRoutes);
 app.use('/api', compassRoutes);
+app.use('/api', weeklyPlanRoutes);
 
 async function start() {
     await mongoose.connect(mongooseConnectionString);

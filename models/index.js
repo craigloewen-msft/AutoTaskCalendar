@@ -22,6 +22,13 @@ function compassTemporalTransform(doc, ret) {
     return ret;
 }
 
+function weeklyPlanTemporalTransform(doc, ret) {
+    serializeCivilDate(ret, 'weekStart');
+    serializeCivilDate(ret, 'weekEnd');
+    for (const item of ret.items || []) serializeCivilDate(item, 'dueDate');
+    return ret;
+}
+
 const UserDetail = new Schema({
     username: { type: String, index: true },
     password: String,
@@ -192,6 +199,36 @@ const EventDetail = new Schema({
     taskRef: { type: Schema.Types.ObjectId, ref: 'taskInfo' },
 });
 
+// --- Weekly Plan: one committed week per user. See docs/WEEKLY_PLAN.md. ---
+// Items are a snapshot taken at commit time so the review survives task edits and deletion.
+// Their live status (open/done/moved/removed) is derived per request, never stored.
+const WeeklyPlanItem = new Schema({
+    taskRef: { type: Schema.Types.ObjectId, ref: 'taskInfo' },
+    projectRef: { type: Schema.Types.ObjectId, ref: 'projectInfo', default: null },
+    title: String,
+    duration: Number,
+    dueDate: Date,
+    seriesRef: { type: Schema.Types.ObjectId, ref: 'taskInfo', default: null },
+    // Separates the original commitment from work folded in later the same week.
+    addedAt: Date,
+}, { _id: false });
+
+const WeeklyPlanDetail = new Schema({
+    userRef: { type: Schema.Types.ObjectId, ref: 'userInfo', index: true },
+    // Monday civil marker. This is the identity of the week.
+    weekStart: Date,
+    weekEnd: Date,
+    timeZone: String,
+    committedAt: Date,
+    amendedAt: Date,
+    items: [WeeklyPlanItem],
+}, {
+    toJSON: { transform: weeklyPlanTemporalTransform },
+    toObject: { transform: weeklyPlanTemporalTransform },
+});
+
+WeeklyPlanDetail.index({ userRef: 1, weekStart: 1 }, { unique: true });
+
 const GoogleOAuthStateDetail = new Schema({
     stateDigest: { type: String, required: true, unique: true },
     userRef: { type: Schema.Types.ObjectId, ref: 'userInfo', required: true, index: true },
@@ -209,6 +246,7 @@ const EventDetails = mongoose.model('eventInfo', EventDetail, 'eventInfo');
 const RoleDetails = mongoose.model('roleInfo', RoleDetail, 'roleInfo');
 const GoalDetails = mongoose.model('goalInfo', GoalDetail, 'goalInfo');
 const ProjectDetails = mongoose.model('projectInfo', ProjectDetail, 'projectInfo');
+const WeeklyPlanDetails = mongoose.model('weeklyPlanInfo', WeeklyPlanDetail, 'weeklyPlanInfo');
 const GoogleOAuthStateDetails = mongoose.model(
     'googleOAuthState',
     GoogleOAuthStateDetail,
@@ -222,5 +260,6 @@ module.exports = {
     RoleDetails,
     GoalDetails,
     ProjectDetails,
+    WeeklyPlanDetails,
     GoogleOAuthStateDetails
 };
