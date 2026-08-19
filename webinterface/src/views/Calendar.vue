@@ -1486,10 +1486,11 @@ export default {
   background: transparent;
   color: #7d8590;
   font-weight: 500;
-  opacity: 0.62;
+  opacity: 0;
+  transition: opacity 0.15s ease;
 }
 
-.task-item:hover .slip-impact-chip.safe,
+.slip-impact-chip.safe:hover,
 .slip-impact-chip.safe:focus-visible,
 .slip-impact-chip.safe[aria-expanded="true"] {
   opacity: 1;
