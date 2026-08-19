@@ -585,10 +585,37 @@ module.exports = {
             endDate: zonedDateTime(boundaryBlockEnd, 17 * 60, 'UTC'),
         });
 
+        // --- Sixth user: the seeded site administrator ------------------------------------
+        // The only account with `isAdmin`, so admin specs have a subject and the dashboard
+        // has someone to log in as. See docs/ADMIN.md.
+        const admin = await b.createUser({
+            username: 'adminuser',
+            email: 'adminuser@example.com',
+            isAdmin: true,
+        });
+        const adminTasks = [
+            await b.createTask(admin.user, {
+                title: 'Review site metrics',
+                dueDate: b.endOfDay(b.anchor, 2),
+                duration: 45,
+            }),
+            await b.createTask(admin.user, {
+                title: 'Answer support mail',
+                dueDate: b.endOfDay(b.anchor, 1),
+                duration: 30,
+                completed: true,
+                completedDate: b.at(b.anchor, { days: -1, hours: 11 }),
+            }),
+        ];
+
         return {
             primary,
             other,
             recurring,
+            admin: {
+                ...admin,
+                tasks: adminTasks,
+            },
             slip: {
                 ...slip,
                 capacityTasks,

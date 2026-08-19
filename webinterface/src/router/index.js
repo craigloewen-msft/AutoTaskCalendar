@@ -71,6 +71,15 @@ const routes = [
     meta: {
       requiresAuth: true
     }
+  },
+  {
+    path: '/admin',
+    name: 'Admin',
+    component: () => import('../views/Admin.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true
+    }
   }
 ]
 
@@ -85,6 +94,10 @@ router.beforeEach(async (to) => {
 
   if (to.matched.some(record => record.meta.requiresAuth) && !store.getters.isLoggedIn) {
     return { path: '/login', query: { next: to.fullPath } }
+  }
+  // Convenience only; the server is the real boundary and answers 403 regardless.
+  if (to.matched.some(record => record.meta.requiresAdmin) && !store.getters.isAdmin) {
+    return { name: 'Home' }
   }
   if (to.matched.some(record => record.meta.guestonly) && store.getters.isLoggedIn) {
     return { name: 'Home' }

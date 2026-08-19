@@ -7,7 +7,7 @@ const passport = require('passport');
 
 // Custom requires
 const { UserDetails, TaskDetails, EventDetails, GoogleOAuthStateDetails } = require('./models');
-const { authenticateSession, requireSameOrigin } = require('./middleware/auth');
+const { authenticateSession, requireSameOrigin, requireAdmin } = require('./middleware/auth');
 const { migrateGoogleCredentials } = require('./utils/googleCredentialMigration');
 const instance = require('./instance');
 
@@ -94,12 +94,14 @@ const taskRoutes = require('./routes/tasks')(config, authenticateSession(config)
 const eventRoutes = require('./routes/events')(config, authenticateSession(config));
 const compassRoutes = require('./routes/compass')(config, authenticateSession(config));
 const weeklyPlanRoutes = require('./routes/weeklyPlan')(config, authenticateSession(config));
+const adminRoutes = require('./routes/admin')(config, authenticateSession(config), requireAdmin);
 
 app.use('/api', authRoutes);
 app.use('/api', taskRoutes);
 app.use('/api', eventRoutes);
 app.use('/api', compassRoutes);
 app.use('/api', weeklyPlanRoutes);
+app.use('/api', adminRoutes);
 
 async function start() {
     await mongoose.connect(mongooseConnectionString);

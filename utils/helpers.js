@@ -16,7 +16,8 @@ async function returnBasicUserInfo(inputUser) {
         workingStartMinutes: inputUser.workingStartMinutes,
         workingEndMinutes: inputUser.workingEndMinutes,
         workingDays: inputUser.workingDays,
-        selectedCalendars: inputUser.selectedCalendars
+        selectedCalendars: inputUser.selectedCalendars,
+        isAdmin: inputUser.isAdmin === true
     };
 }
 

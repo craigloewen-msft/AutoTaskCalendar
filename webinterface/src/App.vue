@@ -11,6 +11,7 @@
           <Bootstrapnavlinkcustom v-if="isLoggedIn" to="/calendar">Calendar</Bootstrapnavlinkcustom>
           <Bootstrapnavlinkcustom v-if="isLoggedIn" to="/weekly-plan">Weekly Plan</Bootstrapnavlinkcustom>
           <Bootstrapnavlinkcustom v-if="isLoggedIn" to="/compass">Compass</Bootstrapnavlinkcustom>
+          <Bootstrapnavlinkcustom v-if="isAdmin" to="/admin">Admin</Bootstrapnavlinkcustom>
           <Bootstrapnavlinkcustom to="/about">About</Bootstrapnavlinkcustom>
         </BNavbarNav>
         <BNavbarNav class="ms-auto">
@@ -62,6 +63,9 @@ export default {
   computed: {
     isLoggedIn: function () {
       return this.$store.getters.isLoggedIn;
+    },
+    isAdmin: function () {
+      return this.$store.getters.isAdmin;
     },
     user: function () {
       return this.$store.state.user;
