@@ -246,8 +246,8 @@ because a `removed` item has no live task and a `moved` item would fail the in-w
 
 Tests:
 
-- `tests/api/weeklyPlan.spec.js` — commit/amend identity, status derivation, promise
-  preservation, ownership, current-week-only, range validation, timezone behaviour.
+- `tests/api/weeklyPlan.spec.js` — two specs covering what is unique to commitments: status
+  derivation from the live task (including ownership), and additive amendment.
 - `tests/ui/weeklyPlan.spec.js` — hierarchy review, quick creation, commit and review, folding
   in later work, the previous-week recap, plan-read failure, narrow screens, saved timezone.
 - `tests/api/temporal.spec.js` — Monday bounds across DST and year boundaries.
