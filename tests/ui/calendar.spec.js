@@ -628,72 +628,46 @@ test.describe('calendar page', () => {
         );
     });
 
-    test('requires an explicit project choice for a standalone follow-up', async ({
+    test('completes a task and creates its follow-up in the same project', async ({
         seed,
         loggedInPage: page,
     }) => {
         const data = await seed();
-        await page.goto('/#/calendar');
-        await page.getByRole('button', { name: 'Add follow up' }).click();
-        await page.fill('#task-title', 'Standalone follow-up');
-        await page.fill('#task-duration', '2');
-        await page.locator('#followup-modal .modal-footer .btn-primary').click();
-        await expect(page.locator('#followup-modal-body')).toContainText(
-            'Choose a project or Unassigned.'
-        );
-        await expect(page.locator('#followup-project')).toBeFocused();
-
-        await page.selectOption('#followup-project', { label: 'Unassigned' });
-        await page.locator('#followup-modal .modal-footer .btn-primary').click();
-        await expect(page.locator('#followup-modal')).not.toBeVisible();
-        const saved = await withDb(() => TaskDetails.findOne({
+        const source = await withDb(() => TaskDetails.create({
+            title: 'Source task awaiting follow up',
+            duration: 30,
+            startDate: parseDateOnly('2030-01-01').date,
+            dueDate: parseDateOnly('2030-01-02').date,
+            completed: false,
+            isBacklog: false,
             userRef: data.primary.user._id,
-            title: 'Standalone follow-up',
+            projectRef: data.named.migrationProject._id,
         }));
-        expect(saved.projectRef).toBeNull();
-    });
-
-    test('offers every strong project recommendation for a standalone follow-up', async ({
-        seed,
-        loggedInPage: page,
-    }) => {
-        const data = await seed();
-        await page.route('**/api/recommendTaskProject', async (route) => {
-            const recommendations = [
-                {
-                    projectId: String(data.named.migrationProject._id),
-                    confidence: 'high',
-                    evidenceCount: 2,
-                },
-                {
-                    projectId: String(data.named.hiringProject._id),
-                    confidence: 'high',
-                    evidenceCount: 2,
-                },
-            ];
-            await route.fulfill({
-                contentType: 'application/json',
-                body: JSON.stringify({
-                    success: true,
-                    recommendations,
-                }),
-            });
-        });
 
         await page.goto('/#/calendar');
-        await page.getByRole('button', { name: 'Add follow up' }).click();
-        await page.fill('#task-title', 'Ask Priyanka about rehearsal');
+        await page.locator('.task-item', { hasText: 'Source task awaiting follow up' })
+            .first()
+            .click();
+        await page.getByRole('button', { name: 'Follow up', exact: true }).click();
 
-        const options = page.locator(
-            '[data-test=project-recommendation-option]'
-        );
-        await expect(options).toHaveCount(2);
-        await expect(page.locator('#followup-project')).toHaveValue('');
+        // A derived follow-up inherits its project, so it offers no project choice.
+        const panel = page.locator('[data-test=follow-up-panel]');
+        await expect(panel).toBeVisible();
+        await expect(page.locator('[data-test=project-recommendation]')).toHaveCount(0);
 
-        await options.nth(1).click();
-        await expect(page.locator('#followup-project')).toHaveValue(
-            String(data.named.hiringProject._id)
-        );
+        await page.fill('#task-follow-up-days', '3');
+        await page.getByRole('button', { name: 'Create follow up' }).click();
+        await expect(page.locator('.task-editor')).toHaveCount(0);
+
+        const followUp = await withDb(() => TaskDetails.findOne({
+            userRef: data.primary.user._id,
+            title: 'Source task awaiting follow up',
+            _id: { $ne: source._id },
+        }));
+        expect(String(followUp.projectRef)).toBe(String(data.named.migrationProject._id));
+
+        const completed = await withDb(() => TaskDetails.findById(source._id));
+        expect(completed.completed).toBe(true);
     });
 
     test('keeps one-off and unscheduled tasks visible without expanding the recurring window', async ({

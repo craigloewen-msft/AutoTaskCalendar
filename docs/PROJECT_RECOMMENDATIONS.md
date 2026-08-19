@@ -14,8 +14,7 @@ The task schema and API representation have not changed. The form uses a tempora
 The rule applies to user-facing creation paths:
 
 - Calendar's shared task editor requires Project or Unassigned.
-- A standalone follow-up requires Project or Unassigned.
-- A follow-up created from an existing task inherits that task's `projectRef`.
+- A follow-up is always created from an existing task and inherits that task's `projectRef`, so it asks for no project and shows no suggestions.
 - Weekly Plan already creates each quick task within the project whose card contains the form.
 
 Existing tasks are unaffected. There is no legacy migration and no completion or editing gate.
@@ -33,6 +32,8 @@ Suggested: [ Engineer → Ship v2 → Migration plan ] [ Engineer → Grow the t
 Each suggestion is a button labelled with its Role → Goal → Project path; clicking one selects that project. Nothing is preselected. The user may also ignore the row and choose manually. Manual selection cancels outstanding recommendation work, and stale responses cannot overwrite it.
 
 `webinterface/src/components/ProjectSuggestions.vue` is the single implementation of this row. It owns the debounce, request cancellation, stale-response handling, and label resolution; a creation form supplies `title`, `notes`, `project-groups`, and an `active` flag, and applies the emitted `select` id. Adding a suggestion row to another creation surface means mounting that component, not repeating the logic.
+
+The task editor is the only surface that mounts it. A follow-up inherits its source task's project, and Weekly Plan quick-adds are already project-scoped, so neither needs a suggestion.
 
 Strong text matches use the sparse model. Comparably scoring projects are all offered rather than hidden, so a genuine near-tie becomes a short menu instead of an abstention. When text evidence is weak, the service offers the single most frequently used available project, breaking ties by recent use, as a `likely` fallback. Unavailable history or recommendation failure produces no suggestion. Manual project selection and Unassigned always remain usable.
 
@@ -127,7 +128,7 @@ Derived model blobs are deliberately not persisted in v1. Persistence would dupl
 Clear only the affected user's model after mutations that alter recommendation training data:
 
 - task create, edit, delete, or reassignment;
-- standalone or derived follow-up creation.
+- follow-up creation.
 
 Completion does not change recommendation text or assignment and needs no cache clear.
 
@@ -157,4 +158,4 @@ Use focused synthetic performance tests to catch large regressions, but do not m
 - stale-cache clearing after task mutations;
 - deterministic input and memory bounds.
 
-Calendar UI coverage verifies the explicit new-task choice, Unassigned persistence, multi- and single-suggestion rendering, accepting a suggestion other than the top one, standalone follow-up choice, and existing edit/completion behavior. Weekly Plan remains covered by its project-scoped creation specs.
+Calendar UI coverage verifies the explicit new-task choice, Unassigned persistence, multi- and single-suggestion rendering, accepting a suggestion other than the top one, follow-up project inheritance, and existing edit/completion behavior. Weekly Plan remains covered by its project-scoped creation specs.

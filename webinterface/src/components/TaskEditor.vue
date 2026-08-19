@@ -171,13 +171,46 @@
       </div>
 
       <footer class="editor-footer">
+        <div v-if="followUpOpen" class="follow-up-panel" data-test="follow-up-panel">
+          <label for="task-follow-up-days">
+            Completes this task and creates a successor in
+          </label>
+          <input
+            id="task-follow-up-days"
+            ref="followUpDaysInput"
+            v-model.number="followUpDays"
+            class="form-control"
+            type="number"
+            min="1"
+            step="1"
+          />
+          <span>days.</span>
+          <div class="follow-up-actions">
+            <button
+              class="btn btn-sm btn-secondary"
+              type="button"
+              :disabled="busy"
+              @click="followUpOpen = false"
+            >
+              Cancel
+            </button>
+            <button
+              class="btn btn-sm btn-primary"
+              type="button"
+              :disabled="busy"
+              @click="createFollowUp"
+            >
+              Create follow up
+            </button>
+          </div>
+        </div>
         <div v-if="isEdit" class="task-actions">
           <button
-            v-if="showFollowUp"
+            v-if="showFollowUp && !followUpOpen"
             class="btn btn-outline-primary"
             type="button"
             :disabled="busy"
-            @click="$emit('follow-up', task)"
+            @click="openFollowUp"
           >
             Follow up
           </button>
@@ -204,7 +237,7 @@
 <script>
 import RepeatEditor from "./RepeatEditor.vue";
 import ProjectSuggestions from "./ProjectSuggestions.vue";
-import { apiDateOnly, dateOnlyInTimeZone } from "../utils/temporal";
+import { addCalendarDays, apiDateOnly, dateOnlyInTimeZone } from "../utils/temporal";
 
 export default {
   name: "TaskEditor",
@@ -220,12 +253,14 @@ export default {
     completionChunkDuration: { type: Number, default: null },
     showFollowUp: { type: Boolean, default: false },
   },
-  emits: ["close", "changed", "follow-up"],
+  emits: ["close", "changed"],
   data() {
     return {
       draft: this.buildDraft(this.task),
       error: "",
       busy: false,
+      followUpOpen: false,
+      followUpDays: 7,
       projectChoiceMade: !!this.task?._id,
     };
   },
@@ -346,6 +381,41 @@ export default {
         this.busy = false;
       }
     },
+    openFollowUp() {
+      this.error = "";
+      this.followUpOpen = true;
+      this.$nextTick(() => this.$refs.followUpDaysInput?.focus());
+    },
+    /**
+     * Complete this task and create its successor, which inherits this task's project.
+     */
+    async createFollowUp() {
+      const days = Number(this.followUpDays);
+      if (!Number.isFinite(days) || days <= 0) {
+        this.error = "Follow up days must be at least one.";
+        return;
+      }
+
+      this.error = "";
+      this.busy = true;
+      try {
+        const response = await this.$http.post("/api/setFollowUp/", {
+          title: this.draft.title.trim() || this.task.title,
+          followUpDate: addCalendarDays(dateOnlyInTimeZone(this.timeZone), days),
+          taskID: this.task._id,
+        });
+        if (!response.data.success) {
+          this.error = response.data.log || "Follow up could not be created.";
+          return;
+        }
+        this.followUpOpen = false;
+        this.$emit("changed", response.data.taskList || []);
+      } catch (error) {
+        this.error = "Follow up could not be created.";
+      } finally {
+        this.busy = false;
+      }
+    },
     async completeTask() {
       this.error = "";
       this.busy = true;
@@ -439,9 +509,35 @@ function clone(value) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 14px;
   padding: 16px 20px;
   background: #1b2129;
+}
+
+/* Full-width row so the follow-up panel sits above the footer buttons. */
+.follow-up-panel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(102, 126, 234, 0.42);
+  border-radius: 8px;
+  background: rgba(102, 126, 234, 0.1);
+  color: #d7dde4;
+  font-size: 0.86rem;
+}
+
+.follow-up-panel input {
+  width: 72px;
+}
+
+.follow-up-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .editor-header {

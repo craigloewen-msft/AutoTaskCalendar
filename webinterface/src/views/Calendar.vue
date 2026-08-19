@@ -7,9 +7,6 @@
           <BButton variant="primary" v-on:click="openAddTaskModal" class="action-btn" aria-label="Add new task">
             <span class="btn-icon" aria-hidden="true">+</span> Add Task
           </BButton>
-          <BButton variant="outline-primary" v-on:click="openFollowUpModal(null)" class="action-btn" aria-label="Add follow up">
-            <span class="btn-icon" aria-hidden="true">↻</span> Follow Up
-          </BButton>
           <BButton variant="success" v-on:click="scheduleTasks" class="action-btn" aria-label="Schedule tasks">
             <span class="btn-icon" aria-hidden="true">📅</span> Schedule Tasks
           </BButton>
@@ -214,71 +211,14 @@
       show-follow-up
       @close="closeTaskEditor"
       @changed="applyTaskChanges"
-      @follow-up="openFollowUpModal"
     />
-    <BModal
-      id="followup-modal"
-      ref="followupmodal"
-      @ok="resolveFollowUpModal"
-      @hidden="resetFollowUpModal"
-      :ok-disabled="followUpSaving"
-      :title="this.selectedTask ? 'Set follow up' : 'Add follow up'"
-    >
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-body">
-            <div v-if="input.error" role="alert">{{ input.error }}</div>
-            <label for="task-title">Task Title*</label>
-            <input
-              type="text"
-              v-model="input.taskTitle"
-              class="form-control"
-              id="task-title"
-              placeholder="Enter task title"
-            />
-            <template v-if="!selectedTask">
-              <label for="followup-project">Project*</label>
-              <select
-                id="followup-project"
-                v-model="input.projectRef"
-                ref="followUpProjectSelect"
-                class="form-control"
-                @change="chooseFollowUpProject"
-              >
-                <option disabled value="">Choose a project or Unassigned…</option>
-                <option :value="null">Unassigned</option>
-                <optgroup v-for="group in projectOptionGroups" :key="group.label" :label="group.label">
-                  <option v-for="project in group.projects" :key="project._id" :value="project._id">
-                    {{ project.title }}
-                  </option>
-                </optgroup>
-              </select>
-              <ProjectSuggestions
-                :title="input.taskTitle"
-                :project-groups="projectOptionGroups"
-                :active="!selectedTask && !followUpProjectChoiceMade"
-                @select="useFollowUpRecommendation"
-              />
-            </template>
-            <label for="task-duration">Follow up after these many days:</label>
-            <input
-              type="number"
-              v-model="input.followUpDays"
-              class="form-control"
-              id="task-duration"
-            />
-          </div>
-        </div>
-      </div>
-    </BModal>
   </div>
 </template>
 
 <script>
 import { DayPilot, DayPilotCalendar } from "@daypilot/daypilot-lite-vue";
-import { BButton, BModal } from 'bootstrap-vue-next';
+import { BButton } from 'bootstrap-vue-next';
 import TaskEditor from "../components/TaskEditor.vue";
-import ProjectSuggestions from "../components/ProjectSuggestions.vue";
 import {
   addCalendarDays,
   apiDateOnly,
@@ -298,9 +238,7 @@ export default {
   components: {
     DayPilotCalendar,
     BButton,
-    BModal,
-    TaskEditor,
-    ProjectSuggestions
+    TaskEditor
   },
   data() {
     return {
@@ -419,14 +357,6 @@ export default {
       },
       user: this.$store.state.user,
       taskList: null,
-      input: {
-        taskTitle: null,
-        followUpDays: null,
-        projectRef: "",
-        error: null,
-      },
-      followUpProjectChoiceMade: false,
-      followUpSaving: false,
       highlightInterval: null,
       taskEditorOpen: false,
       currentDate: dateOnlyInTimeZone(this.$store.state.user?.timeZone),
@@ -638,70 +568,6 @@ export default {
       await this.$http.get("/api/synccalendar/");
       this.loadCalendarEvents();
     },
-    chooseFollowUpProject() {
-      this.followUpProjectChoiceMade = this.input.projectRef !== "";
-    },
-    useFollowUpRecommendation(projectId) {
-      this.input.projectRef = projectId;
-      this.followUpProjectChoiceMade = true;
-    },
-    async createFollowUp(bvModalEvent) {
-      // Prevent modal from closing
-      bvModalEvent.preventDefault();
-
-      this.input.error = "";
-
-      if (!this.input.taskTitle) {
-        this.input.error = "Need task title";
-      } else if (!this.input.followUpDays) {
-        this.input.error = "Need follow up days";
-      }
-      if (!this.selectedTask && this.input.projectRef === "") {
-        this.input.error = "Choose a project or Unassigned.";
-      }
-
-      if (this.input.error) {
-        if (this.input.error === "Choose a project or Unassigned.") {
-          this.$nextTick(() => this.$refs.followUpProjectSelect?.focus());
-        }
-        return;
-      }
-
-      const followUpDate = addCalendarDays(
-        dateOnlyInTimeZone(this.$store.state.user.timeZone),
-        parseInt(this.input.followUpDays, 10)
-      );
-
-      if (this.followUpSaving) return;
-      this.followUpSaving = true;
-
-      try {
-        const response = await this.$http.post("/api/setFollowUp/", {
-          title: this.input.taskTitle,
-          followUpDate: followUpDate,
-          taskID: this.selectedTask?._id,
-          projectRef: this.selectedTask ? undefined : this.input.projectRef,
-        });
-        if (!response.data.success) {
-          this.input.error = response.data.log || "Follow up could not be created.";
-          this.followUpSaving = false;
-          return;
-        }
-        this.taskList = response.data.taskList;
-        await this.loadSlipForecasts();
-
-        Object.keys(this.input).forEach((i) => (this.input[i] = null));
-      } catch (error) {
-        this.input.error = "Follow up could not be created.";
-        this.followUpSaving = false;
-        return;
-      }
-
-      this.followUpSaving = false;
-      this.$nextTick(() => {
-        this.$refs.followupmodal.hide();
-      });
-    },
     addDays(date, days) {
       return addCalendarDays(apiDateOnly(date) || localDateOnly(date), days);
     },
@@ -743,19 +609,6 @@ export default {
       this.closeTaskEditor();
       Promise.all([this.loadCalendarEvents(), this.loadSlipForecasts()]);
     },
-    openFollowUpModal(inputTask) {
-      this.taskEditorOpen = false;
-      this.selectedTask = inputTask;
-      this.input = {
-        taskTitle: inputTask?.title || null,
-        followUpDays: null,
-        projectRef: inputTask ? (inputTask.projectRef || null) : "",
-        error: null,
-      };
-      this.followUpProjectChoiceMade = !!inputTask;
-      this.followUpSaving = false;
-      this.$nextTick(() => this.$refs.followupmodal.show());
-    },
     openEditTaskModal(inputTask) {
       if (!inputTask) return;
       this.selectedTask = inputTask;
@@ -765,15 +618,6 @@ export default {
       this.selectedEvent = eventDetails;
       const foundTask = this.taskList.find((task) => task._id == eventDetails.tags.taskId);
       this.openEditTaskModal(foundTask);
-    },
-    resolveFollowUpModal(bvModalEvent) {
-      this.createFollowUp(bvModalEvent);
-    },
-    resetFollowUpModal() {
-      this.selectedTask = null;
-      this.selectedEvent = null;
-      this.followUpProjectChoiceMade = false;
-      this.followUpSaving = false;
     },
     getTaskDaysBetweenDeadlineAndSchedule(inTask) {
       if (!inTask.dueDate || !this.hasValidScheduledDate(inTask)) return null;
