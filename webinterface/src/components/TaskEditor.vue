@@ -118,17 +118,13 @@
                 </option>
               </optgroup>
             </select>
-            <div
-              v-if="recommendationLabel"
-              class="project-recommendation"
-              data-test="project-recommendation"
-              role="status"
-            >
-              <span><strong>Suggested:</strong> {{ recommendationLabel }}</span>
-              <button class="btn btn-sm btn-outline-primary" type="button" @click="useRecommendation">
-                Use this project
-              </button>
-            </div>
+            <ProjectSuggestions
+              :title="draft.title"
+              :notes="draft.notes"
+              :project-groups="projectGroups"
+              :active="!isEdit && !projectChoiceMade"
+              @select="useRecommendation"
+            />
           </div>
 
           <div class="form-group">
@@ -175,13 +171,46 @@
       </div>
 
       <footer class="editor-footer">
+        <div v-if="followUpOpen" class="follow-up-panel" data-test="follow-up-panel">
+          <label for="task-follow-up-days">
+            Completes this task and creates a successor in
+          </label>
+          <input
+            id="task-follow-up-days"
+            ref="followUpDaysInput"
+            v-model.number="followUpDays"
+            class="form-control"
+            type="number"
+            min="1"
+            step="1"
+          />
+          <span>days.</span>
+          <div class="follow-up-actions">
+            <button
+              class="btn btn-sm btn-secondary"
+              type="button"
+              :disabled="busy"
+              @click="followUpOpen = false"
+            >
+              Cancel
+            </button>
+            <button
+              class="btn btn-sm btn-primary"
+              type="button"
+              :disabled="busy"
+              @click="createFollowUp"
+            >
+              Create follow up
+            </button>
+          </div>
+        </div>
         <div v-if="isEdit" class="task-actions">
           <button
-            v-if="showFollowUp"
+            v-if="showFollowUp && !followUpOpen"
             class="btn btn-outline-primary"
             type="button"
             :disabled="busy"
-            @click="$emit('follow-up', task)"
+            @click="openFollowUp"
           >
             Follow up
           </button>
@@ -235,11 +264,12 @@
 
 <script>
 import RepeatEditor from "./RepeatEditor.vue";
-import { apiDateOnly, dateOnlyInTimeZone } from "../utils/temporal";
+import ProjectSuggestions from "./ProjectSuggestions.vue";
+import { addCalendarDays, apiDateOnly, dateOnlyInTimeZone } from "../utils/temporal";
 
 export default {
   name: "TaskEditor",
-  components: { RepeatEditor },
+  components: { RepeatEditor, ProjectSuggestions },
   props: {
     task: { type: Object, default: null },
     tasks: { type: Array, default: () => [] },
@@ -251,16 +281,15 @@ export default {
     completionChunkDuration: { type: Number, default: null },
     showFollowUp: { type: Boolean, default: false },
   },
-  emits: ["close", "changed", "follow-up"],
+  emits: ["close", "changed"],
   data() {
     return {
       draft: this.buildDraft(this.task),
       error: "",
       busy: false,
       confirmingDelete: false,
-      recommendation: null,
-      recommendationTimer: null,
-      recommendationRequest: 0,
+      followUpOpen: false,
+      followUpDays: 7,
       projectChoiceMade: !!this.task?._id,
     };
   },
@@ -285,28 +314,6 @@ export default {
     dependencyCandidates() {
       return this.tasks.filter((candidate) => candidate._id !== this.task?._id);
     },
-    projectIds() {
-      return this.projectGroups.flatMap((group) => group.projects.map((project) => project._id));
-    },
-    recommendationLabel() {
-      if (this.isEdit || this.projectChoiceMade || !this.recommendation?.projectId) return "";
-      for (const group of this.projectGroups) {
-        const project = group.projects.find(({ _id }) => _id === this.recommendation.projectId);
-        if (project) return `${group.label} → ${project.title}`;
-      }
-      return "";
-    },
-  },
-  watch: {
-    "draft.title"() {
-      this.scheduleRecommendation();
-    },
-    "draft.notes"() {
-      this.scheduleRecommendation();
-    },
-    projectIds(next, previous) {
-      if (next.length && !previous.length) this.scheduleRecommendation();
-    },
   },
   mounted() {
     document.body.classList.add("task-editor-open");
@@ -314,8 +321,6 @@ export default {
   },
   beforeUnmount() {
     document.body.classList.remove("task-editor-open");
-    clearTimeout(this.recommendationTimer);
-    this.recommendationRequest++;
   },
   methods: {
     buildDraft(task) {
@@ -376,44 +381,10 @@ export default {
     chooseProject() {
       if (this.isEdit) return;
       this.projectChoiceMade = this.draft.projectRef !== "";
-      this.recommendation = null;
-      clearTimeout(this.recommendationTimer);
-      this.recommendationRequest++;
     },
-    useRecommendation() {
-      if (!this.recommendationLabel) return;
-      this.draft.projectRef = this.recommendation.projectId;
+    useRecommendation(projectId) {
+      this.draft.projectRef = projectId;
       this.projectChoiceMade = true;
-      this.recommendation = null;
-      clearTimeout(this.recommendationTimer);
-      this.recommendationRequest++;
-    },
-    scheduleRecommendation() {
-      clearTimeout(this.recommendationTimer);
-      this.recommendationRequest++;
-      this.recommendation = null;
-      if (this.isEdit || this.projectChoiceMade || this.draft.title.trim().length < 2) {
-        this.recommendation = null;
-        return;
-      }
-      this.recommendationTimer = setTimeout(() => this.loadRecommendation(), 1000);
-    },
-    async loadRecommendation() {
-      const request = this.recommendationRequest;
-      const title = this.draft.title.trim();
-      if (!title || !this.projectIds.length) return;
-
-      try {
-        const response = await this.$http.post("/api/recommendTaskProject", {
-          title,
-          notes: this.draft.notes,
-          candidateProjectIds: this.projectIds,
-        });
-        if (request !== this.recommendationRequest || this.projectChoiceMade) return;
-        this.recommendation = response.data.success ? response.data.recommendation : null;
-      } catch (error) {
-        if (request === this.recommendationRequest) this.recommendation = null;
-      }
     },
     async save() {
       this.error = this.validate();
@@ -440,6 +411,41 @@ export default {
         }
       } catch (error) {
         this.error = `Task could not be ${this.isEdit ? "saved" : "created"}.`;
+      } finally {
+        this.busy = false;
+      }
+    },
+    openFollowUp() {
+      this.error = "";
+      this.followUpOpen = true;
+      this.$nextTick(() => this.$refs.followUpDaysInput?.focus());
+    },
+    /**
+     * Complete this task and create its successor, which inherits this task's project.
+     */
+    async createFollowUp() {
+      const days = Number(this.followUpDays);
+      if (!Number.isFinite(days) || days <= 0) {
+        this.error = "Follow up days must be at least one.";
+        return;
+      }
+
+      this.error = "";
+      this.busy = true;
+      try {
+        const response = await this.$http.post("/api/setFollowUp/", {
+          title: this.draft.title.trim() || this.task.title,
+          followUpDate: addCalendarDays(dateOnlyInTimeZone(this.timeZone), days),
+          taskID: this.task._id,
+        });
+        if (!response.data.success) {
+          this.error = response.data.log || "Follow up could not be created.";
+          return;
+        }
+        this.followUpOpen = false;
+        this.$emit("changed", response.data.taskList || []);
+      } catch (error) {
+        this.error = "Follow up could not be created.";
       } finally {
         this.busy = false;
       }
@@ -492,6 +498,7 @@ export default {
     close() {
       if (this.busy) return;
       this.confirmingDelete = false;
+      this.followUpOpen = false;
       this.$emit("close");
     },
   },
@@ -534,9 +541,35 @@ function clone(value) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 14px;
   padding: 16px 20px;
   background: #1b2129;
+}
+
+/* Full-width row so the follow-up panel sits above the footer buttons. */
+.follow-up-panel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(102, 126, 234, 0.42);
+  border-radius: 8px;
+  background: rgba(102, 126, 234, 0.1);
+  color: #d7dde4;
+  font-size: 0.86rem;
+}
+
+.follow-up-panel input {
+  width: 72px;
+}
+
+.follow-up-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .editor-header {
@@ -600,28 +633,6 @@ function clone(value) {
   align-items: center;
   gap: 8px;
   margin: 4px 0 14px;
-}
-
-.project-recommendation {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 8px;
-  padding: 9px 10px;
-  border: 1px solid rgba(102, 126, 234, 0.42);
-  border-radius: 8px;
-  background: rgba(102, 126, 234, 0.1);
-  color: #d7dde4;
-  font-size: 0.86rem;
-}
-
-.project-recommendation span {
-  min-width: 0;
-}
-
-.project-recommendation button {
-  flex: 0 0 auto;
 }
 
 .chunk-field {
