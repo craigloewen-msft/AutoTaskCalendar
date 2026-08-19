@@ -82,6 +82,7 @@ export default createStore({
     },
     getters: {
         isLoggedIn: state => !!state.user.username,
+        isAdmin: state => state.user.isAdmin === true,
         authStatus: state => state.status,
     },
 })

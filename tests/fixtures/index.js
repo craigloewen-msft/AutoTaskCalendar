@@ -18,6 +18,7 @@
  *   apiAnon         request context with no credentials, for auth-failure tests
  *   loginAs(u, p)   build an authenticated request context for any user
  *   loggedInPage    a browser page already logged in as the primary user
+ *   adminPage       a browser page logged in as the seeded admin user
  *   nonUtcPage      logged-in page in America/Los_Angeles
  *
  * Reading the database directly? Wrap it in `withDb` (re-exported here) so the connection
@@ -195,6 +196,21 @@ const test = base.test.extend({
         await page.click('button:has-text("Sign in")');
 
         // The app redirects once the server session is established.
+        await page.waitForURL(/#\/user\//);
+
+        await use(page);
+    },
+
+    /**
+     * A browser page logged in as this test's seeded admin.
+     */
+    adminPage: async ({ page, seed }, use) => {
+        const data = seed.last() || await seed();
+
+        await page.goto('/#/login');
+        await page.fill('input[name="username"]', data.admin.username);
+        await page.fill('input[name="password"]', data.admin.password);
+        await page.click('button:has-text("Sign in")');
         await page.waitForURL(/#\/user\//);
 
         await use(page);

@@ -29,7 +29,14 @@ function authenticateSession(config) {
     };
 }
 
+// Site-wide admin surfaces. Runs after authenticateSession, which owns 401 and same-origin.
+function requireAdmin(req, res, next) {
+    if (req.user?.isAdmin !== true) return res.sendStatus(403);
+    next();
+}
+
 module.exports = {
     authenticateSession,
     requireSameOrigin,
+    requireAdmin,
 };

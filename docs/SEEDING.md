@@ -30,6 +30,7 @@ Log in with:
 | `recurruser` | `testpassword` |
 | `slipuser` | `testpassword` |
 | `boundaryuser` | `testpassword` |
+| `adminuser` | `testpassword` |
 
 `otheruser` exists only to prove their data never leaks into `testuser`'s views.
 `recurruser` is the recurring-task scenario: three one-off tasks plus a single
@@ -44,6 +45,10 @@ The following week is empty except for one isolated Friday task, making it easy 
 genuine downstream deadline damage from a selected task merely making itself late.
 
 `boundaryuser` is the late-definition boundary scenario. One six-hour selected task and five two-hour follow-ups exactly fill Monday and Tuesday; a long calendar event removes capacity from Wednesday through the scheduler horizon. Blocking the selected slot leaves three follow-ups unplaced, but none scheduled after their shared Friday due date, so the forecast must show four moved and zero late.
+
+`adminuser` is the only seeded account with `isAdmin: true`, so the admin dashboard has
+someone to log in as. It owns two tasks (one completed) to keep its row in the user table
+from being all zeros. See `docs/ADMIN.md`.
 
 ## What the dataset contains
 

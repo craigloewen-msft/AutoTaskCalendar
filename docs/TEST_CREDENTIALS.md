@@ -27,7 +27,9 @@ Seeding also creates:
 - `slipuser` / `testpassword`, with a full mixed-capacity week and a spacious following week
   for checking blocked-slot reschedule forecasts; and
 - `boundaryuser` / `testpassword`, with a two-day schedule that distinguishes unplaced work
-  from tasks whose completions actually cross their due dates.
+  from tasks whose completions actually cross their due dates; and
+- `adminuser` / `testpassword`, the only seeded account with `isAdmin`, for the admin
+  dashboard. See `docs/ADMIN.md`.
 
 ## What's Included
 
@@ -83,6 +85,7 @@ The dataset creates:
    - Add, edit, or complete tasks
    - Schedule tasks automatically
    - Sync with Google Calendar (requires OAuth setup)
+   - Log in as `adminuser` instead to see the site-wide Admin dashboard
 
 ## Re-seeding the Database
 
