@@ -143,9 +143,9 @@ MongoClient.connect(process.argv[1], { serverSelectionTimeoutMS: 2000 })
 
 // The ping runs in a subprocess that requires the driver, so a missing install would
 // otherwise look exactly like a database that never answers.
-function pingDriverInstalled(root = path.join(__dirname, '..')) {
+function pingDriverInstalled() {
     try {
-        require.resolve('mongodb', { paths: [root] });
+        require.resolve('mongodb', { paths: [path.join(__dirname, '..')] });
         return true;
     } catch (error) {
         return false;
@@ -286,14 +286,7 @@ function ensureDatabase() {
     return port;
 }
 
-module.exports = {
-    ensureDatabase,
-    pingDriverInstalled,
-    CONTAINER_NAME,
-    VOLUME_NAME,
-    IMAGE,
-    PORT_FILE,
-};
+module.exports = { ensureDatabase, CONTAINER_NAME, VOLUME_NAME, IMAGE, PORT_FILE };
 
 if (require.main === module) {
     console.log(`MongoDB ready on port ${ensureDatabase()}`);
