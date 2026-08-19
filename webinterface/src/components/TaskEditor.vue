@@ -209,18 +209,23 @@
             v-if="showFollowUp && !followUpOpen"
             class="btn btn-outline-primary"
             type="button"
-            :disabled="busy"
+            :disabled="busy || confirmingDelete"
             @click="openFollowUp"
           >
             Follow up
           </button>
-          <button class="btn btn-outline-success" type="button" :disabled="busy" @click="completeTask">
+          <button
+            class="btn btn-outline-success"
+            type="button"
+            :disabled="busy || confirmingDelete || followUpOpen"
+            @click="completeTask"
+          >
             Complete
           </button>
           <button
             class="btn btn-outline-danger"
             type="button"
-            :disabled="busy || confirmingDelete"
+            :disabled="busy || confirmingDelete || followUpOpen"
             @click="confirmingDelete = true"
           >
             {{ isSeriesTask ? "Delete series" : "Delete" }}
