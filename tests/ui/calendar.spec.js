@@ -544,21 +544,29 @@ test.describe('calendar page', () => {
         await expect(page.locator('.task-list')).not.toContainText(createdTitle);
     });
 
-    test('offers but does not silently apply a project recommendation', async ({
+    test('offers every strong project recommendation without applying one', async ({
         seed,
         loggedInPage: page,
     }) => {
         const data = await seed();
         await page.route('**/api/recommendTaskProject', async (route) => {
+            const recommendations = [
+                {
+                    projectId: String(data.named.migrationProject._id),
+                    confidence: 'high',
+                    evidenceCount: 2,
+                },
+                {
+                    projectId: String(data.named.hiringProject._id),
+                    confidence: 'high',
+                    evidenceCount: 2,
+                },
+            ];
             await route.fulfill({
                 contentType: 'application/json',
                 body: JSON.stringify({
                     success: true,
-                    recommendation: {
-                        projectId: String(data.named.migrationProject._id),
-                        confidence: 'high',
-                        evidenceCount: 2,
-                    },
+                    recommendations,
                 }),
             });
         });
@@ -568,38 +576,98 @@ test.describe('calendar page', () => {
         await page.fill('#task-title', 'Ask Priyanka about rehearsal');
 
         const suggestion = page.locator('[data-test=project-recommendation]');
-        await expect(suggestion).toContainText('Migration plan');
+        const options = suggestion.locator('[data-test=project-recommendation-option]');
+        await expect(options).toHaveCount(2);
+        await expect(options.first()).toContainText('Migration plan');
+        await expect(options.nth(1)).toContainText('Hiring loop');
         await expect(page.locator('#task-project').locator('option:checked')).toHaveText(
             'Choose a project or Unassigned…'
         );
 
-        await suggestion.getByRole('button', { name: 'Use this project' }).click();
-        await expect(page.locator('#task-project')).toHaveValue(String(data.named.migrationProject._id));
+        // Any offered project can be taken, not just the top one.
+        await options.nth(1).click();
+        await expect(page.locator('#task-project')).toHaveValue(String(data.named.hiringProject._id));
+        await expect(suggestion).toHaveCount(0);
     });
 
-    test('requires an explicit project choice for a standalone follow-up', async ({
+    test('offers a single recommendation when only one project is strong', async ({
         seed,
         loggedInPage: page,
     }) => {
         const data = await seed();
-        await page.goto('/#/calendar');
-        await page.getByRole('button', { name: 'Add follow up' }).click();
-        await page.fill('#task-title', 'Standalone follow-up');
-        await page.fill('#task-duration', '2');
-        await page.locator('#followup-modal .modal-footer .btn-primary').click();
-        await expect(page.locator('#followup-modal-body')).toContainText(
-            'Choose a project or Unassigned.'
-        );
-        await expect(page.locator('#followup-project')).toBeFocused();
+        await page.route('**/api/recommendTaskProject', async (route) => {
+            await route.fulfill({
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    success: true,
+                    recommendations: [{
+                        projectId: String(data.named.migrationProject._id),
+                        confidence: 'high',
+                        evidenceCount: 2,
+                    }],
+                }),
+            });
+        });
 
-        await page.selectOption('#followup-project', { label: 'Unassigned' });
-        await page.locator('#followup-modal .modal-footer .btn-primary').click();
-        await expect(page.locator('#followup-modal')).not.toBeVisible();
-        const saved = await withDb(() => TaskDetails.findOne({
+        await page.goto('/#/calendar');
+        await page.getByRole('button', { name: 'Add new task' }).click();
+        await page.fill('#task-title', 'Ask Priyanka about rehearsal');
+
+        const options = page.locator(
+            '[data-test=project-recommendation] [data-test=project-recommendation-option]'
+        );
+        await expect(options).toHaveCount(1);
+        await expect(options.first()).toContainText('Migration plan');
+        await expect(page.locator('#task-project').locator('option:checked')).toHaveText(
+            'Choose a project or Unassigned…'
+        );
+
+        await options.first().click();
+        await expect(page.locator('#task-project')).toHaveValue(
+            String(data.named.migrationProject._id)
+        );
+    });
+
+    test('completes a task and creates its follow-up in the same project', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        const source = await withDb(() => TaskDetails.create({
+            title: 'Source task awaiting follow up',
+            duration: 30,
+            startDate: parseDateOnly('2030-01-01').date,
+            dueDate: parseDateOnly('2030-01-02').date,
+            completed: false,
+            isBacklog: false,
             userRef: data.primary.user._id,
-            title: 'Standalone follow-up',
+            projectRef: data.named.migrationProject._id,
         }));
-        expect(saved.projectRef).toBeNull();
+
+        await page.goto('/#/calendar');
+        await page.locator('.task-item', { hasText: 'Source task awaiting follow up' })
+            .first()
+            .click();
+        await page.getByRole('button', { name: 'Follow up', exact: true }).click();
+
+        // A derived follow-up inherits its project, so it offers no project choice.
+        const panel = page.locator('[data-test=follow-up-panel]');
+        await expect(panel).toBeVisible();
+        await expect(page.locator('[data-test=project-recommendation]')).toHaveCount(0);
+
+        await page.fill('#task-follow-up-days', '3');
+        await page.getByRole('button', { name: 'Create follow up' }).click();
+        await expect(page.locator('.task-editor')).toHaveCount(0);
+
+        const followUp = await withDb(() => TaskDetails.findOne({
+            userRef: data.primary.user._id,
+            title: 'Source task awaiting follow up',
+            _id: { $ne: source._id },
+        }));
+        expect(String(followUp.projectRef)).toBe(String(data.named.migrationProject._id));
+
+        const completed = await withDb(() => TaskDetails.findById(source._id));
+        expect(completed.completed).toBe(true);
     });
 
     test('keeps one-off and unscheduled tasks visible without expanding the recurring window', async ({
