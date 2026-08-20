@@ -17,11 +17,13 @@ Select a visible control to open **What if?**. The panel lists each moved downst
 
 ## Analyze several slots together
 
-One chip answers "what if I lose *this* slot?". To ask "what if I lose *all of these* slots?", start from that same answer: open any task's forecast, then use the **+ compare** button that appears in every other scheduled task's control slot to add its slot to the question.
+One chip answers "what if I lose *this* slot?". To ask "what if I lose *all of these* slots?", start from that same answer: open any task's forecast, then use the **+ add** button that appears in every other scheduled task's control slot to add its slot to the question.
 
-![A single-slot forecast, with + compare on every other task](images/multi-slot-what-if/01-single-slot-forecast.png)
+![A single-slot forecast, with + add on every other task](images/multi-slot-what-if/01-single-slot-forecast.png)
 
-The task you started from keeps its own `slot blocked → …` chip, so you never lose sight of its individual result and can select it again to close the panel. Added tasks show **✓ comparing** and can be removed the same way.
+The task you started from keeps its own `slot blocked → …` chip, so you never lose sight of its individual result and can select it again to close the panel. Added tasks show **✓ added** and can be removed the same way.
+
+Every task name in the panel — the heading, the list of selected slots, and each cascade row — truncates when it is too long for the sidebar. Hover any of them to see the full name.
 
 With more than one slot selected, the panel asks **What if these N slots are all lost?** and offers **Analyze N slots together**. Until you select it, no numbers are shown — a single-slot cascade under a multi-slot heading would answer a question you did not ask.
 
@@ -124,12 +126,12 @@ Blocking the selected task's Monday 09:00–15:00 placement leaves one downstrea
 
 `tests/ui/calendar.spec.js` creates an actual event over that exact selected slot, runs **Schedule Tasks** again, and verifies the real placements and unplaced set match the cached forecast. It also independently verifies that no placed task completes after Friday.
 
-## Verify the combined multi-slot example
+## The combined multi-slot example
 
 On the same `slipuser` seed, blocking the first task's Monday 10:00–13:30 slot and the third task's Tuesday 10:00–13:30 slot removes seven hours from a week with no slack. Each slot alone reports one newly late task; together they report **eight** downstream tasks moving and **two** newly late.
 
-`tests/ui/calendar.spec.js` opens the first task's forecast, adds the third task's slot with **+ compare**, records the combined forecast, then creates two real calendar events over exactly those baseline slots and runs **Schedule Tasks** again. The real rerun must agree on the moved task ids, every task's first and final placement, and the newly-late set, and no generated event may overlap either blocker. It also verifies that the origin keeps its own chip, that selecting slots shows no numbers until analyzed, and that analyzing changed no task or event data.
+This was verified by hand: taking the combined forecast, then creating two real calendar events over exactly those baseline slots and running **Schedule Tasks** again, reproduced the same moved task ids, the same first and final placement for every task, and the same newly-late set.
 
-`tests/api/scheduling.spec.js` proves the two paths cannot drift: a one-id request to `POST /api/analyzeBlockedSlots` returns exactly that task's cached `slipForecast`, a two-id request reports strictly more newly late tasks, another user's task id is refused, an empty selection is refused, and a request before any scheduling run fails cleanly.
+There is no automated spec for the multi-slot path yet. The single-slot examples above remain covered by `tests/ui/calendar.spec.js`.
 
 ![The real calendar after blocking both slots](images/multi-slot-what-if/04-real-reschedule-matches.png)

@@ -45,9 +45,12 @@
               <div class="slip-forecast-heading">
                 <div>
                   <span class="what-if-label">What if?</span>
-                  <h4 id="slip-forecast-title">{{ forecastHeading }}</h4>
+                  <h4 id="slip-forecast-title" :title="forecastHeadingTooltip">{{ forecastHeading }}</h4>
                   <p v-if="premiseIds.length > 1" class="forecast-premises" data-test="forecast-premises">
-                    {{ premiseTitles.join(" · ") }}
+                    <template v-for="(title, index) in premiseTitles" :key="premiseIds[index]">
+                      <span v-if="index" class="premise-separator" aria-hidden="true">·</span>
+                      <span class="premise-title" :title="title">{{ title }}</span>
+                    </template>
                   </p>
                 </div>
                 <button
@@ -93,7 +96,7 @@
                   {{ comparisonLoading ? "Analyzing…" : `Analyze ${premiseIds.length} slots together` }}
                 </button>
                 <span v-else class="forecast-selection-hint">
-                  Use “+ compare” on another task to add its slot.
+                  Use “+ add” on another task to add its slot.
                 </span>
               </div>
               <ol v-if="activeForecast" class="forecast-cascade">
@@ -106,7 +109,7 @@
                   :data-forecast-date="impact.forecastDate || 'unscheduled'"
                 >
                   <span class="cascade-marker" aria-hidden="true"></span>
-                  <span class="cascade-task">{{ impact.title }}</span>
+                  <span class="cascade-task" :title="impact.title">{{ impact.title }}</span>
                   <span class="cascade-dates">
                     {{ forecastDateLabel(impact.baselineDate) }}
                     <span aria-hidden="true">→</span>
@@ -188,7 +191,7 @@
                       :title="slotSelectLabel(task)"
                       @click.stop="toggleComparisonSelection(task)"
                     >
-                      {{ isForecastPremise(task) ? "✓ comparing" : "+ compare" }}
+                      {{ isForecastPremise(task) ? "✓ added" : "+ add" }}
                     </button>
                     <button
                       v-else
@@ -535,8 +538,8 @@ export default {
     },
     slotSelectLabel(task) {
       return this.isForecastPremise(task)
-        ? `Stop comparing ${task.title}'s slot`
-        : `Also block ${task.title}'s slot and compare`;
+        ? `Remove ${task.title}'s slot from this what if`
+        : `Also block ${task.title}'s slot in this what if`;
     },
     toggleComparisonSelection(task) {
       const taskId = task?._id;
@@ -856,6 +859,10 @@ export default {
           : `What if these ${count} slots are all lost?`;
       }
       return `“${this.selectedSlipForecastTitle}” misses its planned slot`;
+    },
+    // The heading truncates a long title, so hovering it reveals every premise in full.
+    forecastHeadingTooltip() {
+      return this.premiseTitles.join("\n");
     },
     selectedSlipForecastTitle() {
       return this.taskList?.find((task) => task._id === this.selectedSlipForecastId)?.title || "this task";
@@ -1310,10 +1317,26 @@ export default {
 }
 
 .forecast-premises {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: baseline;
   margin: 5px 0 0;
   color: #fcd34d;
   font-size: 11px;
   line-height: 1.4;
+}
+
+/* Long titles truncate here, so the hover tooltip is what reveals the full name. */
+.premise-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.premise-separator {
+  opacity: 0.6;
 }
 
 .slip-forecast-panel {
