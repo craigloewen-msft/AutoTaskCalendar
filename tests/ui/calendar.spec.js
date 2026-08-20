@@ -1,5 +1,11 @@
 const { test, expect, withDb } = require('../fixtures');
-const { EventDetails, TaskDetails } = require('../../models');
+const {
+    EventDetails,
+    TaskDetails,
+    ProjectDetails,
+    GoalDetails,
+    RoleDetails,
+} = require('../../models');
 const {
     addDateOnlyDays,
     dateOnlyFromMarker,
@@ -646,6 +652,49 @@ test.describe('calendar page', () => {
         await expect(page.locator('#task-project')).toHaveValue(
             String(data.named.migrationProject._id)
         );
+    });
+
+    test('keeps a very long recommendation inside the editor', async ({
+        seed,
+        loggedInPage: page,
+    }) => {
+        const data = await seed();
+        const longName = 'Extraordinarily long name that would overflow the modal if left unwrapped';
+        await withDb(async () => {
+            const project = await ProjectDetails.findById(data.named.migrationProject._id);
+            const goal = await GoalDetails.findById(project.goalRef);
+            await RoleDetails.updateOne({ _id: goal.roleRef }, { title: `Role ${longName}` });
+            await GoalDetails.updateOne({ _id: goal._id }, { title: `Goal ${longName}` });
+            await ProjectDetails.updateOne({ _id: project._id }, { title: `Project ${longName}` });
+        });
+
+        await page.route('**/api/recommendTaskProject', async (route) => {
+            await route.fulfill({
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    success: true,
+                    recommendations: [{
+                        projectId: String(data.named.migrationProject._id),
+                        confidence: 'high',
+                        evidenceCount: 2,
+                    }],
+                }),
+            });
+        });
+
+        await page.goto('/#/calendar');
+        await page.getByRole('button', { name: 'Add new task' }).click();
+        await page.fill('#task-title', 'Ask Priyanka about rehearsal');
+
+        const option = page.locator('[data-test=project-recommendation-option]').first();
+        await expect(option).toBeVisible();
+
+        // The suggestion must wrap inside the form rather than spilling past the project select.
+        const optionBox = await option.boundingBox();
+        const formBox = await page.locator('#task-project').boundingBox();
+        expect(optionBox.x).toBeGreaterThanOrEqual(formBox.x - 1);
+        expect(optionBox.x + optionBox.width).toBeLessThanOrEqual(formBox.x + formBox.width + 1);
+        expect(optionBox.height).toBeGreaterThan(24);
     });
 
     test('completes a task and creates its follow-up in the same project', async ({

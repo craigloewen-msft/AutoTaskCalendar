@@ -127,9 +127,10 @@ export default {
 <style scoped>
 .project-suggestions {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 8px;
+  max-width: 100%;
   margin-top: 8px;
   padding: 9px 10px;
   border: 1px solid rgba(102, 126, 234, 0.42);
@@ -139,9 +140,22 @@ export default {
   font-size: 0.86rem;
 }
 .project-suggestions span {
-  min-width: 0;
-}
-.project-suggestions button {
   flex: 0 0 auto;
+  padding-top: 4px;
+}
+/* Long Compass paths must wrap inside the modal instead of widening the row. */
+.project-suggestions button {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+@media (max-width: 575px) {
+  .project-suggestions button {
+    flex: 1 1 100%;
+  }
 }
 </style>
