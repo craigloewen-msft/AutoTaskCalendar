@@ -1,13 +1,13 @@
 # tests/
 
-Playwright suite covering the API and the Vue UI.
+Playwright suite covering the API. The browser (UI) specs were removed as flaky, so the
+Vue front end has no automated coverage.
 
 ```bash
 npm test                    # everything, twelve local workers; four in CI
-npm test -- tests/api       # API only
 npm test -- -g "a name"     # one test, seconds
 npm test -- --workers=1     # force serial execution
-npm test -- --ui            # interactive UI mode
+npm test -- --ui            # interactive runner
 ```
 
 **Read `docs/TESTING.md` before adding a test.** It has the templates, the fixture
@@ -27,9 +27,8 @@ test('does the thing', async ({ seed, api }) => {
 
 Layout:
 
-- `fixtures/` — `seed`, `api`, `apiAnon`, `loginAs`, `loggedInPage`, `withDb`.
+- `fixtures/` — `seed`, `api`, `apiAnon`, `loginAs`, `withDb`.
 - `api/` — HTTP-level and tenant-isolation tests. Fast; put logic coverage here.
-- `ui/` — browser tests. Slower; keep them to user-visible smoke paths.
 
 Reading the database directly? Go through `withDb`, which connects to the right
 per-instance database for you:

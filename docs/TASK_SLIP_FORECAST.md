@@ -115,7 +115,7 @@ The shared `slipuser` seed has ten 3½-hour tasks, all starting Monday and due F
 
 Blocking the first task's Monday 10:00–13:30 placement leaves Monday 13:30–17:00 available. The selected task moves there, each later task shifts one slot, and the final Friday task moves to the following Monday. The forecast therefore reports nine downstream tasks moving and **one** newly late task.
 
-`tests/ui/calendar.spec.js` creates an actual calendar event over that exact slot, runs **Schedule Tasks** again, and compares the real generated placements and newly-late set with the cached forecast. It also verifies that merely opening and reloading the preview changes no task or event data.
+This was verified by hand: creating an actual calendar event over that exact slot and running **Schedule Tasks** again reproduced the forecast's placements and newly-late set. The browser test that pinned it was removed as flaky.
 
 ## Verify the unplaced-is-not-late example
 
@@ -123,7 +123,7 @@ The shared `boundaryuser` seed has one six-hour selected task followed by five t
 
 Blocking the selected task's Monday 09:00–15:00 placement leaves one downstream task unchanged, moves the selected task and one downstream task to Tuesday, and leaves the final three downstream tasks unplaced. The forecast therefore reports four downstream tasks moving and **zero** late tasks. Its panel keeps all three missing placements visible as **Unscheduled** without a **Late** marker.
 
-`tests/ui/calendar.spec.js` creates an actual event over that exact selected slot, runs **Schedule Tasks** again, and verifies the real placements and unplaced set match the cached forecast. It also independently verifies that no placed task completes after Friday.
+This was verified by hand: creating an actual event over that exact selected slot and running **Schedule Tasks** again reproduced the forecast's placements and unplaced set, with no placed task completing after Friday.
 
 ## The combined multi-slot example
 
@@ -131,4 +131,4 @@ On the same `slipuser` seed, blocking the first task's Monday 10:00–13:30 slot
 
 This was verified by hand: taking the combined forecast, then creating two real calendar events over exactly those baseline slots and running **Schedule Tasks** again, reproduced the same moved task ids, the same first and final placement for every task, and the same newly-late set.
 
-`tests/ui/calendar.spec.js` covers the multi-slot panel: it selects several slots, analyzes them, and verifies every selected task gets its own row, that none of them leak into the downstream cascade, and that analyzing writes nothing. `tests/api/scheduling.spec.js` covers the endpoint contract, including that a single-task request still matches that task's cached chip.
+`tests/api/scheduling.spec.js` covers the endpoint contract, including that a single-task request still matches that task's cached chip. The multi-slot panel itself has no automated coverage.

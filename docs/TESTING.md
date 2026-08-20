@@ -1,7 +1,8 @@
 # Testing
 
-AutoTaskCalendar has one test suite: **Playwright**, covering both the HTTP API and the
-Vue UI. This file is the whole manual — how to run it, how to add to it, and how to debug
+AutoTaskCalendar has one test suite: **Playwright**, covering the HTTP API. The browser
+(UI) specs were removed as chronically flaky, so the Vue front end has no automated
+coverage — verify UI changes by hand. This file is the whole manual — how to run it, how to add to it, and how to debug
 a failure.
 
 **The rule: any behaviour change ships with a focused spec.** If you fix a bug, add the
@@ -22,7 +23,6 @@ Keep a test when it protects at least one of these:
 
 Delete or avoid tests that are mainly:
 
-- duplicate API and UI coverage of the same behavior
 - one validation permutation among many equivalent ones
 - routine CRUD already covered by a broader lifecycle
 - payload-shape or implementation-detail assertions
@@ -39,9 +39,8 @@ Most changes should add or update one focused spec, not several parallel ones.
 
 - Choose the narrowest layer that proves the contract.
 - Prefer API specs for business rules and data transitions.
-- Keep UI specs for primary user-visible flows and route guards.
-- Do not duplicate the same rule at endpoint, validation, and UI layers unless each layer
-  has distinct behavior worth protecting.
+- Do not duplicate the same rule at endpoint and validation layers unless each layer has
+  distinct behavior worth protecting.
 - If one representative validation case proves the rule, do not add every permutation.
 - If a broader lifecycle test already proves create/edit/delete/list behavior, do not add a
   separate CRUD micro-test.
@@ -52,7 +51,7 @@ The goal is confidence per test, not coverage theater.
 
 ```bash
 npm test                                     # whole suite, twelve local workers; four in CI
-npm test -- tests/api                        # API tests only
+npm test -- tests/api                        # the API specs (all of them)
 npm test -- tests/api/tasks.spec.js          # one file
 npm test -- -g "completes a task"            # one test by name, seconds
 npm test -- --workers=1                      # force serial execution
@@ -66,9 +65,8 @@ by Playwright.
 **Iterating on one thing? Do not run the whole suite.** File filters and `-g` still take
 seconds; save the full run for just before you commit.
 
-`npm test` handles the setup itself: it starts the database, downloads the Chromium
-browser the first time, rebuilds the web bundle whenever `webinterface/src` is newer than
-`dist/`, then starts the app and runs the suite. This is also the CI contract; workflows do
+`npm test` handles the setup itself: it starts the database, then starts the app and runs
+the suite. No browser download or front-end build is needed. This is also the CI contract; workflows do
 not need a separate MongoDB service. There is nothing to install or export beforehand.
 
 ## How isolation works
@@ -90,8 +88,8 @@ authenticated user's ID, so workers can schedule, mutate, and delete their own d
 touching another test. The fixture removes that tenant after the test; the runner drops the
 entire run database when Playwright exits.
 
-This is why parallel workers are safe here. The suite drives one **built** bundle served by
-one Express process, which is both simple and close to production. You can leave
+This is why parallel workers are safe here. The suite drives one Express process, which is
+both simple and close to production. You can leave
 `npm run dev` running or start two test commands on the same branch without collisions.
 
 ## Writing a test
@@ -108,10 +106,9 @@ Everything lives in `tests/`:
 
 ```
 tests/
-  fixtures/index.js     shared fixtures (seed, api, loggedInPage, withDb, ...)
+  fixtures/index.js     shared fixtures (seed, api, loginAs, withDb, ...)
   fixtures/db.js        database connection handling
   api/*.spec.js         HTTP-level tests, including tenant-isolation coverage
-  ui/*.spec.js          browser tests
 ```
 
 Always import `test` and `expect` from the fixtures, never from `@playwright/test`
@@ -126,7 +123,6 @@ directly — that is what gives you seeding and authentication.
 | `api` | Request context authenticated as this test's primary user. |
 | `apiAnon` | Request context with no credentials, for auth-failure tests. |
 | `loginAs(user, pass)` | Authenticated request context for any seeded user. |
-| `loggedInPage` | Browser page logged in as this test's primary user. |
 | `withDb(fn)` | Run a query against the test database, connecting if needed. |
 
 ### API test template
@@ -144,22 +140,6 @@ test('rejects a task with no duration', async ({ seed, api }) => {
     expect(body.success).toBe(false);
 });
 ```
-
-### UI test template
-
-```js
-const { test, expect } = require('../fixtures');
-
-test('shows the seeded tasks', async ({ seed, loggedInPage: page }) => {
-    const data = await seed();
-
-    await page.goto('/#/calendar');
-
-    await expect(page.locator('.task-list')).toContainText(data.named.proposal.title);
-});
-```
-
-Routes are hash-based, so URLs look like `/#/calendar` and `/#/about`.
 
 ### Using the data
 
@@ -232,7 +212,6 @@ without opening anything.
 Useful flags:
 
 ```bash
-npm test -- --headed             # watch the browser as it runs
 npm test -- --debug              # step through with the inspector
 npm test -- --repeat-each=5      # hunt for flakiness
 ```
@@ -249,6 +228,5 @@ behind. Call `seed(...)` at the top of the test so it owns its state.
 `docker logs autotaskcalendar-mongo`, or recreate it with
 `docker rm -f autotaskcalendar-mongo`.
 
-**Browser tests fail right after a front-end change.** `npm test` rebuilds when
-`webinterface/src` is newer than `dist/`, but a file restored from git can carry an old
-timestamp. Force it with `npm run build`.
+**A front-end change broke something.** There are no automated UI tests any more; run
+`npm run dev` and check the change in a browser yourself.

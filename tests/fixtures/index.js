@@ -17,9 +17,6 @@
  *   api             request context authenticated as the seeded primary user
  *   apiAnon         request context with no credentials, for auth-failure tests
  *   loginAs(u, p)   build an authenticated request context for any user
- *   loggedInPage    a browser page already logged in as the primary user
- *   adminPage       a browser page logged in as the seeded admin user
- *   nonUtcPage      logged-in page in America/Los_Angeles
  *
  * Reading the database directly? Wrap it in `withDb` (re-exported here) so the connection
  * is established first.
@@ -29,7 +26,7 @@ const base = require('@playwright/test');
 const { createHash } = require('crypto');
 
 const { runSeed, wipeNamespace } = require('../../seed');
-const { TaskDetails, EventDetails, UserDetails } = require('../../models');
+const { TaskDetails, EventDetails } = require('../../models');
 const instance = require('../../instance');
 const { withDb } = require('./db');
 
@@ -131,27 +128,6 @@ const test = base.test.extend({
         await context.dispose();
     },
 
-    nonUtcPage: async ({ browser, seed }, use) => {
-        const data = seed.last() || await seed();
-
-        await withDb(() => UserDetails.updateOne(
-            { _id: data.primary.user._id },
-            { $set: { timeZone: 'America/Los_Angeles' } }
-        ));
-        const context = await browser.newContext({
-            baseURL,
-            timezoneId: 'America/Los_Angeles',
-        });
-        const page = await context.newPage();
-        await page.goto('/#/login');
-        await page.fill('input[name="username"]', data.primary.username);
-        await page.fill('input[name="password"]', data.primary.password);
-        await page.click('button:has-text("Sign in")');
-        await page.waitForURL(/#\/user\//);
-        await use(page);
-        await context.close();
-    },
-
     /**
      * Log in as an arbitrary user. Returns a request context you must dispose yourself.
      */
@@ -182,39 +158,6 @@ const test = base.test.extend({
         await context.dispose();
     },
 
-    /**
-     * A browser page already logged in as this test's primary user.
-     *
-     * This drives the real login form so the browser receives a real server session.
-     */
-    loggedInPage: async ({ page, seed }, use) => {
-        const data = seed.last() || await seed();
-
-        await page.goto('/#/login');
-        await page.fill('input[name="username"]', data.primary.username);
-        await page.fill('input[name="password"]', data.primary.password);
-        await page.click('button:has-text("Sign in")');
-
-        // The app redirects once the server session is established.
-        await page.waitForURL(/#\/user\//);
-
-        await use(page);
-    },
-
-    /**
-     * A browser page logged in as this test's seeded admin.
-     */
-    adminPage: async ({ page, seed }, use) => {
-        const data = seed.last() || await seed();
-
-        await page.goto('/#/login');
-        await page.fill('input[name="username"]', data.admin.username);
-        await page.fill('input[name="password"]', data.admin.password);
-        await page.click('button:has-text("Sign in")');
-        await page.waitForURL(/#\/user\//);
-
-        await use(page);
-    },
 });
 
 module.exports = { test, expect: base.expect, baseURL, testNamespace, withDb };

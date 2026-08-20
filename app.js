@@ -18,6 +18,9 @@ const config = fs.existsSync('./config.js') ? require('./config') : require('./d
 const app = express();
 app.use(express.static(__dirname + "/dist"));
 
+// Unauthenticated liveness probe, used by the test runner to wait for the server.
+app.get('/api/health', (req, res) => res.json({ success: true }));
+
 // Set up Dev or Production
 let mongooseConnectionString = '';
 let hostPort = instance.apiPort;

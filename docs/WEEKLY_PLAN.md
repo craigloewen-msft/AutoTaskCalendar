@@ -250,15 +250,12 @@ Tests:
 
 - `tests/api/weeklyPlan.spec.js` — two specs covering what is unique to commitments: status
   derivation from the live task (including ownership), and additive amendment.
-- `tests/ui/weeklyPlan.spec.js` — hierarchy review, quick creation, commit and review, folding
-  in later work, the previous-week recap, plan-read failure, narrow screens, saved timezone.
 - `tests/api/temporal.spec.js` — Monday bounds across DST and year boundaries.
 - `tests/api/tasks.spec.js` — the bounded completion-history query.
 
 Run a focused check while iterating:
 
 ```bash
-npm test -- --project=ui tests/ui/weeklyPlan.spec.js
 npm test -- tests/api/weeklyPlan.spec.js
 ```
 

@@ -142,12 +142,13 @@ Adding a *chart* does not mean adding a chart library. The trend strip is plain 
 
 ## Testing
 
-`tests/api/admin.spec.js` and `tests/ui/admin.spec.js`; run with `npm test -- -g "admin"`.
+`tests/api/admin.spec.js`; run with `npm test -- -g "admin"`. The dashboard page itself has
+no automated coverage.
 
 > **The concurrency trap.** Twelve Playwright workers share one test database and these
 > endpoints count *every* tenant, so `totals.users` changes while a test is running. Assert
 > global counts with `toBeGreaterThanOrEqual`, and use `?search=<namespaced username>` when
 > you need an exact number — that pins the query to the test's own tenant.
 
-The `adminPage` fixture in `tests/fixtures/index.js` gives a browser session logged in as
-the seeded admin, alongside `loggedInPage` for the ordinary-user case.
+Use `loginAs(data.admin.username, data.admin.password)` from `tests/fixtures/index.js` for
+an admin-authenticated request context. There are no browser tests.

@@ -80,6 +80,6 @@ Task titles record activity, not necessarily business impact. Verify inferred ou
 - `routes/tasks.js` validates the range and serves the authenticated attachment.
 - `webinterface/src/views/User.vue` owns the date form and browser download.
 - `tests/api/tasks.spec.js` pins ownership, boundaries, shape, and content.
-- `tests/ui/user.spec.js` pins defaults, validation, download, failure recovery, and narrow screens.
+- The export form itself has no automated coverage; verify the download by hand.
 
 The Weekly Plan's `GET /api/getProjectCompletions` endpoint remains a separate minimal, project-linked previous-week read.

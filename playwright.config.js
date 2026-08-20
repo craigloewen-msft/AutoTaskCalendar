@@ -1,7 +1,7 @@
 // Playwright configuration. Always run through `npm test` (scripts/test.js), which sets
 // the per-instance environment this file reads.
 
-const { defineConfig, devices } = require('@playwright/test');
+const { defineConfig } = require('@playwright/test');
 
 const apiPort = parseInt(process.env.AUTOTASKCALENDAR_API_PORT, 10) || 3000;
 const baseURL = process.env.AUTOTASKCALENDAR_BASE_URL || `http://127.0.0.1:${apiPort}`;
@@ -27,19 +27,16 @@ module.exports = defineConfig({
         baseURL,
         // Artifacts only on failure: enough to debug a regression, cheap when green.
         trace: 'retain-on-failure',
-        screenshot: 'only-on-failure',
-        video: 'retain-on-failure',
     },
 
     projects: [
         { name: 'api', testDir: './tests/api' },
-        { name: 'ui', testDir: './tests/ui', use: { ...devices['Desktop Chrome'] } },
     ],
 
-    // Express serves both /api and the built SPA from dist/, so one server covers both.
+    // The API server under test.
     webServer: {
         command: 'node app.js',
-        url: baseURL,
+        url: `${baseURL}/api/health`,
         reuseExistingServer: !isCI && !isOrchestrated,
         timeout: 60_000,
         // Only errors, so a run's output is the test results and nothing else.

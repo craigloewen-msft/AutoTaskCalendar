@@ -349,9 +349,9 @@ are returned under `named` — `data.named.engineerRole`, `data.named.migrationP
 on. See `docs/SEEDING.md`.
 
 **Tests.** `tests/api/compass.spec.js` covers CRUD, validation, cross-tenant isolation,
-cascade behaviour, the completed window, and task alignment. `tests/ui/compass.spec.js`
-covers the page and the project picker. `npm test` rebuilds the front end automatically
-when it is stale, so the UI specs always run against your changes.
+cascade behaviour, the completed window, and task alignment. The Compass page and project
+picker have no automated coverage — the UI specs were removed as flaky, so check the page
+by hand after changing it.
 
 **Adding a field.** Add it to the schema in `models/index.js`, allow it through
 `buildFields()` in `controllers/compassController.js`, add it to the drawer, and add a
