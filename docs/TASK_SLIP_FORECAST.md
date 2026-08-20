@@ -19,19 +19,13 @@ Select a visible control to open **What if?**. The panel lists each moved downst
 
 One chip answers "what if I lose *this* slot?". To ask "what if I lose *all of these* slots?", start from that same answer: open any task's forecast, then use the **+ add** button that appears in every other scheduled task's control slot to add its slot to the question.
 
-![A single-slot forecast, with + add on every other task](images/multi-slot-what-if/01-single-slot-forecast.png)
-
 The task you started from keeps its own `slot blocked → …` chip, so you never lose sight of its individual result and can select it again to close the panel. Added tasks show **✓ added** and can be removed the same way.
 
 Every task name in the panel — the heading, the list of selected slots, and each cascade row — truncates when it is too long for the sidebar. Hover any of them to see the full name.
 
 With more than one slot selected, the panel asks **What if these N slots are all lost?** and offers **Analyze N slots together**. Until you select it, no numbers are shown — a single-slot cascade under a multi-slot heading would answer a question you did not ask.
 
-![Two slots selected, ready to analyze](images/multi-slot-what-if/02-two-slots-selected.png)
-
 The result is the same **What if?** panel: the same moved/newly-late summary, the same `current day → forecast day` cascade, and the same sidebar highlighting. Every selected task is a premise, so all of them are highlighted and none of them appear as cascade rows.
-
-![The combined forecast for both slots](images/multi-slot-what-if/03-combined-forecast.png)
 
 Adding or removing a slot afterwards discards the displayed result, because it described the previous selection; select **Analyze** again for the new one. Closing the panel clears the whole selection and restores the ordinary chips.
 
@@ -133,5 +127,3 @@ On the same `slipuser` seed, blocking the first task's Monday 10:00–13:30 slot
 This was verified by hand: taking the combined forecast, then creating two real calendar events over exactly those baseline slots and running **Schedule Tasks** again, reproduced the same moved task ids, the same first and final placement for every task, and the same newly-late set.
 
 There is no automated spec for the multi-slot path yet. The single-slot examples above remain covered by `tests/ui/calendar.spec.js`.
-
-![The real calendar after blocking both slots](images/multi-slot-what-if/04-real-reschedule-matches.png)
