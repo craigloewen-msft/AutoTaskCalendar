@@ -9,7 +9,11 @@ const {
     generateTaskEvents,
 } = require('../controllers/taskController');
 const { validateRecurrence, normaliseRecurrence, expandRecurrences } = require('../controllers/recurrence');
-const { SCHEDULING_HORIZON_DAYS } = require('../controllers/scheduling');
+const {
+    SCHEDULING_HORIZON_DAYS,
+    MAX_BLOCKED_SLOT_SELECTION,
+    analyzeBlockedSlots,
+} = require('../controllers/scheduling');
 const { parseDateOnly } = require('../utils/temporal');
 const { createCompletedTaskReport } = require('../controllers/completedTaskExport');
 const {
@@ -521,6 +525,36 @@ function createTaskRoutes(config, authenticateSession) {
         }
     });
 
+
+    // Combined blocked-slot what-if. Read-only: it replays the saved schedule and writes nothing.
+    router.post('/analyzeBlockedSlots', authenticateSession, async (req, res) => {
+        try {
+            if (!req.user) {
+                return res.send(returnFailure('Not logged in'));
+            }
+            const user = await UserDetails.findOne({ username: req.user.username });
+            if (!user) {
+                return res.send(returnFailure('Not logged in'));
+            }
+
+            const { taskIds } = req.body;
+            if (!Array.isArray(taskIds) || !taskIds.length) {
+                return res.send(returnFailure('Select at least one scheduled task'));
+            }
+            if (taskIds.length > MAX_BLOCKED_SLOT_SELECTION) {
+                return res.send(returnFailure(
+                    `Select at most ${MAX_BLOCKED_SLOT_SELECTION} tasks`
+                ));
+            }
+
+            const { forecast, error } = await analyzeBlockedSlots(user, taskIds);
+            if (error) return res.send(returnFailure(error));
+            return res.json({ success: true, forecast });
+        } catch (error) {
+            console.error(error);
+            return res.json({ success: false });
+        }
+    });
 
     router.post('/setFollowUp', authenticateSession, async (req, res) => {
         let user = await UserDetails.findOne({ username: req.user.username });

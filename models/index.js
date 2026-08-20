@@ -34,6 +34,8 @@ const UserDetail = new Schema({
     password: String,
     email: String,
     lastLoginDate: Date,
+    // When the current generated schedule was calculated; blocked-slot forecasts replay from it.
+    lastScheduleRunAt: { type: Date, default: null },
     // Site administrator. Granted only by editing the database; nothing in the app sets it.
     isAdmin: { type: Boolean, default: false },
     // Deprecated compatibility fields. Migrated users use timezone-aware wall-clock values.
