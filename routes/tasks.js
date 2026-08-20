@@ -529,8 +529,11 @@ function createTaskRoutes(config, authenticateSession) {
     // Combined blocked-slot what-if. Read-only: it replays the saved schedule and writes nothing.
     router.post('/analyzeBlockedSlots', authenticateSession, async (req, res) => {
         try {
+            if (!req.user) {
+                return res.send(returnFailure('Not logged in'));
+            }
             const user = await UserDetails.findOne({ username: req.user.username });
-            if (!req.user || !user) {
+            if (!user) {
                 return res.send(returnFailure('Not logged in'));
             }
 

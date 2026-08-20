@@ -96,7 +96,7 @@ async function loadPlanningInput(user, currentTime = new Date()) {
     };
 }
 
-async function persistPlan(plan, user) {
+async function persistPlan(plan, user, scheduleStart) {
     if (plan.placements.length) {
         await EventDetails.insertMany(plan.placements.map((placement) => ({
             title: placement.title,
@@ -116,6 +116,13 @@ async function persistPlan(plan, user) {
         },
     }));
     if (updates.length) await TaskDetails.bulkWrite(updates);
+
+    // Published with the schedule it describes: forecasts replay from this instant.
+    await UserDetails.updateOne(
+        { _id: user._id },
+        { $set: { lastScheduleRunAt: scheduleStart } }
+    );
+    user.lastScheduleRunAt = scheduleStart;
 }
 
 async function generateTaskEvents(user) {
@@ -140,12 +147,7 @@ async function generateTaskEvents(user) {
     if (plan.reachedLimit) {
         console.error('Task scheduling loop limit reached. Remaining tasks:', plan.unscheduledTaskIds.length);
     }
-    await persistPlan(plan, user);
-    // Forecasts replay this run, so remember the instant its capacity was measured from.
-    await UserDetails.updateOne(
-        { _id: user._id },
-        { $set: { lastScheduleRunAt: input.currentTime } }
-    );
+    await persistPlan(plan, user, input.currentTime);
     await cacheBlockedSlotForecasts(user, input.currentTime);
 }
 
@@ -296,8 +298,12 @@ async function calculateBlockedSlotForecasts(user, requestedTaskIds, scheduleSta
     const impacts = {};
 
     for (const selectedId of ids) {
-        const result = simulateBlockedSlots(context, [selectedId], user);
-        impacts[selectedId] = { ...result, selectedTaskId: selectedId };
+        const { movedCount, newlyLateCount, affected } = simulateBlockedSlots(
+            context,
+            [selectedId],
+            user
+        );
+        impacts[selectedId] = { selectedTaskId: selectedId, movedCount, newlyLateCount, affected };
         await yieldToEventLoop();
     }
 
@@ -306,28 +312,43 @@ async function calculateBlockedSlotForecasts(user, requestedTaskIds, scheduleSta
 
 /**
  * On-demand combined forecast. Reads the saved schedule and writes nothing.
+ *
+ * Replanning is synchronous and unbounded by design, so one analysis per user at a time:
+ * a user holding the event loop for everyone else is not worth the extra concurrency.
  */
+const analysisInFlight = new Set();
+
 async function analyzeBlockedSlots(user, requestedTaskIds) {
     if (!user.lastScheduleRunAt) {
         return { error: 'Run Schedule Tasks first to analyze blocked slots' };
     }
 
-    const context = await loadForecastContext(user, user.lastScheduleRunAt);
-    // Only the caller's own scheduled tasks are honoured, so an id alone reveals nothing.
-    const selectedTaskIds = [...new Set(requestedTaskIds.map(String))]
-        .filter((id) => context.taskById.has(id) && context.baselineByTask.has(id));
-    if (!selectedTaskIds.length) {
-        return { error: 'Select at least one scheduled task' };
+    const userKey = user._id.toString();
+    if (analysisInFlight.has(userKey)) {
+        return { error: 'An analysis is already running; try again in a moment' };
     }
+    analysisInFlight.add(userKey);
 
-    const result = simulateBlockedSlots(context, selectedTaskIds, user);
-    return {
-        forecast: {
-            ...result,
-            selectedTitles: selectedTaskIds.map((id) => context.taskById.get(id).title),
-            calculatedAt: new Date().toISOString(),
-        },
-    };
+    try {
+        const context = await loadForecastContext(user, user.lastScheduleRunAt);
+        // Only the caller's own scheduled tasks are honoured, so an id alone reveals nothing.
+        const selectedTaskIds = [...new Set(requestedTaskIds.map(String))]
+            .filter((id) => context.taskById.has(id) && context.baselineByTask.has(id));
+        if (!selectedTaskIds.length) {
+            return { error: 'Select at least one scheduled task' };
+        }
+
+        const result = simulateBlockedSlots(context, selectedTaskIds, user);
+        return {
+            forecast: {
+                ...result,
+                selectedTitles: selectedTaskIds.map((id) => context.taskById.get(id).title),
+                calculatedAt: new Date().toISOString(),
+            },
+        };
+    } finally {
+        analysisInFlight.delete(userKey);
+    }
 }
 
 async function cacheBlockedSlotForecasts(user, scheduleStart = new Date()) {

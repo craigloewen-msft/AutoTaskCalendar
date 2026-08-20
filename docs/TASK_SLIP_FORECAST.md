@@ -97,7 +97,8 @@ Opening, closing, or reloading a forecast only reads the task object already in 
 
 - A forecast requires a generated schedule. Backlog and currently unscheduled tasks have no control and cannot be selected for comparison.
 - **Schedule Tasks** calculates forecasts for the current 21-day sidebar window; run it again to refresh the schedule or bring a later window into the cache.
-- A combined analysis accepts at most ten tasks at once.
+- A combined analysis accepts at most ten tasks at once, and one analysis runs at a time per user.
+- A combined analysis reflects the schedule as it was generated. Tasks completed or deleted since that run are dropped from the comparison, so re-run **Schedule Tasks** after changing your work if you want the analysis to match what you see.
 - It models the selected tasks as wholly uncompleted. It does not predict partial manual progress or future calendar changes beyond the synthetic blockers.
 - The simulation uses the same 60-day placement horizon as normal scheduling.
 
