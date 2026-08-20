@@ -324,6 +324,96 @@ test.describe('calendar page', () => {
         expect(oracle.affected.map(({ taskId }) => taskId)).not.toContain(firstTask._id.toString());
     });
 
+    /**
+     * The bug this locks down: with several slots selected the panel listed only downstream
+     * tasks, hiding the selected tasks' own (usually much larger) moves.
+     */
+    test('shows where every selected task lands when several slots are analyzed together', async ({
+        seed,
+        page,
+    }, testInfo) => {
+        const data = await seed();
+        const { capacityTasks, dates } = data.slip;
+
+        await page.goto('/#/login');
+        await page.fill('input[name="username"]', data.slip.username);
+        await page.fill('input[name="password"]', data.slip.password);
+        await page.click('button:has-text("Sign in")');
+        await page.waitForURL(/#\/user\//);
+        await page.setViewportSize({ width: 1440, height: 1600 });
+        await page.clock.install({ time: new Date(`${dates.capacityMonday}T08:00:00.000Z`) });
+
+        await page.goto('/#/calendar');
+        await page.getByRole('button', { name: 'Schedule tasks' }).click();
+
+        const origin = capacityTasks[0];
+        const added = capacityTasks.slice(1, 4);
+        const selected = [origin, ...added];
+
+        await page.locator(`[data-test="slip-impact-chip-${origin._id}"]`).click();
+        const panel = page.locator('[data-test=slip-forecast-panel]');
+        await expect(panel).toBeVisible();
+
+        for (const task of added) {
+            await page.locator(`[data-test="slot-select-${task._id}"]`).click();
+        }
+        await expect(panel.locator('[data-test=compare-selection-count]')).toContainText(
+            `${selected.length} slots selected`
+        );
+
+        // Until Analyze runs, no numbers are shown for a selection nobody asked about yet.
+        await expect(panel.locator('[data-test=forecast-selected-slots]')).toHaveCount(0);
+
+        await Promise.all([
+            page.waitForResponse((response) => response.url().includes('/api/analyzeBlockedSlots')),
+            panel.locator('[data-test=analyze-slots]').click(),
+        ]);
+
+        // Every selected slot now has its own row showing where that task actually lands.
+        const selectedSection = panel.locator('[data-test=forecast-selected-slots]');
+        await expect(selectedSection).toBeVisible();
+        for (const task of selected) {
+            const row = panel.locator(`[data-test="slip-premise-${task._id}"]`);
+            await expect(row).toHaveCount(1);
+            await expect(row).toContainText(task.title);
+            await expect(row).not.toHaveAttribute('data-baseline-date', '');
+        }
+
+        // The downstream cascade still excludes them, so the two lists never double-count.
+        for (const task of selected) {
+            await expect(panel.locator(`[data-test="slip-impact-${task._id}"]`)).toHaveCount(0);
+        }
+
+        // The whole answer is both lists: the old panel showed only the smaller one.
+        const premiseRows = await panel.locator('[data-test^=slip-premise-]').count();
+        const downstreamRows = await panel.locator('[data-test^=slip-impact-]').count();
+        expect(premiseRows).toBe(selected.length);
+        expect(premiseRows + downstreamRows).toBeGreaterThan(downstreamRows);
+
+        await testInfo.attach('multi-slot-selected-and-downstream', {
+            body: await panel.screenshot(),
+            contentType: 'image/png',
+        });
+
+        // Still read-only: analyzing must not touch the saved schedule.
+        const afterAnalyze = await withDb(async () => {
+            const events = await EventDetails.find({ userRef: data.slip.user._id })
+                .sort({ startDate: 1, title: 1 });
+            return events.map(
+                (event) => `${event._id}:${event.startDate.toISOString()}:${event.endDate.toISOString()}`
+            );
+        });
+        await page.reload();
+        const afterReload = await withDb(async () => {
+            const events = await EventDetails.find({ userRef: data.slip.user._id })
+                .sort({ startDate: 1, title: 1 });
+            return events.map(
+                (event) => `${event._id}:${event.startDate.toISOString()}:${event.endDate.toISOString()}`
+            );
+        });
+        expect(afterReload).toEqual(afterAnalyze);
+    });
+
     test('counts only downstream tasks scheduled past their due dates as late', async ({
         seed,
         page,

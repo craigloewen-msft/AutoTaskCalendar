@@ -286,4 +286,74 @@ test.describe('scheduling', () => {
             );
         }
     });
+
+    /**
+     * A multi-slot analysis must report where the SELECTED tasks land, not just the
+     * downstream fallout. Blocking several slots pushes the premise tasks themselves days
+     * later, so reporting only downstream movement understates the damage badly.
+     */
+    test('reports where every selected task lands in a multi-slot blocked-slot analysis', async ({
+        seed,
+        loginAs,
+    }) => {
+        const data = await seed();
+        const api = await loginAs(data.slip.username, data.slip.password);
+        await schedule(api);
+
+        const selectedIds = data.slip.capacityTasks.slice(0, 3).map((task) => task._id.toString());
+        const body = await (await api.post('/api/analyzeBlockedSlots', {
+            data: { taskIds: selectedIds },
+        })).json();
+
+        expect(body.success).toBe(true);
+        const { forecast } = body;
+
+        // Every selected slot is accounted for, in the order it was asked about.
+        expect(forecast.selectedImpacts.map((impact) => impact.taskId)).toEqual(selectedIds);
+        for (const impact of forecast.selectedImpacts) {
+            expect(impact.baselineDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+            expect(impact.forecastDate || impact.unscheduled).toBeTruthy();
+        }
+
+        // The premise stays out of the downstream cascade and out of both totals.
+        const affectedIds = forecast.affected.map((impact) => impact.taskId);
+        for (const id of selectedIds) expect(affectedIds).not.toContain(id);
+        expect(forecast.movedCount).toBe(forecast.affected.length);
+        expect(forecast.newlyLateCount).toBe(
+            forecast.affected.filter((impact) => impact.newlyLate).length
+        );
+
+        // Blocking three of this seed's five daily slots must move the premise tasks.
+        expect(forecast.selectedImpacts.filter((impact) => impact.moved).length)
+            .toBeGreaterThan(0);
+    });
+
+    test('a single-task analysis still matches that task\'s cached chip', async ({
+        seed,
+        loginAs,
+    }) => {
+        const data = await seed();
+        const api = await loginAs(data.slip.username, data.slip.password);
+        await schedule(api);
+
+        const target = data.slip.capacityTasks[0];
+        const body = await (await api.post('/api/analyzeBlockedSlots', {
+            data: { taskIds: [target._id.toString()] },
+        })).json();
+        expect(body.success).toBe(true);
+
+        const cached = await withDb(async () => (
+            (await TaskDetails.findById(target._id)).slipForecast
+        ));
+
+        expect(body.forecast.movedCount).toBe(cached.movedCount);
+        expect(body.forecast.newlyLateCount).toBe(cached.newlyLateCount);
+        expect(body.forecast.affected.map((impact) => impact.taskId))
+            .toEqual(cached.affected.map((impact) => impact.taskId.toString()));
+        // The cached chip carries the premise row too, so both panels tell the same story.
+        expect(body.forecast.selectedImpacts.map((impact) => impact.taskId))
+            .toEqual(cached.selectedImpacts.map((impact) => impact.taskId.toString()));
+        expect(cached.selectedImpacts.map((impact) => impact.taskId.toString()))
+            .toEqual([target._id.toString()]);
+    });
 });

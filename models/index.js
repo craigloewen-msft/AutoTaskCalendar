@@ -98,6 +98,8 @@ const TaskSlipForecast = new Schema({
     movedCount: Number,
     newlyLateCount: Number,
     affected: [SlipForecastImpact],
+    // Where the blocked task itself lands. The premise, so it is excluded from the counts.
+    selectedImpacts: [SlipForecastImpact],
     calculatedAt: Date,
 }, { _id: false });
 

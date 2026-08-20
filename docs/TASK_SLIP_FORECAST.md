@@ -13,7 +13,7 @@ When a valid cached forecast moves downstream work, a **`slot blocked → …`**
 
 No control is shown when the task has no valid scheduled date, has no cached forecast, or has no downstream movement or deadline impact. This absence does not claim that an unavailable calculation is safe.
 
-Select a visible control to open **What if?**. The panel lists each moved downstream task as `current day → forecast day`, marks newly late rows, and highlights the selected, moved, and newly late tasks in the sidebar. The selected task is highlighted separately and is not a cascade row. Select the close button or the same control again to dismiss it.
+Select a visible control to open **What if?**. The panel has two lists: **Selected slots**, showing where each blocked task itself would land, and **Downstream**, showing each moved downstream task as `current day → forecast day`. Both mark newly late rows, and the selected, moved, and newly late tasks are highlighted in the sidebar. Select the close button or the same control again to dismiss it.
 
 ## Analyze several slots together
 
@@ -25,7 +25,9 @@ Every task name in the panel — the heading, the list of selected slots, and ea
 
 With more than one slot selected, the panel asks **What if these N slots are all lost?** and offers **Analyze N slots together**. Until you select it, no numbers are shown — a single-slot cascade under a multi-slot heading would answer a question you did not ask.
 
-The result is the same **What if?** panel: the same moved/newly-late summary, the same `current day → forecast day` cascade, and the same sidebar highlighting. Every selected task is a premise, so all of them are highlighted and none of them appear as cascade rows.
+The result is the same **What if?** panel: the same moved/newly-late summary, the same `current day → forecast day` lists, and the same sidebar highlighting. Every selected task is a premise, so all of them are highlighted and all of them appear under **Selected slots** rather than in the downstream cascade.
+
+Read both lists together. Blocking several slots usually pushes the selected tasks themselves much further than anything downstream, so the downstream count alone understates what you are about to lose.
 
 Adding or removing a slot afterwards discards the displayed result, because it described the previous selection; select **Analyze** again for the new one. Closing the panel clears the whole selection and restores the ordinary chips.
 
@@ -73,9 +75,12 @@ Existing late work may move later and appears in the cascade, but it is not coun
 The panel reports:
 
 - **downstream tasks move later** — non-selected tasks whose placement changes or disappears;
-- **newly miss deadlines** — the subset whose final completion crosses from on time to after its due date.
+- **newly miss deadlines** — the subset whose final completion crosses from on time to after its due date;
+- **selected tasks move too** — how many of the blocked tasks themselves move, and how many of those miss their deadlines.
 
-The selected task remains in the scheduler queue and consumes capacity in its new placement. Its own movement and deadline state are excluded from both totals because they are the premise rather than a downstream effect. A single isolated task therefore has no visible control when blocking its slot harms no other task. When several tasks are selected, every one of them is a premise and is excluded the same way.
+The selected task remains in the scheduler queue and consumes capacity in its new placement. Its own movement and deadline state are excluded from the two downstream totals because they are the premise rather than a downstream effect, and are reported separately instead. A single isolated task therefore has no visible control when blocking its slot harms no other task. When several tasks are selected, every one of them is a premise and is treated the same way.
+
+A selected task can miss its own deadline in the rerun. That is shown on its **Selected slots** row and in its own count, and it is deliberately not folded into **newly miss deadlines**, which stays a measure of collateral damage.
 
 ## Data flow
 
@@ -91,7 +96,7 @@ Calendar receives the forecast through the normal `GET /api/getUserTasks` payloa
 
 `controllers/schedulePlanner.js` is the pure placement engine. It receives tasks, conflicts, user work settings, a start instant, and a horizon, then returns placements without accessing MongoDB.
 
-`controllers/scheduling.js` uses that same engine for the real schedule and blocked-slot simulations. `loadForecastContext()` reads the baseline once and `simulateBlockedSlots()` blocks every placement of every selected task before replanning, so the cached single-task chips and an on-demand combined analysis are the same calculation with a different premise size. `generateTaskEvents()` expands recurrence, replaces generated placements, persists `scheduledDate` and `lastScheduleRunAt`, calculates the visible-window simulations, and caches their summaries as one scheduling operation. Eligibility and recurrence-expiry calculations are cached only for that forecast operation and discarded afterward.
+`controllers/scheduling.js` uses that same engine for the real schedule and blocked-slot simulations. `loadForecastContext()` reads the baseline once and `simulateBlockedSlots()` blocks every placement of every selected task before replanning, so the cached single-task chips and an on-demand combined analysis are the same calculation with a different premise size. It returns the downstream cascade as `affected` and the premise outcomes as `selectedImpacts`, which is why the panel can show where the blocked tasks land without counting them as collateral. `generateTaskEvents()` expands recurrence, replaces generated placements, persists `scheduledDate` and `lastScheduleRunAt`, calculates the visible-window simulations, and caches their summaries as one scheduling operation. Eligibility and recurrence-expiry calculations are cached only for that forecast operation and discarded afterward.
 
 Opening, closing, or reloading a forecast only reads the task object already in Calendar. **Analyze** invokes the planner in memory but writes nothing. Press **Schedule Tasks** whenever inputs change and you want both the visible schedule and forecasts refreshed.
 
@@ -126,4 +131,4 @@ On the same `slipuser` seed, blocking the first task's Monday 10:00–13:30 slot
 
 This was verified by hand: taking the combined forecast, then creating two real calendar events over exactly those baseline slots and running **Schedule Tasks** again, reproduced the same moved task ids, the same first and final placement for every task, and the same newly-late set.
 
-There is no automated spec for the multi-slot path yet. The single-slot examples above remain covered by `tests/ui/calendar.spec.js`.
+`tests/ui/calendar.spec.js` covers the multi-slot panel: it selects several slots, analyzes them, and verifies every selected task gets its own row, that none of them leak into the downstream cascade, and that analyzing writes nothing. `tests/api/scheduling.spec.js` covers the endpoint contract, including that a single-task request still matches that task's cached chip.

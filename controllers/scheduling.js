@@ -272,22 +272,29 @@ function simulateBlockedSlots(context, selectedTaskIds, user) {
         taskTemporalCache: context.taskTemporalCache,
     });
     const forecastByTask = plannedPlacementSummary(plan.placements);
+    const impactFor = (id) => serializeImpact(
+        context.taskById.get(id),
+        context.baselineByTask.get(id),
+        forecastByTask.get(id),
+        user.timeZone
+    );
     // Selected tasks are the premise: they stay in the queue but never count as downstream.
     const affected = context.baselineTaskIds
         .filter((id) => !selectedIds.has(id) && context.taskById.has(id))
-        .map((id) => serializeImpact(
-            context.taskById.get(id),
-            context.baselineByTask.get(id),
-            forecastByTask.get(id),
-            user.timeZone
-        ))
+        .map(impactFor)
         .filter((impact) => impact.moved);
+    // The premise moves too, and with several slots that is most of the answer. Reported
+    // separately in selection order so it is never mistaken for downstream damage.
+    const selectedImpacts = [...selectedIds]
+        .filter((id) => context.taskById.has(id) && context.baselineByTask.has(id))
+        .map(impactFor);
 
     return {
         selectedTaskIds: [...selectedIds],
         movedCount: affected.length,
         newlyLateCount: affected.filter((impact) => impact.newlyLate).length,
         affected,
+        selectedImpacts,
     };
 }
 
@@ -298,12 +305,18 @@ async function calculateBlockedSlotForecasts(user, requestedTaskIds, scheduleSta
     const impacts = {};
 
     for (const selectedId of ids) {
-        const { movedCount, newlyLateCount, affected } = simulateBlockedSlots(
+        const { movedCount, newlyLateCount, affected, selectedImpacts } = simulateBlockedSlots(
             context,
             [selectedId],
             user
         );
-        impacts[selectedId] = { selectedTaskId: selectedId, movedCount, newlyLateCount, affected };
+        impacts[selectedId] = {
+            selectedTaskId: selectedId,
+            movedCount,
+            newlyLateCount,
+            affected,
+            selectedImpacts,
+        };
         await yieldToEventLoop();
     }
 
@@ -376,6 +389,7 @@ async function cacheBlockedSlotForecasts(user, scheduleStart = new Date()) {
                         movedCount: impacts[taskId].movedCount,
                         newlyLateCount: impacts[taskId].newlyLateCount,
                         affected: impacts[taskId].affected,
+                        selectedImpacts: impacts[taskId].selectedImpacts,
                         calculatedAt,
                     },
                 },

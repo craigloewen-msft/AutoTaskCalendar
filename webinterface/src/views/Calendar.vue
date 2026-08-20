@@ -75,6 +75,25 @@
                     : "newly miss deadlines" }}
                 </strong>
               </p>
+              <p
+                v-if="activeForecast && movedPremiseCount"
+                class="forecast-summary forecast-selected-summary"
+                data-test="slip-selected-summary"
+              >
+                <strong>
+                  {{ movedPremiseCount }} selected
+                  {{ movedPremiseCount === 1 ? "task moves" : "tasks move" }} too
+                </strong>
+                <template v-if="latePremiseCount">
+                  <span>·</span>
+                  <strong class="danger">
+                    {{ latePremiseCount }}
+                    {{ latePremiseCount === 1
+                      ? "misses its deadline"
+                      : "miss their deadlines" }}
+                  </strong>
+                </template>
+              </p>
               <p class="forecast-assumption">
                 {{ premiseIds.length > 1
                   ? "Other events fill every selected task's planned time, then all incomplete tasks are scheduled again. Nothing is saved."
@@ -99,25 +118,57 @@
                   Use “+ add” on another task to add its slot.
                 </span>
               </div>
-              <ol v-if="activeForecast" class="forecast-cascade">
-                <li
-                  v-for="impact in activeForecast.affected"
-                  :key="impact.taskId"
-                  :class="{ 'newly-late': impact.newlyLate }"
-                  :data-test="`slip-impact-${impact.taskId}`"
-                  :data-baseline-date="impact.baselineDate"
-                  :data-forecast-date="impact.forecastDate || 'unscheduled'"
-                >
-                  <span class="cascade-marker" aria-hidden="true"></span>
-                  <span class="cascade-task" :title="impact.title">{{ impact.title }}</span>
-                  <span class="cascade-dates">
-                    {{ forecastDateLabel(impact.baselineDate) }}
-                    <span aria-hidden="true">→</span>
-                    {{ forecastDateLabel(impact.forecastDate) || "Unscheduled" }}
-                    <strong v-if="impact.newlyLate">Late</strong>
-                  </span>
-                </li>
-              </ol>
+              <!-- The premise moves too. Shown separately: it is the question, not the damage. -->
+              <section
+                v-if="activeForecast && premiseImpacts.length"
+                class="forecast-section"
+                data-test="forecast-selected-slots"
+              >
+                <h5 class="forecast-section-title">
+                  {{ premiseImpacts.length === 1 ? "Selected slot" : "Selected slots" }}
+                </h5>
+                <ol class="forecast-cascade premise-cascade">
+                  <li
+                    v-for="impact in premiseImpacts"
+                    :key="impact.taskId"
+                    :class="{ 'newly-late': impact.newlyLate }"
+                    :data-test="`slip-premise-${impact.taskId}`"
+                    :data-baseline-date="impact.baselineDate"
+                    :data-forecast-date="impact.forecastDate || 'unscheduled'"
+                  >
+                    <span class="cascade-marker" aria-hidden="true"></span>
+                    <span class="cascade-task" :title="impact.title">{{ impact.title }}</span>
+                    <span class="cascade-dates">
+                      {{ forecastDateLabel(impact.baselineDate) }}
+                      <span aria-hidden="true">→</span>
+                      {{ forecastDateLabel(impact.forecastDate) || "Unscheduled" }}
+                      <strong v-if="impact.newlyLate">Late</strong>
+                    </span>
+                  </li>
+                </ol>
+              </section>
+              <section v-if="activeForecast && activeForecast.affected.length" class="forecast-section">
+                <h5 class="forecast-section-title">Downstream</h5>
+                <ol class="forecast-cascade">
+                  <li
+                    v-for="impact in activeForecast.affected"
+                    :key="impact.taskId"
+                    :class="{ 'newly-late': impact.newlyLate }"
+                    :data-test="`slip-impact-${impact.taskId}`"
+                    :data-baseline-date="impact.baselineDate"
+                    :data-forecast-date="impact.forecastDate || 'unscheduled'"
+                  >
+                    <span class="cascade-marker" aria-hidden="true"></span>
+                    <span class="cascade-task" :title="impact.title">{{ impact.title }}</span>
+                    <span class="cascade-dates">
+                      {{ forecastDateLabel(impact.baselineDate) }}
+                      <span aria-hidden="true">→</span>
+                      {{ forecastDateLabel(impact.forecastDate) || "Unscheduled" }}
+                      <strong v-if="impact.newlyLate">Late</strong>
+                    </span>
+                  </li>
+                </ol>
+              </section>
             </section>
             <div v-for="date in tasksDatesArray" :key="date" class="task-group">
               <h4 class="task-date-header">{{ date }}</h4>
@@ -137,6 +188,7 @@
                     'forecast-selected-task': isForecastPremise(task),
                     'forecast-moved-task': selectedImpactForTask(task)?.moved,
                     'forecast-newly-late-task': selectedImpactForTask(task)?.newlyLate
+                      || premiseImpactForTask(task)?.newlyLate
                   }"
                   v-on:click="openEditTaskModal(task)"
                 >
@@ -576,8 +628,12 @@ export default {
         this.comparisonLoading = false;
       }
     },
+    // Downstream collateral only. The premise is highlighted as a premise, not as collateral.
     selectedImpactForTask(task) {
       return this.activeForecast?.affected.find((impact) => impact.taskId === task?._id) || null;
+    },
+    premiseImpactForTask(task) {
+      return this.premiseImpacts.find((impact) => impact.taskId === task?._id) || null;
     },
     toggleSlipForecast(task) {
       const closing = this.selectedSlipForecastId === task._id && !this.comparisonSelection.length;
@@ -850,6 +906,16 @@ export default {
       if (this.comparisonForecast && !this.selectionIsStale) return this.comparisonForecast;
       if (this.premiseIds.length > 1) return null;
       return this.selectedSlipForecast;
+    },
+    // Where the blocked tasks themselves land. Absent on forecasts cached before this existed.
+    premiseImpacts() {
+      return this.activeForecast?.selectedImpacts || [];
+    },
+    movedPremiseCount() {
+      return this.premiseImpacts.filter((impact) => impact.moved).length;
+    },
+    latePremiseCount() {
+      return this.premiseImpacts.filter((impact) => impact.newlyLate).length;
     },
     forecastHeading() {
       const count = this.premiseIds.length;
@@ -1415,6 +1481,37 @@ export default {
   color: #9ca3af;
   font-size: 11px;
   line-height: 1.45;
+}
+
+.forecast-section {
+  margin: 0 0 14px;
+}
+
+.forecast-section:last-child {
+  margin-bottom: 0;
+}
+
+.forecast-section-title {
+  margin: 0 0 8px;
+  color: #9ca3af;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.forecast-selected-summary {
+  margin-top: -4px;
+}
+
+/* Premise rows are the question, not the collateral, so they read as outlines. */
+.premise-cascade .cascade-marker {
+  border-style: dashed;
+  background: #1f2937;
+}
+
+.premise-cascade li:not(:last-child)::after {
+  background: rgba(251, 191, 36, 0.18);
 }
 
 .forecast-cascade {
