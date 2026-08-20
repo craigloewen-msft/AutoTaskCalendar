@@ -1,6 +1,6 @@
 'use strict';
 
-const { TaskDetails, EventDetails } = require('../models');
+const { TaskDetails, EventDetails, UserDetails } = require('../models');
 const {
     DEFAULT_WHEN_UNSCHEDULABLE_BEHAVIOR,
     expandRecurrences,
@@ -25,6 +25,8 @@ const {
 const SCHEDULING_HORIZON_DAYS = 60;
 const FORECAST_WINDOW_DAYS = 21;
 const MAX_FORECAST_TASKS = 100;
+// One replan per selected task's slots is cheap, but the request is user-driven, so cap it.
+const MAX_BLOCKED_SLOT_SELECTION = 10;
 
 function incompleteTaskFilter(userId) {
     return {
@@ -139,6 +141,11 @@ async function generateTaskEvents(user) {
         console.error('Task scheduling loop limit reached. Remaining tasks:', plan.unscheduledTaskIds.length);
     }
     await persistPlan(plan, user);
+    // Forecasts replay this run, so remember the instant its capacity was measured from.
+    await UserDetails.updateOne(
+        { _id: user._id },
+        { $set: { lastScheduleRunAt: input.currentTime } }
+    );
     await cacheBlockedSlotForecasts(user, input.currentTime);
 }
 
@@ -202,9 +209,11 @@ function yieldToEventLoop() {
     return new Promise((resolve) => setImmediate(resolve));
 }
 
-async function calculateBlockedSlotForecasts(user, requestedTaskIds, scheduleStart) {
-    if (!requestedTaskIds.length) return { impacts: {} };
-    const ids = requestedTaskIds.map(String);
+/**
+ * Load everything a blocked-slot simulation reads, once. `scheduleStart` must be the instant
+ * the baseline schedule was generated from, or the comparison is against different capacity.
+ */
+async function loadForecastContext(user, scheduleStart) {
     const currentTime = new Date(scheduleStart);
     const horizon = schedulingHorizon(user, currentTime);
 
@@ -221,51 +230,104 @@ async function calculateBlockedSlotForecasts(user, requestedTaskIds, scheduleSta
             endDate: { $gte: currentTime },
         }).sort({ startDate: 1 }).lean(),
     ]);
-    const taskById = new Map(tasks.map((task) => [task._id.toString(), task]));
     const baselineByTask = placementSummary(baselineEvents);
-    const baselineTaskIds = [...baselineByTask.keys()];
-    const behaviorMap = await seriesBehaviorMap(tasks, user._id);
-    const taskTemporalCache = new Map();
+
+    return {
+        tasks,
+        taskById: new Map(tasks.map((task) => [task._id.toString(), task])),
+        baselineEvents,
+        baselineByTask,
+        baselineTaskIds: [...baselineByTask.keys()],
+        conflicts,
+        behaviorMap: await seriesBehaviorMap(tasks, user._id),
+        taskTemporalCache: new Map(),
+        currentTime,
+        horizon,
+    };
+}
+
+/**
+ * Block every generated placement of every selected task, replan the normal queue once, and
+ * diff against the baseline. One selected id reproduces the cached single-task forecast;
+ * several model losing all those slots together, which is not the union of the separate runs.
+ */
+function simulateBlockedSlots(context, selectedTaskIds, user) {
+    const selectedIds = new Set(selectedTaskIds.map(String));
+    const blockers = context.baselineEvents
+        .filter((event) => selectedIds.has(event.taskRef?.toString()))
+        .map((event) => ({
+            startDate: event.startDate,
+            endDate: event.endDate,
+            type: 'calendar',
+        }));
+    const plan = planTaskPlacements({
+        tasks: context.tasks,
+        events: [...context.conflicts, ...blockers],
+        user,
+        currentTime: context.currentTime,
+        schedulingHorizon: context.horizon,
+        seriesWhenUnschedulableBehaviorById: context.behaviorMap,
+        taskTemporalCache: context.taskTemporalCache,
+    });
+    const forecastByTask = plannedPlacementSummary(plan.placements);
+    // Selected tasks are the premise: they stay in the queue but never count as downstream.
+    const affected = context.baselineTaskIds
+        .filter((id) => !selectedIds.has(id) && context.taskById.has(id))
+        .map((id) => serializeImpact(
+            context.taskById.get(id),
+            context.baselineByTask.get(id),
+            forecastByTask.get(id),
+            user.timeZone
+        ))
+        .filter((impact) => impact.moved);
+
+    return {
+        selectedTaskIds: [...selectedIds],
+        movedCount: affected.length,
+        newlyLateCount: affected.filter((impact) => impact.newlyLate).length,
+        affected,
+    };
+}
+
+async function calculateBlockedSlotForecasts(user, requestedTaskIds, scheduleStart) {
+    if (!requestedTaskIds.length) return { impacts: {} };
+    const ids = requestedTaskIds.map(String);
+    const context = await loadForecastContext(user, scheduleStart);
     const impacts = {};
 
     for (const selectedId of ids) {
-        const selectedBlockers = baselineEvents
-            .filter((event) => event.taskRef?.toString() === selectedId)
-            .map((event) => ({
-                startDate: event.startDate,
-                endDate: event.endDate,
-                type: 'calendar',
-            }));
-        const plan = planTaskPlacements({
-            tasks,
-            events: [...conflicts, ...selectedBlockers],
-            user,
-            currentTime,
-            schedulingHorizon: horizon,
-            seriesWhenUnschedulableBehaviorById: behaviorMap,
-            taskTemporalCache,
-        });
-        const forecastByTask = plannedPlacementSummary(plan.placements);
-        const affected = baselineTaskIds
-            .filter((id) => id !== selectedId && taskById.has(id))
-            .map((id) => serializeImpact(
-                taskById.get(id),
-                baselineByTask.get(id),
-                forecastByTask.get(id),
-                user.timeZone
-            ))
-            .filter((impact) => impact.moved);
-
-        impacts[selectedId] = {
-            selectedTaskId: selectedId,
-            movedCount: affected.length,
-            newlyLateCount: affected.filter((impact) => impact.newlyLate).length,
-            affected,
-        };
+        const result = simulateBlockedSlots(context, [selectedId], user);
+        impacts[selectedId] = { ...result, selectedTaskId: selectedId };
         await yieldToEventLoop();
     }
 
     return { impacts };
+}
+
+/**
+ * On-demand combined forecast. Reads the saved schedule and writes nothing.
+ */
+async function analyzeBlockedSlots(user, requestedTaskIds) {
+    if (!user.lastScheduleRunAt) {
+        return { error: 'Run Schedule Tasks first to analyze blocked slots' };
+    }
+
+    const context = await loadForecastContext(user, user.lastScheduleRunAt);
+    // Only the caller's own scheduled tasks are honoured, so an id alone reveals nothing.
+    const selectedTaskIds = [...new Set(requestedTaskIds.map(String))]
+        .filter((id) => context.taskById.has(id) && context.baselineByTask.has(id));
+    if (!selectedTaskIds.length) {
+        return { error: 'Select at least one scheduled task' };
+    }
+
+    const result = simulateBlockedSlots(context, selectedTaskIds, user);
+    return {
+        forecast: {
+            ...result,
+            selectedTitles: selectedTaskIds.map((id) => context.taskById.get(id).title),
+            calculatedAt: new Date().toISOString(),
+        },
+    };
 }
 
 async function cacheBlockedSlotForecasts(user, scheduleStart = new Date()) {
@@ -305,8 +367,10 @@ async function cacheBlockedSlotForecasts(user, scheduleStart = new Date()) {
 
 module.exports = {
     generateTaskEvents,
+    analyzeBlockedSlots,
     SCHEDULING_HORIZON_DAYS,
     MAX_FORECAST_TASKS,
+    MAX_BLOCKED_SLOT_SELECTION,
     areDependenciesMet,
     validateNoCycles,
     findBestTaskForSlot,

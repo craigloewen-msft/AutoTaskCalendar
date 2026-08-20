@@ -324,6 +324,194 @@ test.describe('calendar page', () => {
         expect(oracle.affected.map(({ taskId }) => taskId)).not.toContain(firstTask._id.toString());
     });
 
+    test('analyzes several blocked slots together as one combined reschedule', async ({
+        seed,
+        page,
+    }, testInfo) => {
+        const data = await seed();
+        const { capacityTasks, dates } = data.slip;
+        const { capacityMonday, capacityFriday, recoveryMonday } = dates;
+        // Two Monday/Tuesday morning slots in a week with zero slack.
+        const [firstSelected, , secondSelected] = capacityTasks;
+        const selectedIds = [firstSelected._id.toString(), secondSelected._id.toString()];
+
+        await page.goto('/#/login');
+        await page.fill('input[name="username"]', data.slip.username);
+        await page.fill('input[name="password"]', data.slip.password);
+        await page.click('button:has-text("Sign in")');
+        await page.waitForURL(/#\/user\//);
+        await page.setViewportSize({ width: 1440, height: 1600 });
+        await page.clock.install({ time: new Date(`${capacityMonday}T08:00:00.000Z`) });
+
+        await page.goto('/#/calendar');
+        await Promise.all([
+            page.waitForResponse((response) => response.url().includes('/api/scheduletasks')),
+            page.getByRole('button', { name: 'Schedule tasks' }).click(),
+        ]);
+
+        const snapshot = async () => withDb(async () => {
+            const events = await EventDetails.find({
+                userRef: data.slip.user._id,
+                type: { $in: ['task', 'task-chunk'] },
+            }).sort({ startDate: 1 });
+            return events.map((event) => ({
+                taskId: event.taskRef.toString(),
+                startDate: event.startDate.toISOString(),
+                endDate: event.endDate.toISOString(),
+            }));
+        });
+        const taskState = async () => withDb(async () => {
+            const tasks = await TaskDetails.find({ userRef: data.slip.user._id })
+                .sort({ priority: 1 });
+            return tasks.map((task) => [
+                task._id.toString(),
+                task.scheduledDate?.toISOString(),
+                task.slipForecast?.calculatedAt?.toISOString(),
+            ].join(':'));
+        });
+
+        const baselineEvents = await snapshot();
+        const baselinePlacements = placementSummaries(baselineEvents);
+        const beforeTasks = await taskState();
+
+        // Each slot alone predicts a single newly late task; the pair must be worse.
+        const singleChip = page.locator(`[data-test="slip-impact-chip-${firstSelected._id}"]`);
+        await expect(singleChip).toHaveText('slot blocked → 1 late');
+        await singleChip.click();
+        await expect(page.locator('[data-test=slip-forecast-panel]')).toHaveAttribute(
+            'data-forecast-mode',
+            'single'
+        );
+        await testInfo.attach('single-slot-forecast', {
+            body: await page.locator('.task-controls').screenshot(),
+            contentType: 'image/png',
+        });
+
+        await page.locator('[data-test=compare-slots-toggle]').check();
+        await page.locator(`[data-test="compare-select-${firstSelected._id}"]`).check();
+        await page.locator(`[data-test="compare-select-${secondSelected._id}"]`).check();
+        await expect(page.locator('[data-test=compare-selection-count]')).toHaveText(
+            /2 slots selected/
+        );
+        await testInfo.attach('two-slots-selected', {
+            body: await page.locator('.task-controls').screenshot(),
+            contentType: 'image/png',
+        });
+
+        await Promise.all([
+            page.waitForResponse((response) => response.url().includes('/api/analyzeBlockedSlots')),
+            page.locator('[data-test=analyze-slots]').click(),
+        ]);
+        const panel = page.locator('[data-test=slip-forecast-panel]');
+        await expect(panel).toHaveAttribute('data-forecast-mode', 'combined');
+        const summary = panel.locator('[data-test=slip-forecast-summary]');
+        await expect(summary).toContainText('8 downstream tasks move later');
+        await expect(summary).toContainText('2 newly miss deadlines');
+        await expect(panel.locator('[data-test^=slip-impact-]')).toHaveCount(8);
+        await testInfo.attach('combined-slot-forecast', {
+            body: await page.locator('.task-controls').screenshot(),
+            contentType: 'image/png',
+        });
+
+        // Both premises are excluded from the cascade and highlighted as selected.
+        for (const taskId of selectedIds) {
+            await expect(panel.locator(`[data-test="slip-impact-${taskId}"]`)).toHaveCount(0);
+            await expect(page.locator(`[data-test="task-item-${taskId}"]`)).toHaveClass(
+                /forecast-selected-task/
+            );
+        }
+
+        const forecast = await page.evaluate(async (taskIds) => {
+            const response = await fetch('/api/analyzeBlockedSlots', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ taskIds }),
+            });
+            return (await response.json()).forecast;
+        }, selectedIds);
+        expect(forecast.movedCount).toBe(8);
+        expect(forecast.newlyLateCount).toBe(2);
+        expect(forecast.affected.map(({ taskId }) => taskId)).not.toContain(selectedIds[0]);
+        expect(forecast.affected.map(({ taskId }) => taskId)).not.toContain(selectedIds[1]);
+        // The last two tasks cross Friday; blocking either slot alone only loses one.
+        expect(forecast.affected.filter(({ newlyLate }) => newlyLate).map(({ taskId }) => taskId))
+            .toEqual(capacityTasks.slice(-2).map((task) => task._id.toString()));
+
+        expect(await snapshot()).toEqual(baselineEvents);
+        expect(await taskState()).toEqual(beforeTasks);
+
+        // Now do it for real: block exactly those two slots and reschedule.
+        for (const taskId of selectedIds) {
+            const slot = baselinePlacements.get(taskId);
+            const blocker = await page.request.post('/api/createEvent', {
+                data: {
+                    title: 'Unexpected blocked task slot',
+                    startDate: slot.first,
+                    endDate: slot.last,
+                },
+            });
+            expect((await blocker.json()).success).toBe(true);
+        }
+        await Promise.all([
+            page.waitForResponse((response) => response.url().includes('/api/scheduletasks')),
+            page.getByRole('button', { name: 'Schedule tasks' }).click(),
+        ]);
+
+        const actualEvents = await snapshot();
+        const actualPlacements = placementSummaries(actualEvents);
+        for (const taskId of selectedIds) {
+            const slot = baselinePlacements.get(taskId);
+            const blockerStart = new Date(slot.first).getTime();
+            const blockerEnd = new Date(slot.last).getTime();
+            for (const event of actualEvents) {
+                const overlaps = new Date(event.startDate).getTime() < blockerEnd
+                    && new Date(event.endDate).getTime() > blockerStart;
+                expect(overlaps, `${event.taskId} overlaps a blocked slot`).toBe(false);
+            }
+        }
+
+        const actualMovedIds = [...baselinePlacements.keys()]
+            .filter((taskId) => !selectedIds.includes(taskId))
+            .filter((taskId) => {
+                const baseline = baselinePlacements.get(taskId);
+                const actual = actualPlacements.get(taskId);
+                return !actual || actual.first !== baseline.first || actual.last !== baseline.last;
+            })
+            .sort();
+        expect(actualMovedIds).toEqual(forecast.affected.map(({ taskId }) => taskId).sort());
+
+        for (const impact of forecast.affected) {
+            const actual = actualPlacements.get(impact.taskId);
+            expect(actual?.first || null).toBe(impact.forecastStart);
+            expect(actual?.last || null).toBe(impact.forecastEnd);
+        }
+
+        const taskById = new Map(capacityTasks.map((task) => [task._id.toString(), task]));
+        const actualNewlyLateIds = actualMovedIds.filter((taskId) => {
+            const task = taskById.get(taskId);
+            return task
+                && !isLate(baselinePlacements.get(taskId), task.dueDate)
+                && isLate(actualPlacements.get(taskId), task.dueDate);
+        }).sort();
+        expect(actualNewlyLateIds).toEqual(
+            forecast.affected.filter(({ newlyLate }) => newlyLate).map(({ taskId }) => taskId).sort()
+        );
+        expect(actualNewlyLateIds).toEqual(
+            capacityTasks.slice(-2).map((task) => task._id.toString()).sort()
+        );
+        // The two newly late tasks really do land after the shared Friday due date.
+        for (const taskId of actualNewlyLateIds) {
+            expect(dateOnlyInZone(actualPlacements.get(taskId).last, 'UTC')).toBe(recoveryMonday);
+        }
+        expect(capacityFriday < recoveryMonday).toBe(true);
+
+        await testInfo.attach('combined-blockers-rescheduled-calendar', {
+            body: await page.locator('.calendar-page').screenshot(),
+            contentType: 'image/png',
+        });
+    });
+
     test('counts only downstream tasks scheduled past their due dates as late', async ({
         seed,
         page,

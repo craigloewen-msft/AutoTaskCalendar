@@ -27,16 +27,72 @@
             >
               {{ quickCompleteError }}
             </p>
+            <div class="compare-slots-controls">
+              <label class="compare-toggle">
+                <input
+                  type="checkbox"
+                  data-test="compare-slots-toggle"
+                  :checked="compareMode"
+                  @change="toggleCompareMode($event.target.checked)"
+                />
+                <span>Compare slots</span>
+              </label>
+              <span v-if="compareMode" class="compare-hint">
+                Tick scheduled tasks, then analyze losing all of those slots at once.
+              </span>
+            </div>
+            <div
+              v-if="compareMode"
+              class="compare-actions"
+              data-test="compare-actions"
+            >
+              <span data-test="compare-selection-count">
+                {{ comparisonSelection.length }}
+                {{ comparisonSelection.length === 1 ? "slot" : "slots" }} selected
+              </span>
+              <span class="compare-action-buttons">
+                <button
+                  class="compare-analyze"
+                  type="button"
+                  data-test="analyze-slots"
+                  :disabled="!comparisonSelection.length || comparisonLoading"
+                  @click="analyzeSelectedSlots"
+                >
+                  {{ comparisonLoading ? "Analyzing…" : "Analyze together" }}
+                </button>
+                <button
+                  class="compare-clear"
+                  type="button"
+                  data-test="clear-slots"
+                  :disabled="!comparisonSelection.length && !comparisonForecast"
+                  @click="clearComparison"
+                >
+                  Clear
+                </button>
+              </span>
+            </div>
+            <p
+              v-if="comparisonError"
+              class="quick-complete-error"
+              role="alert"
+              data-test="compare-error"
+            >
+              {{ comparisonError }}
+            </p>
             <section
-              v-if="selectedSlipForecast"
+              v-if="activeForecast"
               class="slip-forecast-panel"
               data-test="slip-forecast-panel"
+              :data-forecast-mode="comparisonForecast ? 'combined' : 'single'"
               aria-labelledby="slip-forecast-title"
             >
               <div class="slip-forecast-heading">
                 <div>
                   <span class="what-if-label">What if?</span>
-                  <h4 id="slip-forecast-title">“{{ selectedSlipForecastTitle }}” misses its planned slot</h4>
+                  <h4 id="slip-forecast-title">{{ forecastHeading }}</h4>
+                  <p v-if="comparisonForecast" class="forecast-premises" data-test="forecast-premises">
+                    {{ comparisonForecast.selectedTitles.join(" · ") }}
+                  </p>
                 </div>
                 <button
                   class="forecast-close"
@@ -49,24 +105,25 @@
               </div>
               <p class="forecast-summary" data-test="slip-forecast-summary">
                 <strong>
-                  {{ selectedSlipForecast.movedCount }} downstream
-                  {{ selectedSlipForecast.movedCount === 1 ? "task moves" : "tasks move" }} later
+                  {{ activeForecast.movedCount }} downstream
+                  {{ activeForecast.movedCount === 1 ? "task moves" : "tasks move" }} later
                 </strong>
                 <span>·</span>
-                <strong :class="{ danger: selectedSlipForecast.newlyLateCount }">
-                  {{ selectedSlipForecast.newlyLateCount }}
-                  {{ selectedSlipForecast.newlyLateCount === 1
+                <strong :class="{ danger: activeForecast.newlyLateCount }">
+                  {{ activeForecast.newlyLateCount }}
+                  {{ activeForecast.newlyLateCount === 1
                     ? "newly misses its deadline"
                     : "newly miss deadlines" }}
                 </strong>
               </p>
               <p class="forecast-assumption">
-                Another event fills this task's planned time, then all incomplete tasks are
-                scheduled again. Nothing is saved.
+                {{ comparisonForecast
+                  ? "Other events fill every selected task's planned time, then all incomplete tasks are scheduled again. Nothing is saved."
+                  : "Another event fills this task's planned time, then all incomplete tasks are scheduled again. Nothing is saved." }}
               </p>
               <ol class="forecast-cascade">
                 <li
-                  v-for="impact in selectedSlipForecast.affected"
+                  v-for="impact in activeForecast.affected"
                   :key="impact.taskId"
                   :class="{ 'newly-late': impact.newlyLate }"
                   :data-test="`slip-impact-${impact.taskId}`"
@@ -99,13 +156,26 @@
                     'due-that-day-task': !task.isBacklog &&
                       getTaskDaysBetweenDeadlineAndSchedule(task) == 0,
                     'backlog-task': task.isBacklog,
-                    'forecast-selected-task': selectedSlipForecastId === task._id,
+                    'forecast-selected-task': isForecastPremise(task),
                     'forecast-moved-task': selectedImpactForTask(task)?.moved,
                     'forecast-newly-late-task': selectedImpactForTask(task)?.newlyLate
                   }"
                   v-on:click="openEditTaskModal(task)"
                 >
                   <span class="task-primary-row">
+                    <label
+                      v-if="compareMode && canCompareTask(task)"
+                      class="compare-task-select"
+                      @click.stop
+                    >
+                      <input
+                        type="checkbox"
+                        :data-test="`compare-select-${task._id}`"
+                        :aria-label="`Include ${task.title}'s slot in the comparison`"
+                        :checked="comparisonSelection.includes(task._id)"
+                        @change="toggleComparisonSelection(task)"
+                      />
+                    </label>
                     <span class="task-title">
                       <span v-if="isRecurringTask(task)" class="recurring-icon" title="Part of a repeating series" role="img" aria-label="Repeating task">↻</span>
                       <span v-if="task.dependsOn && task.dependsOn.length > 0" class="dependency-icon" title="Has dependencies" role="img" aria-label="Has dependencies">🔗</span>
@@ -367,6 +437,12 @@ export default {
       quickCompleteError: "",
       slipForecasts: {},
       selectedSlipForecastId: null,
+      // Multi-slot comparison. Calculated on demand and never persisted.
+      compareMode: false,
+      comparisonSelection: [],
+      comparisonForecast: null,
+      comparisonLoading: false,
+      comparisonError: "",
       // Compass roles, nested with their goals and projects.
       compassRoles: [],
     };
@@ -466,10 +542,61 @@ export default {
     slipForecastFor(task) {
       return this.slipForecasts[task?._id] || null;
     },
+    canCompareTask(task) {
+      return !task?.isBacklog && this.hasValidScheduledDate(task);
+    },
+    isForecastPremise(task) {
+      if (this.comparisonForecast) return this.comparisonSelection.includes(task?._id);
+      return this.selectedSlipForecastId === task?._id;
+    },
+    toggleCompareMode(enabled) {
+      this.compareMode = enabled;
+      if (!enabled) this.clearComparison();
+    },
+    toggleComparisonSelection(task) {
+      const taskId = task?._id;
+      if (!taskId) return;
+      this.comparisonSelection = this.comparisonSelection.includes(taskId)
+        ? this.comparisonSelection.filter((id) => id !== taskId)
+        : [...this.comparisonSelection, taskId];
+      // A shown result describes the old selection, so it is no longer the answer.
+      this.comparisonForecast = null;
+      this.comparisonError = "";
+    },
+    clearComparison() {
+      this.comparisonSelection = [];
+      this.comparisonForecast = null;
+      this.comparisonError = "";
+    },
+    async analyzeSelectedSlots() {
+      if (!this.comparisonSelection.length || this.comparisonLoading) return;
+
+      this.comparisonLoading = true;
+      this.comparisonError = "";
+      try {
+        const response = await this.$http.post("/api/analyzeBlockedSlots", {
+          taskIds: this.comparisonSelection,
+        });
+        if (!response.data.success || !response.data.forecast) {
+          this.comparisonForecast = null;
+          this.comparisonError = response.data.log || "Those slots could not be analyzed.";
+          return;
+        }
+        this.comparisonForecast = response.data.forecast;
+        // One panel at a time: a combined result replaces any open single-task preview.
+        this.selectedSlipForecastId = null;
+      } catch (error) {
+        this.comparisonForecast = null;
+        this.comparisonError = "Those slots could not be analyzed.";
+      } finally {
+        this.comparisonLoading = false;
+      }
+    },
     selectedImpactForTask(task) {
-      return this.selectedSlipForecast?.affected.find((impact) => impact.taskId === task?._id) || null;
+      return this.activeForecast?.affected.find((impact) => impact.taskId === task?._id) || null;
     },
     toggleSlipForecast(task) {
+      this.comparisonForecast = null;
       this.selectedSlipForecastId = this.selectedSlipForecastId === task._id ? null : task._id;
     },
     clearSlipForecastSelection(restoreFocus = null) {
@@ -484,6 +611,10 @@ export default {
       });
     },
     closeSlipForecast() {
+      if (this.comparisonForecast) {
+        this.comparisonForecast = null;
+        return;
+      }
       this.clearSlipForecastSelection(true);
     },
     slipForecastAriaLabel(task) {
@@ -699,6 +830,19 @@ export default {
     },
     selectedSlipForecast() {
       return this.slipForecasts[this.selectedSlipForecastId] || null;
+    },
+    // The combined result wins while it is open; otherwise the cached single-task preview.
+    activeForecast() {
+      return this.comparisonForecast || this.selectedSlipForecast;
+    },
+    forecastHeading() {
+      if (!this.comparisonForecast) {
+        return `“${this.selectedSlipForecastTitle}” misses its planned slot`;
+      }
+      const count = this.comparisonForecast.selectedTitles.length;
+      return count === 1
+        ? "1 selected slot is lost"
+        : `These ${count} slots are all lost`;
     },
     selectedSlipForecastTitle() {
       return this.taskList?.find((task) => task._id === this.selectedSlipForecastId)?.title || "this task";
@@ -1074,6 +1218,99 @@ export default {
   margin: -8px 0 14px;
   color: #fca5a5;
   font-size: 13px;
+}
+
+.compare-slots-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  margin: -6px 0 12px;
+}
+
+.compare-toggle {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+  color: #d1d5db;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.compare-hint {
+  flex: 1 1 100%;
+  color: #9ca3af;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.compare-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 10px;
+  background: rgba(251, 191, 36, 0.07);
+  color: #e5e7eb;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.compare-action-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.compare-analyze,
+.compare-clear {
+  padding: 5px 10px;
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.16);
+  color: #fde68a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.compare-clear {
+  border-color: rgba(156, 163, 175, 0.35);
+  background: transparent;
+  color: #9ca3af;
+}
+
+.compare-analyze:hover:not(:disabled),
+.compare-clear:hover:not(:disabled),
+.compare-analyze:focus-visible,
+.compare-clear:focus-visible {
+  border-color: #fbbf24;
+  outline: none;
+  color: #fef3c7;
+}
+
+.compare-analyze:disabled,
+.compare-clear:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.compare-task-select {
+  display: flex;
+  align-items: center;
+  margin: 0 8px 0 0;
+  cursor: pointer;
+}
+
+.forecast-premises {
+  margin: 5px 0 0;
+  color: #fcd34d;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .slip-forecast-panel {
