@@ -17,15 +17,21 @@ Select a visible control to open **What if?**. The panel lists each moved downst
 
 ## Analyze several slots together
 
-One chip answers "what if I lose *this* slot?". To ask "what if I lose *all of these* slots?", turn on **Compare slots** above the task list, tick each scheduled task whose time you expect to lose, and select **Analyze together**.
+One chip answers "what if I lose *this* slot?". To ask "what if I lose *all of these* slots?", start from that same answer: open any task's forecast, then use the **+ compare** button that appears in every other scheduled task's control slot to add its slot to the question.
 
-The combined panel is the same **What if?** panel: the same moved/newly-late summary, the same `current day → forecast day` cascade, and the same sidebar highlighting. Every selected task is a premise, so all of them are highlighted and none of them appear as cascade rows.
+![A single-slot forecast, with + compare on every other task](images/multi-slot-what-if/01-single-slot-forecast.png)
 
-![Two scheduled slots ticked for comparison](images/multi-slot-what-if/02-two-slots-selected.png)
+The task you started from keeps its own `slot blocked → …` chip, so you never lose sight of its individual result and can select it again to close the panel. Added tasks show **✓ comparing** and can be removed the same way.
+
+With more than one slot selected, the panel asks **What if these N slots are all lost?** and offers **Analyze N slots together**. Until you select it, no numbers are shown — a single-slot cascade under a multi-slot heading would answer a question you did not ask.
+
+![Two slots selected, ready to analyze](images/multi-slot-what-if/02-two-slots-selected.png)
+
+The result is the same **What if?** panel: the same moved/newly-late summary, the same `current day → forecast day` cascade, and the same sidebar highlighting. Every selected task is a premise, so all of them are highlighted and none of them appear as cascade rows.
 
 ![The combined forecast for both slots](images/multi-slot-what-if/03-combined-forecast.png)
 
-Changing the selection clears the displayed result, because that result described the previous selection. Select **Analyze together** again for the new one. **Clear** empties the selection, and turning **Compare slots** off leaves the sidebar exactly as it was.
+Adding or removing a slot afterwards discards the displayed result, because it described the previous selection; select **Analyze** again for the new one. Closing the panel clears the whole selection and restores the ordinary chips.
 
 ### Combined impact is not the sum of the separate forecasts
 
@@ -41,7 +47,7 @@ Reading two chips and combining them by eye understates the damage. Analyze the 
 
 ### Why this one is calculated on demand
 
-There is one cached forecast per task, but one result per *combination* of tasks, so combinations cannot be precomputed. **Analyze together** calculates immediately through `POST /api/analyzeBlockedSlots` instead of reading a cached field.
+There is one cached forecast per task, but one result per *combination* of tasks, so combinations cannot be precomputed. **Analyze** calculates immediately through `POST /api/analyzeBlockedSlots` instead of reading a cached field.
 
 That calculation replays the last **Schedule Tasks** run, using the `lastScheduleRunAt` instant saved beside the schedule it describes. Starting anywhere else would measure different capacity and produce a diff that answers no real question. Before the first scheduling run there is nothing to replay, and the panel says so rather than guessing.
 
@@ -91,11 +97,11 @@ Calendar receives the forecast through the normal `GET /api/getUserTasks` payloa
 
 `controllers/scheduling.js` uses that same engine for the real schedule and blocked-slot simulations. `loadForecastContext()` reads the baseline once and `simulateBlockedSlots()` blocks every placement of every selected task before replanning, so the cached single-task chips and an on-demand combined analysis are the same calculation with a different premise size. `generateTaskEvents()` expands recurrence, replaces generated placements, persists `scheduledDate` and `lastScheduleRunAt`, calculates the visible-window simulations, and caches their summaries as one scheduling operation. Eligibility and recurrence-expiry calculations are cached only for that forecast operation and discarded afterward.
 
-Opening, closing, or reloading a forecast only reads the task object already in Calendar. **Analyze together** invokes the planner in memory but writes nothing. Press **Schedule Tasks** whenever inputs change and you want both the visible schedule and forecasts refreshed.
+Opening, closing, or reloading a forecast only reads the task object already in Calendar. **Analyze** invokes the planner in memory but writes nothing. Press **Schedule Tasks** whenever inputs change and you want both the visible schedule and forecasts refreshed.
 
 ## Limits
 
-- A forecast requires a generated schedule. Backlog and currently unscheduled tasks have no control and cannot be selected for comparison.
+- A forecast requires a generated schedule. Backlog and currently unscheduled tasks have no control and cannot be added to a comparison.
 - **Schedule Tasks** calculates forecasts for the current 21-day sidebar window; run it again to refresh the schedule or bring a later window into the cache.
 - A combined analysis accepts at most ten tasks at once, and one analysis runs at a time per user.
 - A combined analysis reflects the schedule as it was generated. Tasks completed or deleted since that run are dropped from the comparison, so re-run **Schedule Tasks** after changing your work if you want the analysis to match what you see.
@@ -122,7 +128,7 @@ Blocking the selected task's Monday 09:00–15:00 placement leaves one downstrea
 
 On the same `slipuser` seed, blocking the first task's Monday 10:00–13:30 slot and the third task's Tuesday 10:00–13:30 slot removes seven hours from a week with no slack. Each slot alone reports one newly late task; together they report **eight** downstream tasks moving and **two** newly late.
 
-`tests/ui/calendar.spec.js` selects both slots through **Compare slots**, records the combined forecast, then creates two real calendar events over exactly those baseline slots and runs **Schedule Tasks** again. The real rerun must agree on the moved task ids, every task's first and final placement, and the newly-late set, and no generated event may overlap either blocker. It also verifies that analyzing changed no task or event data.
+`tests/ui/calendar.spec.js` opens the first task's forecast, adds the third task's slot with **+ compare**, records the combined forecast, then creates two real calendar events over exactly those baseline slots and runs **Schedule Tasks** again. The real rerun must agree on the moved task ids, every task's first and final placement, and the newly-late set, and no generated event may overlap either blocker. It also verifies that the origin keeps its own chip, that selecting slots shows no numbers until analyzed, and that analyzing changed no task or event data.
 
 `tests/api/scheduling.spec.js` proves the two paths cannot drift: a one-id request to `POST /api/analyzeBlockedSlots` returns exactly that task's cached `slipForecast`, a two-id request reports strictly more newly late tasks, another user's task id is refused, an empty selection is refused, and a request before any scheduling run fails cleanly.
 

@@ -378,21 +378,30 @@ test.describe('calendar page', () => {
         const singleChip = page.locator(`[data-test="slip-impact-chip-${firstSelected._id}"]`);
         await expect(singleChip).toHaveText('slot blocked → 1 late');
         await singleChip.click();
-        await expect(page.locator('[data-test=slip-forecast-panel]')).toHaveAttribute(
-            'data-forecast-mode',
-            'single'
+        const panel = page.locator('[data-test=slip-forecast-panel]');
+        await expect(panel).toHaveAttribute('data-forecast-mode', 'single');
+        await expect(panel.locator('[data-test=slip-forecast-summary]')).toContainText(
+            '1 newly misses its deadline'
         );
         await testInfo.attach('single-slot-forecast', {
             body: await page.locator('.task-controls').screenshot(),
             contentType: 'image/png',
         });
 
-        await page.locator('[data-test=compare-slots-toggle]').check();
-        await page.locator(`[data-test="compare-select-${firstSelected._id}"]`).check();
-        await page.locator(`[data-test="compare-select-${secondSelected._id}"]`).check();
+        // Opening the forecast turns every other task's chip slot into its compare control,
+        // while the origin keeps the chip that opened the panel.
+        await expect(singleChip).toHaveText('slot blocked → 1 late');
+        await expect(page.locator(`[data-test="slot-select-${firstSelected._id}"]`)).toHaveCount(0);
+        const addSecond = page.locator(`[data-test="slot-select-${secondSelected._id}"]`);
+        await expect(addSecond).toHaveText('+ compare');
+        await addSecond.click();
+        await expect(addSecond).toHaveText('✓ comparing');
         await expect(page.locator('[data-test=compare-selection-count]')).toHaveText(
             /2 slots selected/
         );
+        // Two slots are selected but not yet analyzed, so no stale answer is shown.
+        await expect(panel).toHaveAttribute('data-forecast-mode', 'pending');
+        await expect(panel.locator('[data-test=slip-forecast-summary]')).toHaveCount(0);
         await testInfo.attach('two-slots-selected', {
             body: await page.locator('.task-controls').screenshot(),
             contentType: 'image/png',
@@ -402,7 +411,6 @@ test.describe('calendar page', () => {
             page.waitForResponse((response) => response.url().includes('/api/analyzeBlockedSlots')),
             page.locator('[data-test=analyze-slots]').click(),
         ]);
-        const panel = page.locator('[data-test=slip-forecast-panel]');
         await expect(panel).toHaveAttribute('data-forecast-mode', 'combined');
         const summary = panel.locator('[data-test=slip-forecast-summary]');
         await expect(summary).toContainText('8 downstream tasks move later');

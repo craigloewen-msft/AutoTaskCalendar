@@ -27,50 +27,6 @@
             >
               {{ quickCompleteError }}
             </p>
-            <div class="compare-slots-controls">
-              <label class="compare-toggle">
-                <input
-                  type="checkbox"
-                  data-test="compare-slots-toggle"
-                  :checked="compareMode"
-                  @change="toggleCompareMode($event.target.checked)"
-                />
-                <span>Compare slots</span>
-              </label>
-              <span v-if="compareMode" class="compare-hint">
-                Tick scheduled tasks, then analyze losing all of those slots at once.
-              </span>
-            </div>
-            <div
-              v-if="compareMode"
-              class="compare-actions"
-              data-test="compare-actions"
-            >
-              <span data-test="compare-selection-count">
-                {{ comparisonSelection.length }}
-                {{ comparisonSelection.length === 1 ? "slot" : "slots" }} selected
-              </span>
-              <span class="compare-action-buttons">
-                <button
-                  class="compare-analyze"
-                  type="button"
-                  data-test="analyze-slots"
-                  :disabled="!comparisonSelection.length || comparisonLoading"
-                  @click="analyzeSelectedSlots"
-                >
-                  {{ comparisonLoading ? "Analyzing…" : "Analyze together" }}
-                </button>
-                <button
-                  class="compare-clear"
-                  type="button"
-                  data-test="clear-slots"
-                  :disabled="!comparisonSelection.length && !comparisonForecast"
-                  @click="clearComparison"
-                >
-                  Clear
-                </button>
-              </span>
-            </div>
             <p
               v-if="comparisonError"
               class="quick-complete-error"
@@ -80,18 +36,18 @@
               {{ comparisonError }}
             </p>
             <section
-              v-if="activeForecast"
+              v-if="selectionActive"
               class="slip-forecast-panel"
               data-test="slip-forecast-panel"
-              :data-forecast-mode="comparisonForecast ? 'combined' : 'single'"
+              :data-forecast-mode="forecastMode"
               aria-labelledby="slip-forecast-title"
             >
               <div class="slip-forecast-heading">
                 <div>
                   <span class="what-if-label">What if?</span>
                   <h4 id="slip-forecast-title">{{ forecastHeading }}</h4>
-                  <p v-if="comparisonForecast" class="forecast-premises" data-test="forecast-premises">
-                    {{ comparisonForecast.selectedTitles.join(" · ") }}
+                  <p v-if="premiseIds.length > 1" class="forecast-premises" data-test="forecast-premises">
+                    {{ premiseTitles.join(" · ") }}
                   </p>
                 </div>
                 <button
@@ -103,7 +59,7 @@
                   ×
                 </button>
               </div>
-              <p class="forecast-summary" data-test="slip-forecast-summary">
+              <p v-if="activeForecast" class="forecast-summary" data-test="slip-forecast-summary">
                 <strong>
                   {{ activeForecast.movedCount }} downstream
                   {{ activeForecast.movedCount === 1 ? "task moves" : "tasks move" }} later
@@ -117,11 +73,30 @@
                 </strong>
               </p>
               <p class="forecast-assumption">
-                {{ comparisonForecast
+                {{ premiseIds.length > 1
                   ? "Other events fill every selected task's planned time, then all incomplete tasks are scheduled again. Nothing is saved."
                   : "Another event fills this task's planned time, then all incomplete tasks are scheduled again. Nothing is saved." }}
               </p>
-              <ol class="forecast-cascade">
+              <div class="forecast-selection-bar" data-test="forecast-selection-bar">
+                <span data-test="compare-selection-count">
+                  {{ premiseIds.length }}
+                  {{ premiseIds.length === 1 ? "slot" : "slots" }} selected
+                </span>
+                <button
+                  v-if="canAnalyzeSelection"
+                  class="forecast-analyze"
+                  type="button"
+                  data-test="analyze-slots"
+                  :disabled="comparisonLoading"
+                  @click="analyzeSelectedSlots"
+                >
+                  {{ comparisonLoading ? "Analyzing…" : `Analyze ${premiseIds.length} slots together` }}
+                </button>
+                <span v-else class="forecast-selection-hint">
+                  Use “+ compare” on another task to add its slot.
+                </span>
+              </div>
+              <ol v-if="activeForecast" class="forecast-cascade">
                 <li
                   v-for="impact in activeForecast.affected"
                   :key="impact.taskId"
@@ -163,19 +138,6 @@
                   v-on:click="openEditTaskModal(task)"
                 >
                   <span class="task-primary-row">
-                    <label
-                      v-if="compareMode && canCompareTask(task)"
-                      class="compare-task-select"
-                      @click.stop
-                    >
-                      <input
-                        type="checkbox"
-                        :data-test="`compare-select-${task._id}`"
-                        :aria-label="`Include ${task.title}'s slot in the comparison`"
-                        :checked="comparisonSelection.includes(task._id)"
-                        @change="toggleComparisonSelection(task)"
-                      />
-                    </label>
                     <span class="task-title">
                       <span v-if="isRecurringTask(task)" class="recurring-icon" title="Part of a repeating series" role="img" aria-label="Repeating task">↻</span>
                       <span v-if="task.dependsOn && task.dependsOn.length > 0" class="dependency-icon" title="Has dependencies" role="img" aria-label="Has dependencies">🔗</span>
@@ -213,8 +175,23 @@
                       </button>
                     </span>
                   </span>
-                  <span v-if="hasVisibleSlipForecast(task)" class="slip-impact-row">
+                  <span v-if="showsSlotControl(task)" class="slip-impact-row">
+                    <!-- The task that opened the panel keeps its chip; the rest offer to join it. -->
                     <button
+                      v-if="offersCompareControl(task)"
+                      class="slot-select-chip"
+                      :class="{ selected: isForecastPremise(task) }"
+                      type="button"
+                      :data-test="`slot-select-${task._id}`"
+                      :aria-pressed="isForecastPremise(task)"
+                      :aria-label="slotSelectLabel(task)"
+                      :title="slotSelectLabel(task)"
+                      @click.stop="toggleComparisonSelection(task)"
+                    >
+                      {{ isForecastPremise(task) ? "✓ comparing" : "+ compare" }}
+                    </button>
+                    <button
+                      v-else
                       class="slip-impact-chip"
                       :class="{ risk: slipForecastFor(task).newlyLateCount > 0, safe: !slipForecastFor(task).newlyLateCount }"
                       type="button"
@@ -437,8 +414,7 @@ export default {
       quickCompleteError: "",
       slipForecasts: {},
       selectedSlipForecastId: null,
-      // Multi-slot comparison. Calculated on demand and never persisted.
-      compareMode: false,
+      // Extra slots added while a forecast is open. Calculated on demand, never persisted.
       comparisonSelection: [],
       comparisonForecast: null,
       comparisonLoading: false,
@@ -545,22 +521,30 @@ export default {
     canCompareTask(task) {
       return !task?.isBacklog && this.hasValidScheduledDate(task);
     },
-    isForecastPremise(task) {
-      if (this.comparisonForecast) return this.comparisonSelection.includes(task?._id);
-      return this.selectedSlipForecastId === task?._id;
+    // The origin keeps its chip; every other scheduled task offers to join the comparison.
+    offersCompareControl(task) {
+      return this.selectionActive
+        && this.selectedSlipForecastId !== task?._id
+        && this.canCompareTask(task);
     },
-    toggleCompareMode(enabled) {
-      this.compareMode = enabled;
-      if (!enabled) this.clearComparison();
+    showsSlotControl(task) {
+      return this.offersCompareControl(task) || this.hasVisibleSlipForecast(task);
+    },
+    isForecastPremise(task) {
+      return this.premiseIds.includes(task?._id);
+    },
+    slotSelectLabel(task) {
+      return this.isForecastPremise(task)
+        ? `Stop comparing ${task.title}'s slot`
+        : `Also block ${task.title}'s slot and compare`;
     },
     toggleComparisonSelection(task) {
       const taskId = task?._id;
-      if (!taskId) return;
+      if (!taskId || taskId === this.selectedSlipForecastId) return;
+
       this.comparisonSelection = this.comparisonSelection.includes(taskId)
         ? this.comparisonSelection.filter((id) => id !== taskId)
         : [...this.comparisonSelection, taskId];
-      // A shown result describes the old selection, so it is no longer the answer.
-      this.comparisonForecast = null;
       this.comparisonError = "";
     },
     clearComparison() {
@@ -569,22 +553,19 @@ export default {
       this.comparisonError = "";
     },
     async analyzeSelectedSlots() {
-      if (!this.comparisonSelection.length || this.comparisonLoading) return;
+      const taskIds = this.premiseIds;
+      if (taskIds.length < 2 || this.comparisonLoading) return;
 
       this.comparisonLoading = true;
       this.comparisonError = "";
       try {
-        const response = await this.$http.post("/api/analyzeBlockedSlots", {
-          taskIds: this.comparisonSelection,
-        });
+        const response = await this.$http.post("/api/analyzeBlockedSlots", { taskIds });
         if (!response.data.success || !response.data.forecast) {
           this.comparisonForecast = null;
           this.comparisonError = response.data.log || "Those slots could not be analyzed.";
           return;
         }
         this.comparisonForecast = response.data.forecast;
-        // One panel at a time: a combined result replaces any open single-task preview.
-        this.selectedSlipForecastId = null;
       } catch (error) {
         this.comparisonForecast = null;
         this.comparisonError = "Those slots could not be analyzed.";
@@ -596,25 +577,24 @@ export default {
       return this.activeForecast?.affected.find((impact) => impact.taskId === task?._id) || null;
     },
     toggleSlipForecast(task) {
-      this.comparisonForecast = null;
-      this.selectedSlipForecastId = this.selectedSlipForecastId === task._id ? null : task._id;
+      const closing = this.selectedSlipForecastId === task._id && !this.comparisonSelection.length;
+      this.clearComparison();
+      this.selectedSlipForecastId = closing ? null : task._id;
     },
     clearSlipForecastSelection(restoreFocus = null) {
       const taskId = this.selectedSlipForecastId;
       const panelHadFocus = typeof document !== "undefined"
         && !!document.activeElement?.closest?.(".slip-forecast-panel");
       this.selectedSlipForecastId = null;
+      this.clearComparison();
       if (!taskId || !(restoreFocus ?? panelHadFocus)) return;
       this.$nextTick(() => {
         const chip = document.querySelector(`[data-test="slip-impact-chip-${taskId}"]`);
         (chip || this.$refs.taskListTitle)?.focus();
       });
     },
+    // Closing always dismisses the whole panel, including any added slots.
     closeSlipForecast() {
-      if (this.comparisonForecast) {
-        this.comparisonForecast = null;
-        return;
-      }
       this.clearSlipForecastSelection(true);
     },
     slipForecastAriaLabel(task) {
@@ -831,18 +811,51 @@ export default {
     selectedSlipForecast() {
       return this.slipForecasts[this.selectedSlipForecastId] || null;
     },
-    // The combined result wins while it is open; otherwise the cached single-task preview.
+    // Every task whose slot the open panel assumes is lost, origin first.
+    premiseIds() {
+      if (!this.selectedSlipForecastId) return [];
+      return [this.selectedSlipForecastId, ...this.comparisonSelection];
+    },
+    premiseTitles() {
+      return this.premiseIds.map(
+        (id) => this.taskList?.find((task) => task._id === id)?.title || "this task"
+      );
+    },
+    // The panel is open, so each comparable task offers its add/remove control.
+    selectionActive() {
+      return !!this.selectedSlipForecastId;
+    },
+    // A combined result only describes the selection it was calculated for.
+    selectionIsStale() {
+      if (!this.comparisonForecast) return this.premiseIds.length > 1;
+      const analyzed = [...this.comparisonForecast.selectedTaskIds].sort().join(",");
+      return analyzed !== [...this.premiseIds].sort().join(",");
+    },
+    canAnalyzeSelection() {
+      return this.premiseIds.length > 1 && this.selectionIsStale;
+    },
+    forecastMode() {
+      if (!this.activeForecast) return "pending";
+      return this.premiseIds.length > 1 ? "combined" : "single";
+    },
+    /**
+     * The forecast whose numbers and cascade are shown. Null while several slots are
+     * selected but not yet analyzed: showing the single-slot cascade under a multi-slot
+     * heading would answer a question the user did not ask.
+     */
     activeForecast() {
-      return this.comparisonForecast || this.selectedSlipForecast;
+      if (this.comparisonForecast && !this.selectionIsStale) return this.comparisonForecast;
+      if (this.premiseIds.length > 1) return null;
+      return this.selectedSlipForecast;
     },
     forecastHeading() {
-      if (!this.comparisonForecast) {
-        return `“${this.selectedSlipForecastTitle}” misses its planned slot`;
+      const count = this.premiseIds.length;
+      if (count > 1) {
+        return this.activeForecast
+          ? `These ${count} slots are all lost`
+          : `What if these ${count} slots are all lost?`;
       }
-      const count = this.comparisonForecast.selectedTitles.length;
-      return count === 1
-        ? "1 selected slot is lost"
-        : `These ${count} slots are all lost`;
+      return `“${this.selectedSlipForecastTitle}” misses its planned slot`;
     },
     selectedSlipForecastTitle() {
       return this.taskList?.find((task) => task._id === this.selectedSlipForecastId)?.title || "this task";
@@ -1220,90 +1233,80 @@ export default {
   font-size: 13px;
 }
 
-.compare-slots-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  align-items: baseline;
-  margin: -6px 0 12px;
-}
-
-.compare-toggle {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin: 0;
-  color: #d1d5db;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.compare-hint {
-  flex: 1 1 100%;
-  color: #9ca3af;
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.compare-actions {
+.forecast-selection-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   justify-content: space-between;
-  margin: 0 0 14px;
-  padding: 8px 10px;
-  border: 1px solid rgba(251, 191, 36, 0.3);
-  border-radius: 10px;
-  background: rgba(251, 191, 36, 0.07);
+  margin: 0 0 13px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(251, 191, 36, 0.2);
   color: #e5e7eb;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
 }
 
-.compare-action-buttons {
-  display: flex;
-  gap: 6px;
+.forecast-selection-hint {
+  color: #9ca3af;
+  font-size: 11px;
+  font-weight: 400;
 }
 
-.compare-analyze,
-.compare-clear {
-  padding: 5px 10px;
-  border: 1px solid rgba(251, 191, 36, 0.5);
+.forecast-analyze {
+  padding: 6px 12px;
+  border: 1px solid rgba(251, 191, 36, 0.55);
   border-radius: 999px;
-  background: rgba(251, 191, 36, 0.16);
+  background: rgba(251, 191, 36, 0.18);
   color: #fde68a;
   font-size: 11px;
   font-weight: 700;
 }
 
-.compare-clear {
-  border-color: rgba(156, 163, 175, 0.35);
-  background: transparent;
-  color: #9ca3af;
-}
-
-.compare-analyze:hover:not(:disabled),
-.compare-clear:hover:not(:disabled),
-.compare-analyze:focus-visible,
-.compare-clear:focus-visible {
+.forecast-analyze:hover:not(:disabled),
+.forecast-analyze:focus-visible {
   border-color: #fbbf24;
   outline: none;
+  background: rgba(251, 191, 36, 0.28);
   color: #fef3c7;
 }
 
-.compare-analyze:disabled,
-.compare-clear:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
+.forecast-analyze:disabled {
+  cursor: progress;
+  opacity: 0.55;
 }
 
-.compare-task-select {
-  display: flex;
-  align-items: center;
-  margin: 0 8px 0 0;
-  cursor: pointer;
+/* Shares the chip slot, so it matches .slip-impact-chip's size and shape. */
+.slot-select-chip {
+  padding: 4px 9px;
+  border: 1px dashed rgba(156, 163, 175, 0.5);
+  border-radius: 999px;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.slot-select-chip:hover:not(:disabled),
+.slot-select-chip:focus-visible {
+  border-color: #fbbf24;
+  outline: none;
+  background: rgba(251, 191, 36, 0.12);
+  color: #fde68a;
+}
+
+.slot-select-chip.selected {
+  border-style: solid;
+  border-color: rgba(251, 191, 36, 0.75);
+  background: rgba(251, 191, 36, 0.2);
+  color: #fde68a;
+}
+
+.slot-select-chip:disabled {
+  cursor: default;
+  opacity: 0.75;
 }
 
 .forecast-premises {
