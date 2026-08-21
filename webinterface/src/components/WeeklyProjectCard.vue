@@ -11,7 +11,7 @@
     </header>
 
     <WeeklyCommitmentProgress
-      v-if="committedItems.length"
+      v-if="showProgress"
       :project-id="String(project._id)"
       :items="committedItems"
       :added="addedTasks"
@@ -59,7 +59,7 @@
         </button>
       </li>
     </ul>
-    <p v-else-if="showWeekList && !committedItems.length" class="nothing-planned">
+    <p v-else-if="showWeekList" class="nothing-planned">
       Nothing planned for this week yet.
     </p>
 
@@ -252,14 +252,27 @@ export default {
     "update-field",
   ],
   computed: {
-    // After committing, the progress block already lists this week's work.
+    // The progress block owns the commitment AND anything added since it, so it renders
+    // whenever either exists -- not only for a project that was committed to on Monday.
+    showProgress() {
+      return !!(this.committedItems.length || this.addedTasks.length);
+    },
+    // The live list is the fallback for whatever the progress block did not render.
     showWeekList() {
-      return !this.committed;
+      return !this.showProgress;
     },
     summaryLabel() {
-      if (this.committed && this.committedItems.length) {
-        const done = this.committedItems.filter((item) => item.status === "done").length;
-        return `${done}/${this.committedItems.length} done`;
+      if (this.committed) {
+        if (this.committedItems.length) {
+          const done = this.committedItems.filter((item) => item.status === "done").length;
+          return `${done}/${this.committedItems.length} done`;
+        }
+        // Committed to nothing here, so report the later additions rather than a live
+        // count the body no longer shows.
+        if (this.addedTasks.length) {
+          return `${this.addedTasks.length} added`;
+        }
+        return "nothing committed";
       }
       if (!this.weekTasks.length) return "nothing planned";
       const minutes = this.weekTasks.reduce(

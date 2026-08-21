@@ -842,9 +842,15 @@ export default {
 
       if (this.isCommitted) {
         const items = this.committedItems.filter((item) => ids.has(item.projectRef));
-        if (!items.length) return "nothing committed";
-        const done = items.filter((item) => item.status === "done").length;
-        return `${done}/${items.length} done`;
+        if (items.length) {
+          const done = items.filter((item) => item.status === "done").length;
+          return `${done}/${items.length} done`;
+        }
+        // Nothing committed under this role, but work added later still belongs to it.
+        const added = this.weeklyTasks.filter((task) => {
+          return ids.has(task.projectRef) && !this.committedTaskIds.has(String(task._id));
+        });
+        return added.length ? `${added.length} added` : "nothing committed";
       }
 
       const tasks = this.weeklyTasks.filter((task) => ids.has(task.projectRef));

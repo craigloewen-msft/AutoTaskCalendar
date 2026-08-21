@@ -58,7 +58,9 @@ Committing records the snapshot and switches the page to Review mode without a r
 
 ## Review mode
 
-Each project that had committed work shows a progress block above its live tasks:
+Each project that had committed work shows a progress block above its live tasks. A project
+that has only work added since the commit shows the same block with the committed half
+omitted:
 
 ```text
      Migration plan                        3 of 5 done · 2h of 3h 30m
@@ -87,7 +89,17 @@ kept out of the project's **Other active tasks** list so the same work is never 
 **Update commitment** folds them in; each item records its own `addedAt`, so the review can
 always distinguish the original promise from work added later.
 
+This list does not depend on the project having been committed to. A project with an empty
+snapshot still shows its added-since-commit tasks, and so does every project when the whole
+week was committed with nothing selected. Do not gate the progress block on
+`committedItems.length` alone: the live task list stands aside for it in Review mode, so
+doing that leaves this week's work with nowhere to render at all.
+
 Quick add stays available in both modes. Adding a task after committing is normal.
+
+The panel's right-hand label follows the same rule, so the header can never disagree with
+the body: `3 of 5 done` with a commitment, `2 added` when only later additions exist, and
+`nothing committed` when the project has no work this week at all. Role headers do the same.
 
 ### Amending is additive
 

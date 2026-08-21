@@ -1,51 +1,55 @@
 <template>
   <div class="commitment" :data-test="`commitment-${projectId}`">
-    <div class="commitment-head">
-      <span class="commitment-label">Committed</span>
-      <span class="commitment-score" :data-test="`commitment-score-${projectId}`">
-        {{ doneCount }} of {{ items.length }} done · {{ formatDuration(doneMinutes) }} of
-        {{ formatDuration(totalMinutes) }}
-      </span>
-    </div>
+    <!-- A project can hold work added since commit without having been committed to at
+         all, so the snapshot half only renders when there is a snapshot. -->
+    <template v-if="items.length">
+      <div class="commitment-head">
+        <span class="commitment-label">Committed</span>
+        <span class="commitment-score" :data-test="`commitment-score-${projectId}`">
+          {{ doneCount }} of {{ items.length }} done · {{ formatDuration(doneMinutes) }} of
+          {{ formatDuration(totalMinutes) }}
+        </span>
+      </div>
 
-    <div
-      class="commitment-bar"
-      role="progressbar"
-      :aria-valuenow="donePercent"
-      aria-valuemin="0"
-      aria-valuemax="100"
-      :aria-label="`${doneCount} of ${items.length} committed tasks done`"
-    >
-      <span class="commitment-fill" :style="{ width: `${donePercent}%` }"></span>
-    </div>
-
-    <ul class="commitment-list">
-      <li
-        v-for="item in items"
-        :key="item.taskRef"
-        class="commitment-row"
-        :class="`is-${item.status}`"
-        :data-test="`commitment-item-${item.taskRef}`"
-        :data-status="item.status"
+      <div
+        class="commitment-bar"
+        role="progressbar"
+        :aria-valuenow="donePercent"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-label="`${doneCount} of ${items.length} committed tasks done`"
       >
-        <component
-          :is="openableTask(item) ? 'button' : 'div'"
-          class="commitment-cell"
-          :type="openableTask(item) ? 'button' : null"
-          @click="openableTask(item) && $emit('open', openableTask(item), $event)"
+        <span class="commitment-fill" :style="{ width: `${donePercent}%` }"></span>
+      </div>
+
+      <ul class="commitment-list">
+        <li
+          v-for="item in items"
+          :key="item.taskRef"
+          class="commitment-row"
+          :class="`is-${item.status}`"
+          :data-test="`commitment-item-${item.taskRef}`"
+          :data-status="item.status"
         >
-          <span class="commitment-title">
-            <span class="status-glyph" aria-hidden="true">{{ glyph(item.status) }}</span>
-            <span v-if="item.seriesRef" class="task-marker" aria-label="Repeating task">↻</span>
-            <span class="title-text">{{ item.title }}</span>
-          </span>
-          <span class="commitment-meta">{{ statusLabel(item) }}</span>
-        </component>
-      </li>
-    </ul>
+          <component
+            :is="openableTask(item) ? 'button' : 'div'"
+            class="commitment-cell"
+            :type="openableTask(item) ? 'button' : null"
+            @click="openableTask(item) && $emit('open', openableTask(item), $event)"
+          >
+            <span class="commitment-title">
+              <span class="status-glyph" aria-hidden="true">{{ glyph(item.status) }}</span>
+              <span v-if="item.seriesRef" class="task-marker" aria-label="Repeating task">↻</span>
+              <span class="title-text">{{ item.title }}</span>
+            </span>
+            <span class="commitment-meta">{{ statusLabel(item) }}</span>
+          </component>
+        </li>
+      </ul>
+    </template>
 
     <template v-if="added.length">
-      <div class="added-head">
+      <div class="added-head" :class="{ leading: !items.length }">
         <span>Added since commit</span>
         <button
           class="fold-in"
@@ -313,6 +317,13 @@ button.commitment-cell:focus-visible {
   font-size: 0.72rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+/* Without a committed list above it there is nothing to divide, so drop the rule. */
+.added-head.leading {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .fold-in {
