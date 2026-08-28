@@ -46,7 +46,7 @@ curl \
   --output completed-tasks-2026.md
 ```
 
-Use the API port printed by `npm run dev`; it may not be 3000 when another instance is running.
+Use the API port printed by `npm run dev`; it is 3000 unless you pinned another.
 
 Validation errors follow the normal API convention: HTTP 200 with `{ "success": false, "log": "..." }`. Missing or invalid authentication returns HTTP 401.
 

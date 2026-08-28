@@ -49,6 +49,10 @@ const UserDetail = new Schema({
     googleAccessTokenEncrypted: String,
     googleRefreshTokenEncrypted: String,
     selectedCalendars: [String],
+    // Set only by the seeder. Tests share one database and delete by namespace; see
+    // docs/SHARED_DATABASE.md.
+    seedNamespace: { type: String, default: null, index: true },
+    seededAt: { type: Date, default: null, index: true },
 }, { collection: 'usercollection' });
 
 UserDetail.virtual('taskList', {

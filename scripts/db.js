@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Start the shared MongoDB container.
+ * Make sure MongoDB is answering on localhost:27017.
  *
- * Every instance on this host talks to one container and is isolated by database name, so
- * this is convergent: `dev`, `test`, and `seed` all call it freely.
+ * Under Kingdom the database is a declared shared resource (.kingdom/services.toml) that
+ * the IDE raises; if anything already answers on the port we use it and never touch
+ * Docker. Only outside Kingdom does this start a container of its own.
  *
- * The running container is the source of truth for the port. If the default is taken we
- * publish on the next free one and report it back, so a busy host cannot block startup.
+ * Convergent either way: `dev`, `test`, and `seed` all call it freely.
  */
 
 'use strict';
@@ -20,11 +20,10 @@ const CONTAINER_NAME = 'autotaskcalendar-mongo';
 const VOLUME_NAME = 'autotaskcalendar-mongo-data';
 const IMAGE = process.env.AUTOTASKCALENDAR_MONGO_IMAGE || 'mongo:7';
 
-const DEFAULT_PORT = 27017;
+// Fixed, because every stack assumes its database is at localhost on this port.
+const MONGO_PORT = Number.parseInt(process.env.AUTOTASKCALENDAR_MONGO_PORT, 10) || 27017;
 const READY_TIMEOUT_MS = 90_000;
 const LOCK_FILE = path.join(os.tmpdir(), 'autotaskcalendar-mongo.lock');
-// Records the port in use, so a one-off script can find the database without asking Docker.
-const PORT_FILE = path.join(os.tmpdir(), 'autotaskcalendar-mongo.port');
 const LOCK_STALE_MS = 180_000;
 
 function sleepSync(ms) {
@@ -69,49 +68,6 @@ function inspect(format) {
 /** 'missing' | 'running' | 'exited' | 'created' | ... */
 function containerState() {
     return inspect('{{.State.Status}}') ?? 'missing';
-}
-
-/** The host port the existing container publishes 27017 on. */
-function publishedPort() {
-    const raw = inspect('{{(index (index .NetworkSettings.Ports "27017/tcp") 0).HostPort}}');
-    const port = Number.parseInt(raw, 10);
-
-    return Number.isInteger(port) ? port : null;
-}
-
-/**
- * Find a bindable port at or after `base`.
- *
- * A port can be unbindable with nothing visibly listening on it — WSL's mirrored
- * networking leaves ghost reservations behind — so probe rather than assume.
- */
-function findFreePort(base) {
-    const script = `
-        const net = require('net');
-        const base = Number(process.argv[1]);
-        (async () => {
-            for (let port = base; port < base + 200; port++) {
-                const free = await new Promise((resolve) => {
-                    const server = net.createServer();
-                    server.once('error', () => resolve(false));
-                    server.once('listening', () => server.close(() => resolve(true)));
-                    server.listen(port, '0.0.0.0');
-                });
-                if (free) return process.stdout.write(String(port));
-            }
-            process.exit(1);
-        })();
-    `;
-
-    const result = spawnSync(process.execPath, ['-e', script, String(base)], {
-        encoding: 'utf8',
-    });
-
-    if (result.status !== 0) {
-        fail(`no free port available at or after ${base}.`);
-    }
-
-    return Number.parseInt(result.stdout.trim(), 10);
 }
 
 function createContainer(port) {
@@ -213,49 +169,40 @@ function withLock(fn) {
     }
 }
 
+/** Bring up our own container on the fixed port. Only reached outside Kingdom. */
 function start() {
     const state = containerState();
 
     if (state === 'running') {
-        return publishedPort() ?? DEFAULT_PORT;
+        return;
     }
 
     if (state !== 'missing') {
-        const existing = publishedPort();
-
         if (docker(['start', CONTAINER_NAME], { stdio: 'ignore' }).status === 0) {
-            return existing ?? DEFAULT_PORT;
+            return;
         }
 
-        // Its published port was taken while it was stopped; rebuild it on a free one.
+        // It cannot start on the port it was built for; rebuild it.
         docker(['rm', '-f', CONTAINER_NAME], { stdio: 'ignore' });
     }
 
-    const wanted = Number.parseInt(process.env.AUTOTASKCALENDAR_MONGO_PORT, 10) || DEFAULT_PORT;
+    console.log(`Starting MongoDB (${IMAGE}) on port ${MONGO_PORT}...`);
+    const error = createContainer(MONGO_PORT);
 
-    for (let attempt = 0; attempt < 5; attempt++) {
-        const port = findFreePort(attempt === 0 ? wanted : wanted + 1 + attempt);
-
-        console.log(`Starting MongoDB (${IMAGE}) on port ${port}...`);
-        const error = createContainer(port);
-
-        if (!error) {
-            return port;
-        }
-
-        // Another process can claim the port between the probe and the bind.
-        if (!/address already in use|port is already allocated/i.test(error)) {
-            fail(`could not start MongoDB:\n${error}`);
-        }
+    if (error) {
+        fail(
+            `could not start MongoDB on port ${MONGO_PORT}:\n${error}\n` +
+            'Something else may be holding the port; stop it, or point this stack elsewhere ' +
+            'with AUTOTASKCALENDAR_MONGO_URL.'
+        );
     }
-
-    return fail('could not find a bindable port for MongoDB.');
 }
 
 /**
- * Ensure MongoDB is up, and return the host port it is listening on.
+ * Ensure MongoDB is answering on MONGO_PORT, and return that port.
  *
- * Also exports AUTOTASKCALENDAR_MONGO_PORT so instance.js and every child process agree.
+ * Under Kingdom the container is already standing and this is a single ping. A plan must
+ * never start, restart, or stop a shared resource the IDE owns.
  */
 function ensureDatabase() {
     if (!pingDriverInstalled()) {
@@ -265,28 +212,30 @@ function ensureDatabase() {
         );
     }
 
+    if (respondsToPing(MONGO_PORT)) {
+        return MONGO_PORT;
+    }
+
     startDaemon();
 
-    const port = withLock(() => {
-        const chosen = start();
+    withLock(() => {
+        // Another process may have started it while we waited for the lock.
+        if (respondsToPing(MONGO_PORT)) return;
 
-        if (!waitUntilReady(chosen)) {
+        start();
+
+        if (!waitUntilReady(MONGO_PORT)) {
             fail(
                 `MongoDB did not become ready within ${READY_TIMEOUT_MS / 1000}s.\n` +
                 `Inspect it with:  docker logs ${CONTAINER_NAME}`
             );
         }
-
-        return chosen;
     });
 
-    process.env.AUTOTASKCALENDAR_MONGO_PORT = String(port);
-    fs.writeFileSync(PORT_FILE, String(port));
-
-    return port;
+    return MONGO_PORT;
 }
 
-module.exports = { ensureDatabase, CONTAINER_NAME, VOLUME_NAME, IMAGE, PORT_FILE };
+module.exports = { ensureDatabase, CONTAINER_NAME, VOLUME_NAME, IMAGE, MONGO_PORT };
 
 if (require.main === module) {
     console.log(`MongoDB ready on port ${ensureDatabase()}`);

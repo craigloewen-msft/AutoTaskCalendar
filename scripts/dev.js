@@ -11,7 +11,6 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { ensureDatabase } = require('./db');
 
-// Must run before the instance is resolved: it exports the Mongo port everything uses.
 ensureDatabase();
 
 const { resolveInstance } = require('../instance');
@@ -22,10 +21,8 @@ const repoRoot = path.join(__dirname, '..');
 // Pin every port so the API, the Vue proxy, and nodemon all agree.
 const childEnv = {
     ...process.env,
-    AUTOTASKCALENDAR_INSTANCE: instance.name,
     AUTOTASKCALENDAR_API_PORT: String(instance.apiPort),
     AUTOTASKCALENDAR_WEB_PORT: String(instance.webPort),
-    AUTOTASKCALENDAR_MONGO_PORT: String(instance.mongoPort),
     AUTOTASKCALENDAR_INSPECT_PORT: String(instance.inspectPort),
     AUTOTASKCALENDAR_MONGO_URL: instance.mongoUrl,
 };

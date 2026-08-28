@@ -107,7 +107,12 @@ app.use('/api', weeklyPlanRoutes);
 app.use('/api', adminRoutes);
 
 async function start() {
-    await mongoose.connect(mongooseConnectionString);
+    await mongoose.connect(mongooseConnectionString, {
+        // Many agents share one mongod; the default 100-connection pool per process is far
+        // more than any single stack needs.
+        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 10000,
+    });
     await migrateGoogleCredentials(config);
     await GoogleOAuthStateDetails.init();
 
@@ -116,19 +121,17 @@ async function start() {
         if (process.env.NODE_ENV == 'production') {
             console.log(`App listening on port ${hostPort} on all interfaces`);
         } else {
-            console.log(
-                `App listening on port ${hostPort} (instance "${instance.name}", db "${instance.dbName}")`
-            );
+            console.log(`App listening on port ${hostPort} (db "${instance.dbName}")`);
         }
     });
 
-    // EADDRINUSE alone does not say which instance owns the port, which is the useful part.
+    // EADDRINUSE says nothing about who owns the port, which is the useful part.
     server.on('error', (error) => {
         if (error.code === 'EADDRINUSE') {
             console.error(
-                `\nPort ${hostPort} is already in use, so instance "${instance.name}" cannot start.\n` +
-                'Another instance almost certainly owns it. Start the stack with `npm run dev`, ' +
-                'which probes for free ports at startup, or pin one with ' +
+                `\nPort ${hostPort} is already in use, so the app cannot start.\n` +
+                'Every stack uses this fixed port; another copy of the app is probably ' +
+                'already running here. Stop it, or pin a different port with ' +
                 'AUTOTASKCALENDAR_API_PORT.\n'
             );
         } else {

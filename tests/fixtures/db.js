@@ -12,7 +12,10 @@ const instance = require('../../instance');
 
 async function ensureConnected() {
     if (mongoose.connection.readyState !== 1) {
-        await mongoose.connect(instance.mongoUrl);
+        await mongoose.connect(instance.mongoUrl, {
+            maxPoolSize: 10,
+            serverSelectionTimeoutMS: 10000,
+        });
     }
 }
 

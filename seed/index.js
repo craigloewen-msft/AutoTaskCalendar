@@ -3,8 +3,9 @@
 /**
  * Seed runner for development and tests.
  *
- * CLI seeding wipes the instance; tests replace one namespaced tenant so workers can run
- * concurrently against the same database.
+ * Every agent shares one database, so seeding is always scoped to a namespace: a tenant
+ * of users (and everything they own) that no other agent touches. `global: true` opts
+ * into the old wipe-everything behaviour. See docs/SHARED_DATABASE.md.
  */
 
 const mongoose = require('mongoose');
@@ -74,11 +75,8 @@ function namespacePattern(namespace) {
     return new RegExp(`^${escaped}-`);
 }
 
-/** Remove one test tenant without touching concurrent workers. */
-async function wipeNamespace(namespace) {
-    const users = await UserDetails.find({ username: namespacePattern(namespace) }).select('_id');
-    const userIds = users.map((user) => user._id);
-
+/** Delete these users and everything they own. */
+async function deleteUsers(userIds) {
     if (userIds.length === 0) return;
 
     const owned = { userRef: { $in: userIds } };
@@ -92,6 +90,48 @@ async function wipeNamespace(namespace) {
         GoogleOAuthStateDetails.deleteMany(owned),
     ]);
     await UserDetails.deleteMany({ _id: { $in: userIds } });
+}
+
+/**
+ * Remove one tenant without touching concurrent agents.
+ *
+ * Matches the indexed seedNamespace field, falling back to the username prefix so rows
+ * seeded before that field existed are still cleaned up.
+ */
+async function wipeNamespace(namespace) {
+    const users = await UserDetails.find({
+        $or: [{ seedNamespace: namespace }, { username: namespacePattern(namespace) }],
+    }).select('_id');
+
+    await deleteUsers(users.map((user) => user._id));
+}
+
+/**
+ * Delete tenants left behind by runs that never cleaned up.
+ *
+ * Nothing drops the shared database any more, so abandoned namespaces would otherwise
+ * accumulate forever.
+ */
+async function sweepStaleNamespaces({ olderThanMs = 24 * 60 * 60 * 1000 } = {}) {
+    const cutoff = new Date(Date.now() - olderThanMs);
+    const users = await UserDetails.find({
+        seedNamespace: { $ne: null },
+        seededAt: { $lt: cutoff },
+    }).select('_id seedNamespace');
+
+    await deleteUsers(users.map((user) => user._id));
+
+    return new Set(users.map((user) => user.seedNamespace)).size;
+}
+
+/** Remove every tenant whose namespace starts with this prefix (one test run's workers). */
+async function wipeNamespacePrefix(prefix) {
+    const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const users = await UserDetails.find({
+        seedNamespace: new RegExp(`^${escaped}`),
+    }).select('_id');
+
+    await deleteUsers(users.map((user) => user._id));
 }
 
 /**
@@ -132,7 +172,10 @@ function makeBuilder(anchor, namespace) {
         async createUser(overrides = {}) {
             const namespaced = namespaceUser(overrides);
             const { password, attributes } = factories.makeUser({ anchor, ...namespaced });
-            const user = await UserDetails.register(attributes, password);
+            const user = await UserDetails.register(
+                { ...attributes, seedNamespace: namespace, seededAt: new Date() },
+                password
+            );
             const record = { user, username: attributes.username, password };
             created.users.push(record);
             return record;
@@ -237,12 +280,26 @@ function makeBuilder(anchor, namespace) {
 }
 
 /**
- * Build the dataset, replacing either the whole instance or one namespaced tenant.
+ * Build the dataset into one namespaced tenant, or — with `global: true` — over the whole
+ * shared database.
  *
  * Returns `{ anchor, users, tasks, events, roles, goals, projects, primary, other, recurring,
  * slip, named, counts }` — everything created, so tests can assert without re-querying.
  */
-async function executeSeed({ mongoUrl, anchor, disconnect = false, namespace = null } = {}) {
+async function executeSeed({
+    mongoUrl,
+    anchor,
+    disconnect = false,
+    namespace = null,
+    global = false,
+} = {}) {
+    if (!namespace && !global) {
+        throw new Error(
+            'runSeed needs a namespace: every agent shares one database. Pass { namespace } ' +
+            'or, to wipe and reseed the whole database, { global: true }.'
+        );
+    }
+
     const url = resolveMongoUrl(mongoUrl);
     const ownsConnection = mongoose.connection.readyState === 0;
 
@@ -282,4 +339,6 @@ function runSeed(options = {}) {
 module.exports = {
     runSeed,
     wipeNamespace,
+    wipeNamespacePrefix,
+    sweepStaleNamespaces,
 };

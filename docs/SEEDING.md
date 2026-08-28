@@ -16,12 +16,17 @@ the dataset — a single thing to understand and a single thing to keep correct.
 npm run seed
 ```
 
-The `npm run seed` command **wipes** the users, tasks, events, roles, goals, projects, and
-weekly plans in your development instance first, so each run gives you a clean, known state.
-The test fixture instead namespaces its users and removes only that test's tenant, allowing
+The `npm run seed` command builds the dataset in **your own namespace** inside the shared
+database, wiping only that namespace first, so each run gives you a clean, known state
+without disturbing other agents. Seeded usernames are prefixed with the namespace (`local`
+by default, or `AUTOTASKCALENDAR_INSTANCE`). `npm run seed -- --global` wipes the whole
+shared database and creates the bare usernames instead — only do that on a machine nobody
+else is working on. See `docs/SHARED_DATABASE.md`.
+
+The test fixture namespaces the same way and removes only that test's tenant, allowing
 native Playwright workers to seed concurrently.
 
-Log in with:
+Log in with (prefix each with your namespace, e.g. `local-testuser`):
 
 | Username | Password |
 | --- | --- |
@@ -124,8 +129,9 @@ flowchart LR
   `makeProject`. Sensible defaults, every field overridable, powered by `@faker-js/faker`
   with a fixed seed so runs are reproducible.
 - **`seed/dataset.js`** — the dataset itself, as one readable `build(b)` function.
-- **`seed/index.js`** — `runSeed()`: connects, builds, and returns the created data. CLI
-  calls wipe the instance; namespaced test calls replace only their own tenant.
+- **`seed/index.js`** — `runSeed()`: connects, builds, and returns the created data. It
+  requires a namespace and replaces only that tenant; `{ global: true }` is the opt-in that
+  wipes the whole shared database.
 - **`scripts/seed.js`** — the CLI wrapper.
 
 ### Dates are anchored, never absolute

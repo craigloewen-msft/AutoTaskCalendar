@@ -65,32 +65,40 @@ by Playwright.
 **Iterating on one thing? Do not run the whole suite.** File filters and `-g` still take
 seconds; save the full run for just before you commit.
 
-`npm test` handles the setup itself: it starts the database, then starts the app and runs
-the suite. No browser download or front-end build is needed. This is also the CI contract; workflows do
-not need a separate MongoDB service. There is nothing to install or export beforehand.
+`npm test` handles the setup itself: it makes sure the shared database is answering, then
+starts the app and runs the suite. No browser download or front-end build is needed. This is
+also the CI contract; workflows do not need a separate MongoDB service. There is nothing to
+install or export beforehand.
 
 ## How isolation works
 
-Tests never touch the database you develop against. Each `npm test` invocation gets one
-run-specific database, API port, session cookie, artifact directory, and Express server.
-Twelve local Playwright workers share that app stack; hosted CI uses four to leave headroom
+Every agent and every test run share **one database** — see `docs/SHARED_DATABASE.md`.
+Isolation is by seed namespace, not by database. Each `npm test` invocation gets a run id,
+and each test within it a namespace of the form `pw-<run-id>-<worker>-<test-hash>`.
+Twelve local Playwright workers share one app stack; hosted CI uses four to leave headroom
 for the shared Express and MongoDB processes.
 
 ```mermaid
 flowchart LR
   A["Parallel Playwright workers"] --> E["one Express server"]
-  E --> F[("one test-run database")]
+  E --> F[("the shared database")]
+  F --> G["one namespace per test"]
 ```
 
-The `seed` fixture does **not** wipe the database. It creates uniquely named primary,
-secondary, and recurring users for the current test. Application queries are scoped by the
-authenticated user's ID, so workers can schedule, mutate, and delete their own data without
-touching another test. The fixture removes that tenant after the test; the runner drops the
-entire run database when Playwright exits.
+The `seed` fixture does **not** wipe the database — nothing does any more. It creates
+namespaced primary, secondary, and recurring users for the current test. Application queries
+are scoped by the authenticated user's ID, so workers can schedule, mutate, and delete their
+own data without touching another test, or another agent. The fixture removes that tenant
+after the test; the runner wipes the whole run's namespaces when Playwright exits and sweeps
+any left behind by runs that were killed.
 
-This is why parallel workers are safe here. The suite drives one Express process, which is
-both simple and close to production. You can leave
-`npm run dev` running or start two test commands on the same branch without collisions.
+Because the database is shared, a spec must never query or count without scoping to its own
+tenant. The rules are in `docs/SHARED_DATABASE.md`, and `tests/api/shared-database.spec.js`
+asserts them.
+
+You can leave `npm run dev` running while you test — the suite touches only its own
+namespaces — but both bind port 3000, so pin `AUTOTASKCALENDAR_API_PORT` if you want both up
+at once.
 
 ## Writing a test
 

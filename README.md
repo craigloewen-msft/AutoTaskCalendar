@@ -25,24 +25,28 @@ That's the whole set-up. `npm run dev` prints the URLs it picked, normally
 | --- | --- |
 | `npm run dev` | Runs the full stack. |
 | `npm test` | Runs the Playwright suite, building the frontend first if needed. |
-| `npm run seed` | Resets the database to the sample dataset. |
+| `npm run seed` | Resets your seed namespace to the sample dataset. |
 | `npm run build` | Production build into `dist/`. |
 
 See [docs/TEST_CREDENTIALS.md](docs/TEST_CREDENTIALS.md) for the seeded login details.
 
 ## Running more than one copy
 
-Every git branch gets its own database and its own ports, so several checkouts — or
-several AI agents — can run at once without colliding. Ports are probed at startup, so a
-busy one is simply skipped. Set `AUTOTASKCALENDAR_INSTANCE` to run two stacks on one
-branch:
+Every stack uses the same fixed ports (API 3000, web 8080) and the same shared database,
+`mongodb://127.0.0.1:27017/autotaskcalendar`. Under the Kingdom IDE each agent has its own
+loopback, so many can run at once on those numbers; the database is declared in
+`.kingdom/services.toml` and raised once for everyone.
+
+Without that isolation, pin the ports for the second stack and give it its own seed
+namespace:
 
 ```bash
-AUTOTASKCALENDAR_INSTANCE=agent2 npm run dev
+AUTOTASKCALENDAR_INSTANCE=agent2 AUTOTASKCALENDAR_API_PORT=3001 \
+  AUTOTASKCALENDAR_WEB_PORT=8081 npm run dev
 ```
 
-All instances share one `autotaskcalendar-mongo` container and are isolated by database
-name.
+Seeded data is isolated by namespace rather than by database. See
+[docs/SHARED_DATABASE.md](docs/SHARED_DATABASE.md).
 
 ## Configuration
 
@@ -53,7 +57,8 @@ variables instead (`prodMongoDBConnectionString`, `secret`, `sessionSecret`,
 
 ## If the database misbehaves
 
-The scripts own the container, but it is a normal Docker container if you need to poke it:
+Under Kingdom the IDE owns the container and you should not stop it — other agents are
+using it. On your own machine it is a normal Docker container if you need to poke it:
 
 ```bash
 docker logs autotaskcalendar-mongo             # what happened
