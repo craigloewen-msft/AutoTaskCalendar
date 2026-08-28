@@ -32,10 +32,14 @@ const { withDb } = require('./db');
 
 const baseURL = process.env.AUTOTASKCALENDAR_BASE_URL || `http://127.0.0.1:${instance.apiPort}`;
 
+// Namespaces must be unique across every agent sharing the database, so they carry the
+// test run's id rather than a pid, which repeats across machines and containers.
+const runId = process.env.AUTOTASKCALENDAR_TEST_RUN_ID || `local-${process.pid}`;
+
 function testNamespace(testInfo) {
     const identity = [testInfo.testId, testInfo.retry, testInfo.repeatEachIndex].join(':');
     const hash = createHash('sha1').update(identity).digest('hex').slice(0, 12);
-    return `pw-${process.pid}-${testInfo.workerIndex}-${hash}`;
+    return `pw-${runId}-${testInfo.workerIndex}-${hash}`;
 }
 
 /**

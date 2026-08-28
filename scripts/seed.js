@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * Seed this instance's database with the test dataset.
+ * Seed the shared database with the test dataset.
  *
- * Usage: npm run seed
+ * Usage: npm run seed            seed this checkout's own namespace
+ *        npm run seed -- --global  wipe the shared database and seed bare usernames
  */
 
 'use strict';
 
 const { ensureDatabase } = require('./db');
 
-// Must run before the instance is resolved: it exports the Mongo port everything uses.
 ensureDatabase();
 
 const { runSeed } = require('../seed');
@@ -17,11 +17,19 @@ const { resolveInstance } = require('../instance');
 
 const instance = resolveInstance();
 
+const global = process.argv.includes('--global');
+
 async function main() {
-    const result = await runSeed({ mongoUrl: instance.mongoUrl, disconnect: true });
+    const result = await runSeed({
+        mongoUrl: instance.mongoUrl,
+        disconnect: true,
+        global,
+        namespace: global ? null : instance.namespace,
+    });
 
     console.log(
-        `\nSeeded ${instance.dbName}: ` +
+        `\nSeeded ${instance.dbName}` +
+        `${global ? ' (whole database)' : ` namespace "${instance.namespace}"`}: ` +
         `${result.users.length} users, ${result.tasks.length} tasks, ` +
         `${result.events.length} events, ${result.roles.length} roles, ` +
         `${result.goals.length} goals, ${result.projects.length} projects.\n`

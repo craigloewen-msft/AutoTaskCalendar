@@ -1,41 +1,20 @@
 #!/usr/bin/env node
-/** Run the Playwright API suite with one app server and isolated test users. */
+/**
+ * Run the Playwright API suite against the shared database.
+ *
+ * Every test seeds its own namespace inside that one database, so many agents can run the
+ * suite at once. Nothing is dropped; this run's namespaces are wiped at the end and stale
+ * ones are swept. See docs/SHARED_DATABASE.md.
+ */
 
 'use strict';
 
 const path = require('path');
 const { spawn } = require('child_process');
-const mongoose = require('mongoose');
 const { ensureDatabase } = require('./db');
 
 const repoRoot = path.join(__dirname, '..');
 const playwrightCli = require.resolve('@playwright/test/cli');
-
-function resolveTestInstance(name) {
-    const saved = {};
-    const overrides = {
-        AUTOTASKCALENDAR_INSTANCE: name,
-        AUTOTASKCALENDAR_API_PORT: undefined,
-        AUTOTASKCALENDAR_WEB_PORT: undefined,
-        AUTOTASKCALENDAR_INSPECT_PORT: undefined,
-        AUTOTASKCALENDAR_MONGO_URL: undefined,
-    };
-
-    for (const [key, value] of Object.entries(overrides)) {
-        saved[key] = process.env[key];
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-    }
-
-    try {
-        return require('../instance').resolveInstance();
-    } finally {
-        for (const [key, value] of Object.entries(saved)) {
-            if (value === undefined) delete process.env[key];
-            else process.env[key] = value;
-        }
-    }
-}
 
 function runPlaywright(args, env) {
     return new Promise((resolve, reject) => {
@@ -68,30 +47,33 @@ function runPlaywright(args, env) {
     });
 }
 
-async function dropDatabase(mongoUrl) {
-    const connection = await mongoose.createConnection(mongoUrl).asPromise();
-    await connection.dropDatabase();
-    await connection.close();
+/** Remove this run's tenants, and any left behind by runs that died. */
+async function cleanUp(runId) {
+    const mongoose = require('mongoose');
+    const { wipeNamespacePrefix, sweepStaleNamespaces } = require('../seed');
+    const instance = require('../instance');
+
+    await mongoose.connect(instance.mongoUrl, { maxPoolSize: 5 });
+    try {
+        await wipeNamespacePrefix(`pw-${runId}-`);
+        await sweepStaleNamespaces();
+    } finally {
+        await mongoose.connection.close();
+    }
 }
 
 async function main() {
     ensureDatabase();
 
-    const baseName = process.env.AUTOTASKCALENDAR_TEST_INSTANCE
-        || `${require('../instance').resolveInstanceName()}-test`;
+    const instance = require('../instance').resolveInstance();
     const runId = `${Date.now().toString(36)}-${process.pid}`;
-    const instance = resolveTestInstance(`${baseName}-${runId}`);
     const runRoot = path.join(repoRoot, '.playwright', 'runs', runId);
+    const baseUrl = `http://127.0.0.1:${instance.apiPort}`;
     const env = {
         ...process.env,
         TZ: 'UTC',
-        AUTOTASKCALENDAR_INSTANCE: instance.name,
-        AUTOTASKCALENDAR_API_PORT: String(instance.apiPort),
-        AUTOTASKCALENDAR_WEB_PORT: String(instance.webPort),
-        AUTOTASKCALENDAR_MONGO_PORT: String(instance.mongoPort),
-        AUTOTASKCALENDAR_INSPECT_PORT: String(instance.inspectPort),
-        AUTOTASKCALENDAR_MONGO_URL: instance.mongoUrl,
-        AUTOTASKCALENDAR_BASE_URL: `http://127.0.0.1:${instance.apiPort}`,
+        AUTOTASKCALENDAR_TEST_RUN_ID: runId,
+        AUTOTASKCALENDAR_BASE_URL: baseUrl,
         AUTOTASKCALENDAR_TEST_ORCHESTRATED: '1',
         AUTOTASKCALENDAR_GOOGLE_OAUTH_CLIENT_ID: 'playwright-client-id',
         AUTOTASKCALENDAR_GOOGLE_OAUTH_CLIENT_SECRET: 'playwright-client-secret',
@@ -101,8 +83,9 @@ async function main() {
     };
 
     console.log(
-        `\n  app       ${env.AUTOTASKCALENDAR_BASE_URL}\n` +
-        `  database  ${instance.dbName}\n` +
+        `\n  app       ${baseUrl}\n` +
+        `  database  ${instance.dbName} (shared)\n` +
+        `  namespace pw-${runId}-*\n` +
         `  artifacts ${path.relative(repoRoot, runRoot)}\n`
     );
 
@@ -110,8 +93,8 @@ async function main() {
     try {
         result = await runPlaywright(process.argv.slice(2), env);
     } finally {
-        await dropDatabase(instance.mongoUrl).catch((error) => {
-            console.warn(`Could not clean database ${instance.dbName}: ${error.message}`);
+        await cleanUp(runId).catch((error) => {
+            console.warn(`Could not clean up namespaces for run ${runId}: ${error.message}`);
         });
     }
 

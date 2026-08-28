@@ -1,0 +1,9 @@
+# Shared resources for this project. Kingdom raises these once and every plan reaches
+# them at localhost on the port below. See docs/SHARED_DATABASE.md.
+
+[[service]]
+type   = "docker"
+name   = "mongo"
+image  = "mongo:7"
+port   = 27017
+volume = "autotaskcalendar-mongo-data"

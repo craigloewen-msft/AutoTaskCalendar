@@ -14,7 +14,9 @@ See `docs/SEEDING.md` for what the dataset contains and how to extend it.
 
 ## Test User Credentials
 
-After running the seed script, you can login with:
+After running the seed script, you can login with (usernames are prefixed with your seed
+namespace — `local` unless you set `AUTOTASKCALENDAR_INSTANCE`, so `local-testuser`; use
+`npm run seed -- --global` for the bare names):
 
 - **Username:** `testuser`
 - **Password:** `testpassword`
@@ -89,12 +91,14 @@ The dataset creates:
 
 ## Re-seeding the Database
 
-Seeding wipes all users, tasks, events, roles, goals, and projects in your instance's
-database before rebuilding the dataset, so you always start from a clean, known state.
+Seeding rebuilds the dataset in your own namespace inside the shared database, wiping only
+that namespace first, so you always start from a clean, known state and no other agent is
+affected. `npm run seed -- --global` wipes the whole shared database instead.
+See `docs/SHARED_DATABASE.md`.
 
 ## Important Notes
 
 - These credentials are for **development and testing only**
 - Do not use these credentials in production
-- The automated test suite seeds its own isolated database and never touches yours;
-  see `docs/TESTING.md`
+- The automated test suite seeds its own namespaces in the same shared database and never
+  touches yours; see `docs/TESTING.md`
