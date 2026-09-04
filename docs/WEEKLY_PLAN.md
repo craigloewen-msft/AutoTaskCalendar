@@ -129,7 +129,9 @@ boxes:
 - **Tasks are dense rows** with right-aligned tabular due day and duration, so they line up
   vertically down the whole page.
 - The header is a **sticky week bar** carrying the range, totals, a seven-segment Mon–Sun load
-  strip, and the primary action.
+  strip, and the calendar link.
+- The primary action is a **commit bar at the foot of the page**, below the loose-ends drawers,
+  holding the commit button, its note, and any commit error.
 - **Quick add is collapsed** to `+ Add a task` per project and expands in place.
 
 Do not reintroduce a multi-column `auto-fit` grid. Role cards sized independently produce a
