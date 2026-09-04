@@ -39,27 +39,9 @@
         </div>
 
         <div class="week-actions">
-          <button
-            v-if="!loading && !loadError"
-            class="btn commit-button"
-            :class="isCommitted ? 'btn-outline-primary' : 'btn-primary'"
-            type="button"
-            data-test="commit-week"
-            :disabled="committing"
-            @click="commitWeek()"
-          >
-            {{ commitLabel }}
-          </button>
-          <p v-if="!loading && !loadError" class="commit-note" data-test="commit-note">
-            {{ commitNote }}
-          </p>
           <router-link class="btn btn-link calendar-link" to="/calendar">Go to calendar</router-link>
         </div>
       </header>
-
-      <p v-if="commitError" class="bar-message error" role="alert" data-test="commit-error">
-        {{ commitError }}
-      </p>
 
       <div
         v-if="!loading && !loadError && planError"
@@ -320,6 +302,23 @@
           </ul>
         </details>
       </div>
+
+      <footer v-if="!loading && !loadError" class="commit-bar">
+        <p v-if="commitError" class="bar-message error" role="alert" data-test="commit-error">
+          {{ commitError }}
+        </p>
+        <button
+          class="btn commit-button"
+          :class="isCommitted ? 'btn-outline-primary' : 'btn-primary'"
+          type="button"
+          data-test="commit-week"
+          :disabled="committing"
+          @click="commitWeek()"
+        >
+          {{ commitLabel }}
+        </button>
+        <p class="commit-note" data-test="commit-note">{{ commitNote }}</p>
+      </footer>
     </div>
 
     <TaskEditor
@@ -1145,7 +1144,24 @@ export default {
 .week-actions {
   display: grid;
   gap: 4px;
-  justify-items: stretch;
+  justify-items: end;
+}
+
+/* The primary action lives at the foot of the page, after all the week's content. */
+.commit-bar {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  margin-top: 24px;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: rgba(13, 17, 23, 0.6);
+}
+
+.commit-bar .bar-message {
+  width: 100%;
+  margin-bottom: 0;
 }
 
 .commit-button {
@@ -1533,6 +1549,10 @@ export default {
 
   .week-actions {
     justify-items: start;
+  }
+
+  .commit-bar {
+    padding: 14px;
   }
 
   .role-head {
