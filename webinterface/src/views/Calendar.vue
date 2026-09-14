@@ -13,16 +13,16 @@
             class="action-btn"
             aria-label="Schedule tasks"
             data-test="schedule-tasks"
-            :disabled="scheduling.busy"
-            :aria-busy="scheduling.busy ? 'true' : 'false'"
+            :disabled="schedulingBusy"
+            :aria-busy="schedulingBusy ? 'true' : 'false'"
           >
             <span
-              v-if="scheduling.busy"
+              v-if="schedulingBusy"
               class="spinner-border spinner-border-sm btn-icon"
               aria-hidden="true"
             ></span>
-            <span v-else class="btn-icon" aria-hidden="true">📅</span>
-            {{ scheduling.busy ? "Scheduling…" : "Schedule Tasks" }}
+            <span v-else class="btn-icon" aria-hidden="true">{{ schedulingError ? "!" : "📅" }}</span>
+            <span role="status" aria-live="polite">{{ scheduleButtonLabel }}</span>
           </BButton>
           <BButton
             variant="info"
@@ -43,13 +43,7 @@
           </BButton>
         </div>
       </div>
-      <ScheduleProgress
-        :busy="scheduling.busy"
-        :phase="scheduling.phase"
-        :done="scheduling.done"
-        :error="scheduling.error"
-      />
-      <div class="calendar-box" :class="{ 'is-busy': scheduling.busy }" :aria-busy="scheduling.busy ? 'true' : 'false'">
+      <div class="calendar-box" :class="{ 'is-busy': schedulingBusy }" :aria-busy="schedulingBusy ? 'true' : 'false'">
         <div class="task-controls">
           <div class="task-list">
             <h3 ref="taskListTitle" class="sidebar-title" tabindex="-1">Tasks</h3>
@@ -355,7 +349,6 @@
 import { DayPilot, DayPilotCalendar } from "@daypilot/daypilot-lite-vue";
 import { BButton } from 'bootstrap-vue-next';
 import TaskEditor from "../components/TaskEditor.vue";
-import ScheduleProgress from "../components/ScheduleProgress.vue";
 import {
   addCalendarDays,
   apiDateOnly,
@@ -375,8 +368,7 @@ export default {
   components: {
     DayPilotCalendar,
     BButton,
-    TaskEditor,
-    ScheduleProgress
+    TaskEditor
   },
   data() {
     return {
@@ -510,9 +502,10 @@ export default {
       comparisonForecast: null,
       comparisonLoading: false,
       comparisonError: "",
-      // Feedback for the long-running schedule run: busy phase, confirmation, or error.
-      scheduling: { busy: false, phase: "", done: "", error: "" },
-      schedulingDoneTimer: null,
+      // Feedback for the long-running schedule run, shown in the button itself.
+      schedulingBusy: false,
+      schedulingError: false,
+      schedulingErrorTimer: null,
       syncing: false,
       // Compass roles, nested with their goals and projects.
       compassRoles: [],
@@ -805,27 +798,25 @@ export default {
       return hour;
     },
     async scheduleTasks() {
-      if (this.scheduling.busy) return;
-      clearTimeout(this.schedulingDoneTimer);
-      this.scheduling = { busy: true, phase: "Scheduling tasks…", done: "", error: "" };
+      if (this.schedulingBusy) return;
+      clearTimeout(this.schedulingErrorTimer);
+      this.schedulingError = false;
+      this.schedulingBusy = true;
       try {
         const response = await this.$http.get("api/scheduletasks");
         if (response.data && response.data.success === false) {
           throw new Error(response.data.log || "Scheduling failed");
         }
-        this.scheduling.phase = "Refreshing calendar…";
         await this.loadData();
-        this.scheduling.done = "Tasks scheduled";
-        // The confirmation is transient; the calendar itself is the lasting result.
-        this.schedulingDoneTimer = setTimeout(() => {
-          this.scheduling.done = "";
-        }, 4000);
       } catch (error) {
         console.error(error);
-        this.scheduling.error = "Could not schedule tasks. Please try again.";
+        this.schedulingError = true;
+        // The failure notice is transient; the button returns to its normal label.
+        this.schedulingErrorTimer = setTimeout(() => {
+          this.schedulingError = false;
+        }, 4000);
       } finally {
-        this.scheduling.busy = false;
-        this.scheduling.phase = "";
+        this.schedulingBusy = false;
       }
     },
     openAddTaskModal() {
@@ -903,6 +894,11 @@ export default {
     },
   },
   computed: {
+    // All schedule feedback lives in the button label, so nothing shifts the layout.
+    scheduleButtonLabel() {
+      if (this.schedulingBusy) return "Scheduling…";
+      return this.schedulingError ? "Scheduling failed" : "Schedule Tasks";
+    },
     calendar() {
       return this.$refs.calendar.control;
     },
@@ -1057,7 +1053,7 @@ export default {
   },
   beforeUnmount() {
     clearInterval(this.highlightInterval);
-    clearTimeout(this.schedulingDoneTimer);
+    clearTimeout(this.schedulingErrorTimer);
   },
   metaInfo: {
     title: "My Calendar - Manage Your Tasks",
