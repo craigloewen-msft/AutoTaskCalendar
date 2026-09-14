@@ -2,11 +2,14 @@ const express = require('express');
 const router = express.Router();
 const { UserDetails } = require('../models');
 const { returnFailure } = require('../utils/helpers');
-const { dateOnlyFromMarker } = require('../utils/temporal');
+const { addDateOnlyDays, dateOnlyFromMarker, mondayWeekBounds } = require('../utils/temporal');
+const { getTaskListFromUsername } = require('../controllers/taskController');
+const { clearProjectRecommendationCache } = require('../controllers/projectRecommendation');
 const {
     WeeklyPlanError,
     getWeeklyPlans,
     commitWeeklyPlan,
+    carryTasksForward,
 } = require('../controllers/weeklyPlanController');
 
 /**
@@ -49,6 +52,28 @@ function createWeeklyPlanRoutes(config, authenticateSession) {
         const plan = await commitWeeklyPlan(user, req.body);
         const weekStart = dateOnlyFromMarker(plan.weekStart);
         return getWeeklyPlans(user, { from: weekStart, to: weekStart });
+    }));
+
+    /**
+     * Carry last week's unfinished work into this week.
+     *
+     * Returns the refreshed task list AND both weeks' plans, so one round trip leaves the
+     * page consistent: the carried task appears in this week, and last week's item now
+     * resolves as `moved` without its snapshot having been rewritten.
+     */
+    router.post('/carryTasksForward', authenticateSession, handle(async (req, user) => {
+        const { dueDate } = await carryTasksForward(user, req.body);
+        clearProjectRecommendationCache(user._id);
+
+        const week = mondayWeekBounds(dueDate, user.timeZone);
+        const [plans, taskList] = await Promise.all([
+            getWeeklyPlans(user, {
+                from: addDateOnlyDays(week.startDate, -7),
+                to: week.startDate,
+            }),
+            getTaskListFromUsername(user.username),
+        ]);
+        return { ...plans, taskList };
     }));
 
     return router;

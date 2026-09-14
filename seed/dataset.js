@@ -452,12 +452,31 @@ module.exports = {
             duration: 90,
             projectRef: migrationProject._id,
         });
+        // Promised last week and never finished: the review's carry-forward subject.
+        const lastWeekSlipped = await b.createTask(user, {
+            title: 'Write the rollback runbook',
+            dueDate: b.civilDate(b.lastMonday, 4),
+            startDate: b.civilDate(b.lastMonday, 0),
+            duration: 75,
+            projectRef: migrationProject._id,
+        });
         const previousPlan = await b.commitWeek(
             user,
             b.lastMondayDate,
-            [lastWeekDone, lastWeekDropped]
+            [lastWeekDone, lastWeekDropped, lastWeekSlipped]
         );
         await b.deleteTask(lastWeekDropped);
+
+        // Finished last week but never promised: the review's "where the week actually went".
+        const lastWeekUnplanned = await b.createTask(user, {
+            title: 'Unblock the staging database',
+            dueDate: b.civilDate(b.lastMonday, 2),
+            startDate: b.civilDate(b.lastMonday, 0),
+            duration: 50,
+            completed: true,
+            completedDate: b.at(b.lastMonday, { days: 2, hours: 16 }),
+            projectRef: perfProject._id,
+        });
 
         // --- Second user: data that must never appear in the primary user's responses -----
         const other = await b.createUser({
@@ -696,6 +715,8 @@ module.exports = {
                 weekAdded,
                 lastWeekDone,
                 lastWeekDropped,
+                lastWeekSlipped,
+                lastWeekUnplanned,
                 otherRole,
                 otherGoal,
                 otherProject,

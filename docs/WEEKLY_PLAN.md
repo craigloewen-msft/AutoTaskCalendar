@@ -105,14 +105,59 @@ be a way to quietly delete a promise you did not keep.
 
 `committedAt` is preserved across amendments; `amendedAt` records the most recent change.
 
-### Previous-week recap
+### Last week's review
 
-When a plan exists for the previous Monday–Sunday, Review mode opens with a one-line recap:
-**Last week: committed 7, finished 5, 2 slipped**. Expanding it shows the same status list,
-read-only. When no previous plan exists the band is absent rather than showing zeros.
+The page opens with a review of the previous Monday–Sunday, because the first question a
+planner has on Monday is not "what shall I do" but "what happened". It is **expanded while
+this week is uncommitted** — exactly when you are planning — and **collapsed once you have
+committed**, so Review mode leads with the current week. The toggle is per-visit, not stored.
 
-This is distinct from the per-project **Completed last week** disclosure, which answers a
-different question: what actually got finished, whether or not it was planned.
+It answers three questions, in this order, and every part of it is named work rather than a
+number:
+
+| Block | The question | Source |
+| --- | --- | --- |
+| Headline and bar | How did last week go? | `You kept 4 of 7 promises`, plus minutes done of minutes promised |
+| **Unfinished** | What do I still owe? | Plan items whose status is not `done`, grouped by project |
+| **Kept** | What did I actually land? | Plan items with status `done`, with the day each finished |
+| **Also finished, never promised** | Where did the week really go? | `getProjectCompletions` for last week, minus anything in the snapshot |
+
+The third block matters as much as the first two: unplanned work is usually *why* the
+promises slipped, and a review that hides it makes the week look like a failure of will
+rather than a failure of capacity. It is capped at four rows with the rest behind a
+`+ N more` link — it is context, not a to-do list, and a long tail of it would bury the two
+blocks you can actually act on. Project headers appear only when more than one project is
+involved.
+
+When no plan exists for last week the panel does not disappear silently — if anything was
+finished it still says so (*No commitment last week. You finished 3 tasks anyway.*). Only a
+week with neither a commitment nor a completion hides it.
+
+This is distinct from the per-project **Completed last week** disclosure, which answers the
+same "what got finished" question from inside a single project.
+
+### Carrying work forward
+
+Each unfinished row carries the action that resolves it. **Carry →** moves the live task into
+this week; **Carry N into this week** at the block header does every carryable row.
+
+The target date is the **same weekday in the current week**, or today when that day has
+already passed — the intent of "Friday work" survives, and nothing is ever carried into a day
+that is already gone. A row offers the action only when there is a live, incomplete,
+non-repeating task to move:
+
+| Last week's status | The row reads | Action |
+| --- | --- | --- |
+| `open` | `was due Fri · 45m` | **Carry →** |
+| `moved` out past this week | `now due Apr 24` | **Carry →** |
+| `moved` into this week already | `already in this week` | none — it is on the page below |
+| `removed` | `deleted after committing` | none — there is nothing to move |
+| a repeating occurrence | `repeats — next occurrence stands` | none — dates come from the rule |
+
+**Carrying never touches last week's plan document.** Only `taskInfo` is written. The promise
+stays exactly as snapshotted and simply resolves as `moved` on the next read — the same rule
+that makes amending additive. A carried task then appears in its project below, ready to be
+committed to this week; carrying is not committing.
 
 ---
 
@@ -199,9 +244,10 @@ with `{ success: false, log }`.
 | --- | --- | --- |
 | GET | `/api/getWeeklyPlans?from=&to=` | Plans in a bounded Monday range, items resolved to a live status. |
 | POST | `/api/commitWeeklyPlan` | `{ weekStart, taskIds }` — create or additively amend the current week. |
+| POST | `/api/carryTasksForward` | `{ taskIds, dueDate }` — move unfinished work into the current week. |
 
-Both return the same `plans` shape, so the client applies one reducer to a read and to a
-commit response.
+All three return the same `plans` shape, so the client applies one reducer to a read, to a
+commit, and to a carry-forward.
 
 `getWeeklyPlans` requires both bounds, requires each to be a Monday, and refuses a range wider
 than 8 weeks — bounded like `getProjectCompletions`, because plans accumulate forever. The page
@@ -212,6 +258,14 @@ Committing a past or future week is refused, which is what removes the need for 
 navigation and makes last week's record permanent. Every new `taskId` must belong to the
 caller and be due inside the week; anything else is refused with a clear `log` rather than
 silently omitted. Omitting `taskIds` snapshots every project-linked task currently in the week.
+
+`carryTasksForward` writes **only `taskInfo`** — it never reads or writes a plan document. Each
+id must belong to the caller, exist, and be incomplete; a generated occurrence is refused
+because its dates are owned by its rule. `dueDate` must be a civil date inside the caller's
+current week and not before today in their timezone. A task's `startDate` is pulled back to
+today when it would otherwise sit after the new due date, so the scheduler can place it.
+Nothing is scheduled or reprioritised. The response carries the refreshed `taskList` *and* the
+`plans` for the previous and current Monday, so one round trip leaves the page consistent.
 
 The page also reads:
 
@@ -242,11 +296,12 @@ Calendar. Compass scheduling influence remains a separate, higher-risk feature.
 | File | Role |
 | --- | --- |
 | `webinterface/src/views/WeeklyPlan.vue` | The page. Owns all state and every mutation. |
+| `webinterface/src/components/WeeklyLastWeekReview.vue` | Last week's review and the carry-forward action. |
 | `webinterface/src/components/WeeklyProjectCard.vue` | One project panel. Presentation only; emits events. |
 | `webinterface/src/components/WeeklyCommitmentProgress.vue` | Committed items, progress bar, added-since list. |
 | `webinterface/src/components/TaskEditor.vue` | The shared editor, used by Calendar too. |
-| `controllers/weeklyPlanController.js` | Commit and status derivation. |
-| `routes/weeklyPlan.js` | The two endpoints. |
+| `controllers/weeklyPlanController.js` | Commit, status derivation, and carry-forward. |
+| `routes/weeklyPlan.js` | The three endpoints. |
 
 Page state stays local rather than expanding the auth-focused Vuex store. Quick-task form
 state is keyed by project id so one draft cannot clear another; the child components never
@@ -257,8 +312,9 @@ because a `removed` item has no live task and a `moved` item would fail the in-w
 
 Tests:
 
-- `tests/api/weeklyPlan.spec.js` — two specs covering what is unique to commitments: status
-  derivation from the live task (including ownership), and additive amendment.
+- `tests/api/weeklyPlan.spec.js` — three specs covering what is unique to commitments: status
+  derivation from the live task (including ownership), additive amendment, and carrying work
+  forward without rewriting the promise.
 - `tests/api/temporal.spec.js` — Monday bounds across DST and year boundaries.
 - `tests/api/tasks.spec.js` — the bounded completion-history query.
 

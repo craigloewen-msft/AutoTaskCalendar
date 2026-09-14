@@ -2,6 +2,7 @@ const { test, expect, withDb } = require('../fixtures');
 const { TaskDetails, WeeklyPlanDetails } = require('../../models');
 const {
     addDateOnlyDays,
+    dateOnlyFromMarker,
     mondayWeekBounds,
     parseDateOnly,
     todayInZone,
@@ -141,5 +142,102 @@ test.describe('weekly plan commitments', () => {
         const past = await commit(api, addDateOnlyDays(week.startDate, -7), []);
         expect(past.success).toBe(false);
         expect(past.log).toContain('current week');
+    });
+
+    test('carrying last week\'s unfinished work forward never rewrites the promise', async ({
+        seed,
+        api,
+    }) => {
+        const data = await seed();
+        await clearPlans(data);
+        const week = currentWeek();
+        const lastWeek = {
+            startDate: addDateOnlyDays(week.startDate, -7),
+            endDate: addDateOnlyDays(week.startDate, -1),
+        };
+
+        // A promise from last week that was never finished, beside one that was.
+        const slipped = await weekTask(data, lastWeek, { title: 'Slipped last week' });
+        const finished = await weekTask(data, lastWeek, {
+            title: 'Finished last week',
+            completed: true,
+            completedDate: new Date(),
+        });
+        await withDb(() => WeeklyPlanDetails.create({
+            userRef: data.primary.user._id,
+            weekStart: parseDateOnly(lastWeek.startDate).date,
+            weekEnd: parseDateOnly(lastWeek.endDate).date,
+            timeZone: 'UTC',
+            committedAt: new Date(),
+            items: [slipped, finished].map((task) => ({
+                taskRef: task._id,
+                projectRef: task.projectRef,
+                title: task.title,
+                duration: task.duration,
+                dueDate: task.dueDate,
+                addedAt: new Date(),
+            })),
+        }));
+
+        const findPlan = () => withDb(() => WeeklyPlanDetails.findOne({
+            userRef: data.primary.user._id,
+            weekStart: parseDateOnly(lastWeek.startDate).date,
+        }).lean());
+        const before = await findPlan();
+
+        const target = week.endDate;
+        const carried = await (await api.post('/api/carryTasksForward', {
+            data: { taskIds: [String(slipped._id)], dueDate: target },
+        })).json();
+        expect(carried.success).toBe(true);
+
+        // The task now lives in this week and comes back ready to plan with.
+        const live = carried.taskList.find((task) => String(task._id) === String(slipped._id));
+        expect(dateOnlyFromMarker(live.dueDate)).toBe(target);
+
+        // The promise itself is untouched: same snapshot, now merely resolving as `moved`.
+        const after = await findPlan();
+        expect(after.items).toEqual(before.items);
+        expect(after.amendedAt).toEqual(before.amendedAt);
+
+        const lastWeekPlan = carried.plans.find((plan) => plan.weekStart === lastWeek.startDate);
+        expect(itemFor(lastWeekPlan, slipped._id).status).toBe('moved');
+        expect(itemFor(lastWeekPlan, slipped._id).liveDueDate).toBe(target);
+
+        // What must never move: someone else's task, finished work, a series occurrence,
+        // and any date outside the caller's current week.
+        const theirs = await withDb(() => TaskDetails.create({
+            title: 'THEIR SECRET TASK',
+            duration: 30,
+            startDate: parseDateOnly(lastWeek.startDate).date,
+            dueDate: parseDateOnly(lastWeek.endDate).date,
+            completed: false,
+            userRef: data.other.user._id,
+        }));
+        const occurrence = await weekTask(data, lastWeek, {
+            title: 'An occurrence',
+            seriesRef: data.named.monthlySeries._id,
+            occurrenceDate: parseDateOnly(lastWeek.endDate).date,
+        });
+
+        const refusals = [
+            [{ taskIds: [String(theirs._id)], dueDate: target }, 'not found'],
+            [{ taskIds: [String(finished._id)], dueDate: target }, 'already finished'],
+            [{ taskIds: [String(occurrence._id)], dueDate: target }, 'repeats'],
+            [
+                { taskIds: [String(slipped._id)], dueDate: addDateOnlyDays(week.endDate, 1) },
+                'inside the current week',
+            ],
+        ];
+
+        for (const [payload, message] of refusals) {
+            const refused = await (await api.post('/api/carryTasksForward', { data: payload })).json();
+            expect(refused.success).toBe(false);
+            expect(refused.log).toContain(message);
+        }
+
+        // A refusal is total: the rejected date never landed on the task.
+        const unchanged = await withDb(() => TaskDetails.findById(slipped._id).lean());
+        expect(dateOnlyFromMarker(unchanged.dueDate)).toBe(target);
     });
 });
