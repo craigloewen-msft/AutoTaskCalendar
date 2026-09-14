@@ -7,15 +7,49 @@
           <BButton variant="primary" v-on:click="openAddTaskModal" class="action-btn" aria-label="Add new task">
             <span class="btn-icon" aria-hidden="true">+</span> Add Task
           </BButton>
-          <BButton variant="success" v-on:click="scheduleTasks" class="action-btn" aria-label="Schedule tasks">
-            <span class="btn-icon" aria-hidden="true">📅</span> Schedule Tasks
+          <BButton
+            variant="success"
+            v-on:click="scheduleTasks"
+            class="action-btn"
+            aria-label="Schedule tasks"
+            data-test="schedule-tasks"
+            :disabled="scheduling.busy"
+            :aria-busy="scheduling.busy ? 'true' : 'false'"
+          >
+            <span
+              v-if="scheduling.busy"
+              class="spinner-border spinner-border-sm btn-icon"
+              aria-hidden="true"
+            ></span>
+            <span v-else class="btn-icon" aria-hidden="true">📅</span>
+            {{ scheduling.busy ? "Scheduling…" : "Schedule Tasks" }}
           </BButton>
-          <BButton variant="info" v-on:click="syncCalendar" class="action-btn" aria-label="Sync calendar with Google">
-            <span class="btn-icon" aria-hidden="true">⟳</span> Sync Calendar
+          <BButton
+            variant="info"
+            v-on:click="syncCalendar"
+            class="action-btn"
+            aria-label="Sync calendar with Google"
+            data-test="sync-calendar"
+            :disabled="syncing"
+            :aria-busy="syncing ? 'true' : 'false'"
+          >
+            <span
+              v-if="syncing"
+              class="spinner-border spinner-border-sm btn-icon"
+              aria-hidden="true"
+            ></span>
+            <span v-else class="btn-icon" aria-hidden="true">⟳</span>
+            {{ syncing ? "Syncing…" : "Sync Calendar" }}
           </BButton>
         </div>
       </div>
-      <div class="calendar-box">
+      <ScheduleProgress
+        :busy="scheduling.busy"
+        :phase="scheduling.phase"
+        :done="scheduling.done"
+        :error="scheduling.error"
+      />
+      <div class="calendar-box" :class="{ 'is-busy': scheduling.busy }" :aria-busy="scheduling.busy ? 'true' : 'false'">
         <div class="task-controls">
           <div class="task-list">
             <h3 ref="taskListTitle" class="sidebar-title" tabindex="-1">Tasks</h3>
@@ -321,6 +355,7 @@
 import { DayPilot, DayPilotCalendar } from "@daypilot/daypilot-lite-vue";
 import { BButton } from 'bootstrap-vue-next';
 import TaskEditor from "../components/TaskEditor.vue";
+import ScheduleProgress from "../components/ScheduleProgress.vue";
 import {
   addCalendarDays,
   apiDateOnly,
@@ -340,7 +375,8 @@ export default {
   components: {
     DayPilotCalendar,
     BButton,
-    TaskEditor
+    TaskEditor,
+    ScheduleProgress
   },
   data() {
     return {
@@ -474,6 +510,10 @@ export default {
       comparisonForecast: null,
       comparisonLoading: false,
       comparisonError: "",
+      // Feedback for the long-running schedule run: busy phase, confirmation, or error.
+      scheduling: { busy: false, phase: "", done: "", error: "" },
+      schedulingDoneTimer: null,
+      syncing: false,
       // Compass roles, nested with their goals and projects.
       compassRoles: [],
     };
@@ -735,8 +775,16 @@ export default {
       await Promise.all([this.loadTasks(), this.loadCalendarEvents(), this.loadCompass()]);
     },
     async syncCalendar() {
-      await this.$http.get("/api/synccalendar/");
-      this.loadCalendarEvents();
+      if (this.syncing) return;
+      this.syncing = true;
+      try {
+        await this.$http.get("/api/synccalendar/");
+        await this.loadCalendarEvents();
+      } catch (error) {
+        console.error(error);
+      } finally {
+        this.syncing = false;
+      }
     },
     addDays(date, days) {
       return addCalendarDays(apiDateOnly(date) || localDateOnly(date), days);
@@ -757,11 +805,27 @@ export default {
       return hour;
     },
     async scheduleTasks() {
+      if (this.scheduling.busy) return;
+      clearTimeout(this.schedulingDoneTimer);
+      this.scheduling = { busy: true, phase: "Scheduling tasks…", done: "", error: "" };
       try {
-        await this.$http.get("api/scheduletasks");
+        const response = await this.$http.get("api/scheduletasks");
+        if (response.data && response.data.success === false) {
+          throw new Error(response.data.log || "Scheduling failed");
+        }
+        this.scheduling.phase = "Refreshing calendar…";
         await this.loadData();
+        this.scheduling.done = "Tasks scheduled";
+        // The confirmation is transient; the calendar itself is the lasting result.
+        this.schedulingDoneTimer = setTimeout(() => {
+          this.scheduling.done = "";
+        }, 4000);
       } catch (error) {
         console.error(error);
+        this.scheduling.error = "Could not schedule tasks. Please try again.";
+      } finally {
+        this.scheduling.busy = false;
+        this.scheduling.phase = "";
       }
     },
     openAddTaskModal() {
@@ -993,6 +1057,7 @@ export default {
   },
   beforeUnmount() {
     clearInterval(this.highlightInterval);
+    clearTimeout(this.schedulingDoneTimer);
   },
   metaInfo: {
     title: "My Calendar - Manage Your Tasks",
@@ -1156,6 +1221,13 @@ export default {
   display: flex;
   gap: 20px;
   min-height: 600px;
+  transition: opacity 0.2s ease;
+}
+
+/* Dim the calendar while scheduling so it reads as stale, not current. */
+.calendar-box.is-busy {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .task-controls {
