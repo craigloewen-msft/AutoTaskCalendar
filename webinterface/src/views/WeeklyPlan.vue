@@ -60,33 +60,21 @@
         </button>
       </div>
 
-      <details
-        v-if="!loading && !loadError && previousPlan"
-        class="recap"
-        data-test="previous-week-recap"
-      >
-        <summary>
-          <strong>Last week:</strong>
-          committed {{ previousPlan.items.length }},
-          finished {{ previousDoneCount }},
-          {{ previousSlippedCount }} slipped
-        </summary>
-        <ul class="recap-list">
-          <li
-            v-for="item in previousPlan.items"
-            :key="item.taskRef"
-            class="recap-row"
-            :class="`is-${item.status}`"
-            :data-status="item.status"
-          >
-            <span class="recap-title">
-              <span class="status-glyph" aria-hidden="true">{{ statusGlyph(item.status) }}</span>
-              {{ item.title }}
-            </span>
-            <span class="recap-meta">{{ item.status }}</span>
-          </li>
-        </ul>
-      </details>
+      <WeeklyLastWeekReview
+        v-if="!loading && !loadError && showLastWeek"
+        :plan="previousPlan"
+        :unplanned="unplannedLastWeekCompletions"
+        :project-titles="projectTitles"
+        :tasks-by-id="tasksById"
+        :range-label="formattedPreviousWeekRange"
+        :week="week"
+        :today="today"
+        :open="lastWeekOpen"
+        :busy="carrying"
+        :error="carryError"
+        @toggle="lastWeekOpenOverride = !lastWeekOpen"
+        @carry="carryForward"
+      />
 
       <div
         v-if="!loading && !loadError && roles.length && completionError"
@@ -336,6 +324,7 @@
 
 <script>
 import TaskEditor from "../components/TaskEditor.vue";
+import WeeklyLastWeekReview from "../components/WeeklyLastWeekReview.vue";
 import WeeklyProjectCard from "../components/WeeklyProjectCard.vue";
 import { buildRoleColorMap } from "../utils/roleColors";
 import {
@@ -355,7 +344,7 @@ import {
  */
 export default {
   name: "WeeklyPlan",
-  components: { TaskEditor, WeeklyProjectCard },
+  components: { TaskEditor, WeeklyLastWeekReview, WeeklyProjectCard },
   data() {
     const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
 
@@ -370,6 +359,9 @@ export default {
       planError: "",
       planLoading: false,
       planRequestId: 0,
+      carrying: false,
+      carryError: "",
+      lastWeekOpenOverride: null,
       committing: false,
       commitError: "",
       selection: {},
@@ -463,13 +455,30 @@ export default {
         .filter((item) => item.status === "done")
         .reduce((total, item) => total + (Number(item.duration) || 0), 0);
     },
-    previousDoneCount() {
-      return (this.previousPlan?.items || []).filter((item) => item.status === "done").length;
+    // Open while this week is still being planned -- that is when last week is the question.
+    // Once committed the current week leads and the review folds away, unless asked for.
+    lastWeekOpen() {
+      return this.lastWeekOpenOverride === null ? !this.isCommitted : this.lastWeekOpenOverride;
     },
-    previousSlippedCount() {
-      return (this.previousPlan?.items || []).filter(
-        (item) => item.status !== "done"
-      ).length;
+    // A week with neither a commitment nor a completion has nothing to review.
+    showLastWeek() {
+      return !!this.previousPlan?.items?.length || !!this.unplannedLastWeekCompletions.length;
+    },
+    // Completed last week but never promised -- the other half of where the week went.
+    unplannedLastWeekCompletions() {
+      const promised = new Set(
+        (this.previousPlan?.items || []).map((item) => String(item.taskRef))
+      );
+      return this.projectCompletions.filter((task) => !promised.has(String(task._id)));
+    },
+    projectTitles() {
+      const titles = {};
+      for (const role of this.roles) {
+        for (const goal of role.goalList || []) {
+          for (const project of goal.projectList || []) titles[project._id] = project.title;
+        }
+      }
+      return titles;
     },
     commitLabel() {
       if (this.committing) return "Saving…";
@@ -719,6 +728,51 @@ export default {
         this.committing = false;
       }
     },
+    /**
+     * Move last week's unfinished work into this week.
+     *
+     * One request per target date, and each response carries both the refreshed tasks and
+     * both weeks' plans -- so the carried task appears below and last week's item becomes
+     * `moved` without its snapshot being rewritten.
+     */
+    async carryForward(entries) {
+      const wanted = (entries || []).filter((entry) => entry.taskId && entry.dueDate);
+      if (!wanted.length || this.carrying) return;
+
+      if (this.refreshTemporal()) {
+        // A rollover invalidates dates computed against the old week, so re-read and stop.
+        this.loadProjectCompletions();
+        await this.loadPlans();
+        this.carryError = "The week rolled over. Check the dates and try again.";
+        return;
+      }
+
+      this.carrying = true;
+      this.carryError = "";
+
+      // The endpoint takes one date per call, so same-day rows travel together.
+      const byDate = new Map();
+      for (const entry of wanted) {
+        if (!byDate.has(entry.dueDate)) byDate.set(entry.dueDate, []);
+        byDate.get(entry.dueDate).push(String(entry.taskId));
+      }
+
+      try {
+        for (const [dueDate, taskIds] of byDate) {
+          const response = await this.$http.post("/api/carryTasksForward", { taskIds, dueDate });
+          if (!response.data.success) {
+            this.carryError = response.data.log || "That work could not be carried forward.";
+            return;
+          }
+          this.taskList = response.data.taskList || this.taskList;
+          this.applyPlans(response.data.plans);
+        }
+      } catch (error) {
+        this.carryError = "That work could not be carried forward.";
+      } finally {
+        this.carrying = false;
+      }
+    },
     toggleTask(task) {
       this.selection[task._id] = this.selection[task._id] === false;
     },
@@ -873,9 +927,6 @@ export default {
       const peak = Math.max(...loads, 0);
       if (!peak) return 0;
       return Math.round((minutesOn(date) / peak) * 100);
-    },
-    statusGlyph(status) {
-      return { done: "✓", moved: "↷", removed: "✗" }[status] || "●";
     },
     sortTasks(tasks) {
       return [...tasks].sort((left, right) => {
@@ -1203,77 +1254,6 @@ export default {
 .bar-message.error {
   border-color: rgba(248, 113, 113, 0.35);
   color: #fca5a5;
-}
-
-.recap {
-  margin-bottom: 18px;
-  padding: 12px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 11px;
-  background: rgba(22, 27, 34, 0.6);
-}
-
-.recap summary {
-  color: #a8b4c0;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.recap summary strong {
-  color: #d7dde4;
-}
-
-.recap-list {
-  display: grid;
-  gap: 2px;
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.recap-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 5px 8px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.025);
-  color: #b6c0ca;
-  font-size: 0.82rem;
-}
-
-.recap-title {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: 8px;
-  overflow-wrap: anywhere;
-}
-
-.recap-meta {
-  flex: 0 0 auto;
-  color: #77818d;
-  font-size: 0.74rem;
-  text-transform: capitalize;
-}
-
-.status-glyph {
-  width: 12px;
-  color: #8b949e;
-  text-align: center;
-}
-
-.recap-row.is-done .status-glyph {
-  color: #6ee7b7;
-}
-
-.recap-row.is-moved .status-glyph {
-  color: #fbbf24;
-}
-
-.recap-row.is-removed .status-glyph {
-  color: #f87171;
 }
 
 .panel-state {

@@ -259,9 +259,73 @@ function inCommittableWeek(task, week) {
     return withinWeek(taskPlanDate(task), week.startDate, week.endDate);
 }
 
+/**
+ * Move unfinished work from a past week into the current one.
+ *
+ * This is the action half of the last-week review: it writes `taskInfo` only. No plan
+ * document is touched, so last week's promise survives exactly as snapshotted and simply
+ * resolves as `moved` on the next read -- amending a commitment must never be a way to
+ * quietly erase a promise that was not kept.
+ *
+ * Nothing is scheduled or reprioritised here; a carried task behaves like any other task.
+ */
+async function carryTasksForward(user, { taskIds, dueDate } = {}, now = new Date()) {
+    if (!Array.isArray(taskIds) || !taskIds.length) {
+        fail('taskIds must be a non-empty array');
+    }
+
+    const week = currentWeek(user, now);
+    const today = todayInZone(user.timeZone, now);
+    const parsed = parseDateOnly(dueDate);
+    if (!parsed.provided) fail('dueDate is required');
+    if (!parsed.valid) fail('dueDate must use YYYY-MM-DD');
+    if (!withinWeek(parsed.value, week.startDate, week.endDate)) {
+        fail('dueDate must be inside the current week');
+    }
+    if (compareDateOnly(parsed.value, today) < 0) {
+        fail('dueDate cannot be in the past');
+    }
+
+    const unique = [...new Set(taskIds.map((id) => String(id)))];
+    let found = [];
+    try {
+        found = await TaskDetails.find({ _id: { $in: unique }, userRef: user._id });
+    } catch (error) {
+        // A malformed id is just a not-found from the caller's point of view.
+        fail('Task not found');
+    }
+
+    const byId = new Map(found.map((task) => [String(task._id), task]));
+    const carried = [];
+
+    for (const id of unique) {
+        const task = byId.get(id);
+        if (!task) fail('Task not found');
+        if (task.completed) fail(`"${task.title}" is already finished`);
+        if (task.seriesRef || task.recurrence?.freq) {
+            fail(`"${task.title}" repeats, so its dates come from the rule`);
+        }
+        carried.push(task);
+    }
+
+    for (const task of carried) {
+        task.dueDate = parsed.date;
+        // A start date after the due date would leave the scheduler nowhere to place it.
+        const startDate = dateOnlyFromMarker(task.startDate);
+        if (!startDate || compareDateOnly(startDate, parsed.value) > 0) {
+            task.startDate = parseDateOnly(today).date;
+        }
+        task.isBacklog = false;
+        await task.save();
+    }
+
+    return { dueDate: parsed.value, carried: carried.length };
+}
+
 module.exports = {
     WeeklyPlanError,
     MAX_RANGE_WEEKS,
     getWeeklyPlans,
     commitWeeklyPlan,
+    carryTasksForward,
 };

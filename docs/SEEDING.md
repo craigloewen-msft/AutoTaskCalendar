@@ -98,9 +98,12 @@ All of it belongs to `testuser` unless noted:
     due date was pushed past the week afterwards so it resolves as `moved`. `weekAdded` is
     due this week but deliberately left out of the snapshot, so **Added since commit** has a
     subject.
-  - The **previous week** (`data.named.previousPlan`) commits two tasks: `lastWeekDone`,
-    completed, and `lastWeekDropped`, which was deleted after committing and therefore
-    resolves as `removed`. That combination is what the previous-week recap reads.
+  - The **previous week** (`data.named.previousPlan`) commits three tasks: `lastWeekDone`,
+    completed; `lastWeekDropped`, which was deleted after committing and therefore resolves
+    as `removed`; and `lastWeekSlipped`, still incomplete and still dated last week, which is
+    what the review's **Carry →** action acts on. `lastWeekUnplanned` was completed last week
+    but deliberately never committed, so **Also finished, never promised** has a subject.
+    That combination is what last week's review reads.
   - Both anchor on real Mondays (`b.thisMondayDate` / `b.lastMondayDate`), so the fixture is
     correct whichever day the seed runs on.
 - **A second user** with 5 tasks, 1 event, and a role/goal/project, all titled
