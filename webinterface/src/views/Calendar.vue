@@ -244,17 +244,21 @@
                       >
                         {{ getTaskDaysBetweenDeadlineAndSchedule(task) }}
                       </span>
+                      <!-- Two-step: the first click arms, the second completes. No undo exists. -->
                       <button
-                        v-if="isRecurringTask(task)"
                         class="quick-complete-button"
+                        :class="{ armed: isCompletionArmed(task) }"
                         type="button"
-                        :aria-label="`Complete recurring task: ${task.title}`"
+                        :data-test="`quick-complete-${task._id}`"
+                        :aria-label="quickCompleteLabel(task)"
                         :aria-busy="isQuickCompleting(task)"
-                        title="Complete this occurrence"
+                        :title="quickCompleteLabel(task)"
                         :disabled="isQuickCompleting(task)"
-                        @click.stop="quickCompleteTask(task)"
+                        @click.stop="toggleQuickComplete(task)"
+                        @keydown.esc.stop="disarmCompletion()"
+                        @blur="disarmCompletion()"
                       >
-                        <span aria-hidden="true">{{ isQuickCompleting(task) ? "…" : "✓" }}</span>
+                        <span aria-hidden="true">{{ quickCompleteGlyph(task) }}</span>
                       </button>
                     </span>
                   </span>
@@ -495,6 +499,9 @@ export default {
       allDayEvents: [],
       quickCompletingTaskIds: [],
       quickCompleteError: "",
+      // The task whose inline complete button is armed, plus its auto-disarm timer.
+      armedCompleteTaskId: null,
+      armedCompleteTimer: null,
       slipForecasts: {},
       selectedSlipForecastId: null,
       // Extra slots added while a forecast is open. Calculated on demand, never persisted.
@@ -537,6 +544,41 @@ export default {
     },
     isQuickCompleting(task) {
       return this.quickCompletingTaskIds.includes(task?._id);
+    },
+    isCompletionArmed(task) {
+      return !!task?._id && this.armedCompleteTaskId === task._id;
+    },
+    quickCompleteGlyph(task) {
+      if (this.isQuickCompleting(task)) return "…";
+      return this.isCompletionArmed(task) ? "✓ Confirm" : "✓";
+    },
+    quickCompleteLabel(task) {
+      const title = task?.title || "task";
+      return this.isCompletionArmed(task)
+        ? `Confirm completion of ${title}`
+        : `Complete task: ${title}`;
+    },
+    /** First click arms the button, second click within the window completes. */
+    toggleQuickComplete(task) {
+      if (this.isCompletionArmed(task)) {
+        this.disarmCompletion();
+        this.quickCompleteTask(task);
+        return;
+      }
+      this.armCompletion(task);
+    },
+    armCompletion(task) {
+      const taskId = task?._id;
+      if (!taskId) return;
+      this.quickCompleteError = "";
+      this.disarmCompletion();
+      this.armedCompleteTaskId = taskId;
+      this.armedCompleteTimer = setTimeout(() => this.disarmCompletion(), 4000);
+    },
+    disarmCompletion() {
+      if (this.armedCompleteTimer) clearTimeout(this.armedCompleteTimer);
+      this.armedCompleteTimer = null;
+      this.armedCompleteTaskId = null;
     },
     async quickCompleteTask(task) {
       const taskId = task?._id;
@@ -1054,6 +1096,7 @@ export default {
   beforeUnmount() {
     clearInterval(this.highlightInterval);
     clearTimeout(this.schedulingErrorTimer);
+    this.disarmCompletion();
   },
   metaInfo: {
     title: "My Calendar - Manage Your Tasks",
@@ -1339,22 +1382,40 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
+  min-width: 30px;
   height: 30px;
   padding: 0;
   border: 1px solid rgba(110, 231, 183, 0.45);
-  border-radius: 50%;
+  border-radius: 999px;
   background: transparent;
   color: #6ee7b7;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
-  opacity: 0.55;
+  /* Stays out of the way until the row is hovered, so it is hard to hit by accident. */
+  opacity: 0;
   transition: opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.task-item:hover .quick-complete-button,
+.task-item:focus-within .quick-complete-button {
+  opacity: 0.55;
 }
 
 .quick-complete-button:hover,
 .quick-complete-button:focus-visible {
   border-color: #6ee7b7;
   background: rgba(16, 185, 129, 0.14);
+  opacity: 1;
+}
+
+/* Armed: the second click completes, so it is unmistakable. */
+.task-item .quick-complete-button.armed {
+  padding: 0 11px;
+  border-color: #10b981;
+  background: #10b981;
+  color: #06281d;
   opacity: 1;
 }
 
@@ -1366,6 +1427,13 @@ export default {
 .quick-complete-button:disabled {
   cursor: progress;
   opacity: 0.4;
+}
+
+/* Touch devices have no hover, so the button is always at resting strength. */
+@media (hover: none) {
+  .quick-complete-button {
+    opacity: 0.55;
+  }
 }
 
 .quick-complete-error {
