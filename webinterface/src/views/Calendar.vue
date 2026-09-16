@@ -549,8 +549,8 @@ export default {
       return !!task?._id && this.armedCompleteTaskId === task._id;
     },
     quickCompleteGlyph(task) {
-      if (this.isQuickCompleting(task)) return "…";
-      return this.isCompletionArmed(task) ? "✓ Confirm" : "✓";
+      // Same glyph armed or not: the button must never change size.
+      return this.isQuickCompleting(task) ? "…" : "✓";
     },
     quickCompleteLabel(task) {
       const title = task?.title || "task";
@@ -1382,16 +1382,13 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 30px;
+  width: 30px;
   height: 30px;
   padding: 0;
   border: 1px solid rgba(110, 231, 183, 0.45);
-  border-radius: 999px;
+  border-radius: 50%;
   background: transparent;
   color: #6ee7b7;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
   cursor: pointer;
   /* Stays out of the way until the row is hovered, so it is hard to hit by accident. */
   opacity: 0;
@@ -1410,12 +1407,12 @@ export default {
   opacity: 1;
 }
 
-/* Armed: the second click completes, so it is unmistakable. */
+/* Armed: same box, filled solid green with a ring. Nothing here affects layout. */
 .task-item .quick-complete-button.armed {
-  padding: 0 11px;
   border-color: #10b981;
   background: #10b981;
   color: #06281d;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
   opacity: 1;
 }
 
