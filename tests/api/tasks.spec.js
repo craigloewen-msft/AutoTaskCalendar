@@ -186,6 +186,22 @@ test.describe('tasks', () => {
         expect(remainingIds).toHaveLength(3);
     });
 
+    test('completes a plain non-recurring task and returns the refreshed active list', async ({ seed, api }) => {
+        const data = await seed();
+        const task = data.named.codeReview;
+
+        const body = await (await api.post('/api/completeTask', {
+            data: { taskId: task._id.toString() },
+        })).json();
+
+        expect(body.success).toBe(true);
+        // The inline complete button renders straight from this list.
+        expect(Array.isArray(body.taskList)).toBe(true);
+        expect(titles(body.taskList)).not.toContain(task.title);
+        const stored = await withDb(() => TaskDetails.findById(task._id));
+        expect(stored.completed).toBe(true);
+    });
+
     test('completes chunked tasks incrementally until the final chunk removes them from the active list', async ({
         seed,
         api,
