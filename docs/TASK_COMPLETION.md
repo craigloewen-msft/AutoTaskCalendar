@@ -18,7 +18,10 @@ It is deliberately two-step:
 | State | Looks like | What a click does |
 | --- | --- | --- |
 | Resting | invisible until the row is hovered or focused, then a faint outlined circle | arms the button |
-| Armed | solid green `✓ Confirm` pill | completes the task |
+| Armed | solid green filled circle, exactly the same size as resting | completes the task |
+
+The two states are deliberately identical in size — only colour changes — so nothing in the
+task row shifts when you arm it.
 
 Arming disarms again after **4 seconds**, on `Escape`, on blur, when another task's button is
 armed, or when the task editor opens. So an accidental completion needs two deliberate clicks
