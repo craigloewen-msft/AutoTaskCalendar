@@ -1,4 +1,4 @@
-const { TaskDetails, WeeklyPlanDetails } = require('../models');
+const { TaskDetails, WeeklyPlanDetails, ProjectDetails } = require('../models');
 const {
     addDateOnlyDays,
     compareDateOnly,
@@ -139,7 +139,44 @@ async function getWeeklyPlans(user, { from, to } = {}) {
         : [];
     const tasksById = new Map(tasks.map((task) => [String(task._id), task]));
 
-    return { plans: plans.map((plan) => serializePlan(plan, tasksById)) };
+    return {
+        plans: plans.map((plan) => serializePlan(plan, tasksById)),
+        projects: await planProjects(user, plans),
+    };
+}
+
+/**
+ * The projects the returned plans actually reference, live or ended.
+ *
+ * A commitment outlives its project: once a project ends it leaves `getCompass`, and
+ * without this the page could not render a promise it must still show. Bounded by the
+ * plans already read, so it cannot grow beyond them.
+ */
+async function planProjects(user, plans, now = new Date()) {
+    const ids = [...new Set(
+        plans.flatMap((plan) => (plan.items || [])
+            .filter((item) => item.projectRef)
+            .map((item) => String(item.projectRef)))
+    )];
+
+    if (!ids.length) return [];
+
+    const projects = await ProjectDetails.find({ _id: { $in: ids }, userRef: user._id })
+        .select('_id title endDate')
+        .lean();
+
+    const today = todayInZone(user.timeZone, now);
+
+    return projects.map((project) => {
+        const endDate = dateOnlyFromMarker(project.endDate);
+        return {
+            _id: String(project._id),
+            title: project.title,
+            endDate,
+            // Same rule as Compass: an end date of today or earlier means ended.
+            ended: !!endDate && compareDateOnly(endDate, today) <= 0,
+        };
+    });
 }
 
 /**

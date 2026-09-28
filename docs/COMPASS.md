@@ -38,6 +38,11 @@ There is no `status` field anywhere, so there is nothing to keep in sync:
 Giving a parked project a start date is what "starting" it means. Setting an end date is
 what "finishing" it means. That is the whole state machine.
 
+**Ending takes effect immediately.** An end date of today or earlier means ended, so the
+item leaves the board and the Weekly Plan hierarchy the moment you end it. An end date in
+the future leaves the item live until that day arrives, which is how an end is scheduled
+ahead of time.
+
 This table describes how the **client** reads the dates. The API stores and returns dates
 and nothing else.
 
@@ -102,9 +107,9 @@ with `{ success: false, log }` via `returnFailure()`.
 | --- | --- | --- |
 | GET | `/api/getCompass` | The **live** hierarchy. The page's main read. |
 | GET | `/api/getCompassArchive` | Paged detail about ended items. |
-| POST | `/api/createRole` · `/api/editRole` · `/api/deleteRole` | |
-| POST | `/api/createGoal` · `/api/editGoal` · `/api/deleteGoal` | |
-| POST | `/api/createProject` · `/api/editProject` · `/api/deleteProject` | |
+| POST | `/api/createRole` · `/api/editRole` · `/api/endRole` · `/api/deleteRole` | |
+| POST | `/api/createGoal` · `/api/editGoal` · `/api/endGoal` · `/api/deleteGoal` | |
+| POST | `/api/createProject` · `/api/editProject` · `/api/endProject` · `/api/deleteProject` | |
 | POST | `/api/setTaskProject` | `{ taskId, projectId }`; a null `projectId` unlinks. |
 
 **Every mutation returns the same payload as `getCompass`**, mirroring how the task
@@ -159,13 +164,18 @@ all of it on every create, edit, and delete.
 
 Two consequences worth knowing:
 
-- **Ending a role archives its whole branch.** Its goals and projects come from the archive
-  endpoint, not from here. This keeps the rule simple: the tree is reachable-and-live.
+- **Ending a role archives its whole branch.** `POST /api/endRole` stamps the end date on
+  every goal and project beneath it, so they come back from the archive endpoint rather than
+  vanishing entirely.
 - **Parked ("someday") projects are still live.** They have no `startDate` but no `endDate`
   either, so they always come back, and the client decides how to present them.
 
 - **`completedCounts`** — how many roles / goals / projects are finished, where finished
-  means `endDate` is set and already past.
+  means `endDate` is set and is today or earlier.
+- **`endedProjects`** — identity (`_id`, `title`, `endDate`) for ended projects that
+  unfinished tasks still point at. Ending a project can leave live work behind, and without
+  a title that work would appear on Weekly Plan with nothing to name it. Identity only: it
+  is not a rollup, and it is bounded by how many ended projects still have open work.
 - **`unalignedTaskCount`** — incomplete tasks with no `projectRef`.
 
 #### Query parameters
@@ -221,8 +231,10 @@ through finished goals the same way it pages through finished tasks.
 - `title` is required everywhere. `startDate` is required on roles and goals, optional on
   projects.
 - `endDate`, when present, must be on or after `startDate`.
-- Dates are strict inclusive civil dates (`YYYY-MM-DD`), not instants. An item remains live
-  through its selected end day.
+- Dates are strict civil dates (`YYYY-MM-DD`), not instants.
+- **Ending is immediate.** An `endDate` of today or earlier means ended: the item leaves
+  `getCompass` on the very next read, not the following morning. Only an `endDate` strictly
+  in the future leaves an item live, which is how you schedule an end in advance.
 - `roleRef` / `goalRef` / `projectRef` must exist **and belong to the caller**. This is the
   cross-tenant boundary; `findOwned()` in the controller is the single chokepoint, and it
   has explicit test coverage.
@@ -302,6 +314,38 @@ This is a client-side guard over data the page already holds — `getCompass` on
 live items, so anything populated under a role or goal is by definition still active. No
 extra request, and **no API change**: `POST /api/editRole` with an `endDate` still archives
 a branch for any caller that genuinely wants that.
+
+### Ending a project, end to end
+
+**End project** does not just stamp a date. It opens a confirm step inside the drawer that
+names the project, lists its unfinished tasks, and asks what should happen to them:
+
+| Choice | `taskAction` | What it does |
+| --- | --- | --- |
+| Leave them alone | `keep` (default) | Tasks are untouched and stay on the calendar. |
+| Unlink them | `unlink` | Clears `projectRef`, so they appear under **Unaligned tasks** on Weekly Plan, ready to reassign. |
+| Mark them done | `complete` | Runs each through the normal completion path, so events and recurrence stay correct. |
+
+The request is `POST /api/endProject` with `{ _id, taskAction }`. It returns the usual
+`getCompass` payload plus `taskAction` and `affectedTaskCount`, and the page uses those to
+show a line saying what happened — ending is invisible otherwise, which is what made it feel
+broken. `POST /api/editProject` with an explicit `endDate` is still the way to backdate an
+end or schedule one in the future.
+
+Ending a role or goal takes the same `taskAction` and applies it to every task in the
+branch, and **stamps the same end date on every goal and project beneath it**. That last
+part matters: without it the children would be merely unreachable — gone from the board but
+absent from the archive too, and invisible to the `endedProjects` naming that left-behind
+tasks rely on. The UI still blocks this while live children exist; the API stays consistent
+for callers that do it anyway.
+
+### Work left behind by an ended project
+
+With `keep`, unfinished tasks keep pointing at a project that is no longer on the board.
+They are not orphans and must not be presented as such, so `getCompass` returns
+`endedProjects` — titles for exactly those projects — and Weekly Plan groups the work under
+an **Ended projects** drawer with a reassign control. Tasks whose project was *deleted*
+rather than ended have no title to show and stay in the generic drawer.
 
 ### On the Calendar page
 

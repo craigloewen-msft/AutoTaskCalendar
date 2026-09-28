@@ -107,6 +107,155 @@ test.describe('compass', () => {
         }
     });
 
+    test('ends a project immediately, on the same call', async ({ seed, api }) => {
+        const data = await seed();
+        const before = await compass(api);
+        const projectId = String(data.named.perfProject._id);
+
+        const body = await (await api.post('/api/endProject', {
+            data: { _id: projectId },
+        })).json();
+
+        expect(body.success).toBe(true);
+        expect(JSON.stringify(body.roles)).not.toContain('Perf pass');
+        expect(body.completedCounts.projects).toBe(before.completedCounts.projects + 1);
+
+        // And it stays gone on a fresh read, rather than only in the mutation's echo.
+        expect(JSON.stringify((await compass(api)).roles)).not.toContain('Perf pass');
+    });
+
+    test('a future end date still leaves an item live', async ({ seed, api }) => {
+        const data = await seed();
+
+        const body = await (await api.post('/api/editProject', {
+            data: { _id: String(data.named.perfProject._id), endDate: daysFromNow(3) },
+        })).json();
+
+        expect(JSON.stringify(body.roles)).toContain('Perf pass');
+    });
+
+    test('ending applies the chosen action to the unfinished tasks beneath', async ({ seed, api }) => {
+        const data = await seed();
+        const projectId = String(data.named.migrationProject._id);
+
+        const taskList = (await (await api.get('/api/getUserTasks')).json()).taskList;
+        const openIds = taskList.filter((t) => t.projectRef === projectId).map((t) => t._id);
+        expect(openIds.length).toBeGreaterThan(0);
+
+        const body = await (await api.post('/api/endProject', {
+            data: { _id: projectId, taskAction: 'unlink' },
+        })).json();
+
+        expect(body.success).toBe(true);
+        expect(body.taskAction).toBe('unlink');
+        expect(body.affectedTaskCount).toBe(openIds.length);
+
+        const after = (await (await api.get('/api/getUserTasks')).json()).taskList;
+        for (const id of openIds) {
+            const task = after.find((t) => t._id === id);
+            expect(task).toBeTruthy();
+            expect(task.projectRef).toBeFalsy();
+        }
+
+        // Completed work keeps its link, so the project's history survives being ended.
+        const completions = (await (await api.get(
+            `/api/getProjectCompletions?completedFrom=${daysFromNow(-60)}&completedTo=${daysFromNow(0)}`
+        )).json()).items;
+        expect(completions.some((item) => item.projectRef === projectId)).toBe(true);
+    });
+
+    test('ending can complete the work instead, or leave it alone', async ({ seed, api }) => {
+        const data = await seed();
+        const hiringId = String(data.named.hiringProject._id);
+        const trainingId = String(data.named.trainingProject._id);
+
+        const before = (await (await api.get('/api/getUserTasks')).json()).taskList;
+        const hiringIds = before.filter((t) => t.projectRef === hiringId).map((t) => t._id);
+        const trainingIds = before.filter((t) => t.projectRef === trainingId).map((t) => t._id);
+        expect(hiringIds.length).toBeGreaterThan(0);
+        expect(trainingIds.length).toBeGreaterThan(0);
+
+        const completed = await (await api.post('/api/endProject', {
+            data: { _id: hiringId, taskAction: 'complete' },
+        })).json();
+        expect(completed.affectedTaskCount).toBe(hiringIds.length);
+
+        const kept = await (await api.post('/api/endProject', {
+            data: { _id: trainingId, taskAction: 'keep' },
+        })).json();
+        expect(kept.affectedTaskCount).toBe(0);
+
+        // getUserTasks only returns unfinished work, so completed tasks drop out of it.
+        const after = (await (await api.get('/api/getUserTasks')).json()).taskList;
+        for (const id of hiringIds) expect(after.find((t) => t._id === id)).toBeFalsy();
+        for (const id of trainingIds) {
+            expect(after.find((t) => t._id === id)?.projectRef).toBe(trainingId);
+        }
+
+        // Completing a repeating task clones it forward; that clone must not land back
+        // inside the project that was just ended.
+        expect(after.some((task) => task.projectRef === hiringId)).toBe(false);
+    });
+
+    test('rejects an unknown task action and another tenant\'s project', async ({ seed, api }) => {
+        const data = await seed();
+
+        const badAction = await (await api.post('/api/endProject', {
+            data: { _id: String(data.named.perfProject._id), taskAction: 'destroy' },
+        })).json();
+        expect(badAction.success).toBe(false);
+        expect(badAction.log).toContain('Task action');
+
+        const otherTenant = await (await api.post('/api/endProject', {
+            data: { _id: String(data.named.otherProject._id) },
+        })).json();
+        expect(otherTenant.success).toBe(false);
+    });
+
+    test('ending a role archives its whole branch into the archive, not into limbo', async ({ seed, api }) => {
+        const data = await seed();
+        const before = await compass(api);
+
+        const body = await (await api.post('/api/endRole', {
+            data: { _id: String(data.named.engineerRole._id), taskAction: 'keep' },
+        })).json();
+
+        expect(body.success).toBe(true);
+        expect(findRole(body, 'Engineer')).toBeFalsy();
+
+        // The children must be genuinely ended, not merely unreachable: otherwise they are
+        // missing from the board AND from the archive.
+        expect(body.completedCounts.goals).toBeGreaterThan(before.completedCounts.goals);
+        expect(body.completedCounts.projects).toBeGreaterThan(before.completedCounts.projects);
+
+        const archive = await (await api.get('/api/getCompassArchive?level=project&limit=100')).json();
+        expect(archive.items.map((item) => item.title)).toContain('Migration plan');
+    });
+
+    test('names ended projects that unfinished work still points at', async ({ seed, api }) => {
+        const data = await seed();
+        const projectId = String(data.named.trainingProject._id);
+
+        expect((await compass(api)).endedProjects).toEqual([]);
+
+        const body = await (await api.post('/api/endProject', {
+            data: { _id: projectId, taskAction: 'keep' },
+        })).json();
+
+        // Left-behind work is not an orphan: the page needs a title to group it under.
+        const named = body.endedProjects.find((p) => String(p._id) === projectId);
+        expect(named).toBeTruthy();
+        expect(named.title).toBe('Training block');
+        // Civil date, like every other date Compass returns -- not an ISO instant.
+        expect(named.endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+        // Unlinking removes the reason to mention it at all.
+        const unlinked = await (await api.post('/api/endProject', {
+            data: { _id: String(data.named.hiringProject._id), taskAction: 'unlink' },
+        })).json();
+        expect(unlinked.endedProjects.map((p) => p.title)).not.toContain('Hiring loop');
+    });
+
     test('applies representative validation', async ({ seed, api }) => {
         const data = await seed();
 

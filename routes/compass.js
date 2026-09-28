@@ -8,6 +8,7 @@ const {
     getCompassArchive,
     createItem,
     editItem,
+    endItem,
     deleteItem,
     setTaskProject,
 } = require('../controllers/compassController');
@@ -30,10 +31,10 @@ function createCompassRoutes(config, authenticateSession) {
                     return res.send(returnFailure('Not logged in'));
                 }
 
-                await work(req, user);
+                const extra = await work(req, user);
 
                 const payload = await getCompassPayload(user, req.query);
-                return res.json({ success: true, ...payload });
+                return res.json({ success: true, ...payload, ...(extra || {}) });
             } catch (error) {
                 if (error instanceof CompassError) {
                     return res.send(returnFailure(error.message));
@@ -77,6 +78,12 @@ function createCompassRoutes(config, authenticateSession) {
 
         router.post(`/edit${level}`, authenticateSession, handle(async (req, user) => {
             await editItem(key, req.body, user);
+        }));
+
+        // Ending is immediate and carries what to do with the unfinished tasks beneath.
+        router.post(`/end${level}`, authenticateSession, handle(async (req, user) => {
+            const { taskAction, affectedTaskCount } = await endItem(key, req.body, user);
+            return { taskAction, affectedTaskCount };
         }));
 
         router.post(`/delete${level}`, authenticateSession, handle(async (req, user) => {

@@ -8,7 +8,47 @@
 
       <div v-if="error" class="drawer-error">{{ error }}</div>
 
-      <div class="drawer-body">
+      <!-- Ending is immediate and may touch tasks, so it is confirmed in place. -->
+      <div v-if="confirmingEnd" class="drawer-body end-confirm" data-test="end-confirm">
+        <h3 class="end-confirm-title">End “{{ existing.title }}”?</h3>
+        <p class="end-confirm-copy">
+          It leaves your board and your weekly plan straight away. You can still find it in
+          the Archive, and nothing is deleted.
+        </p>
+
+        <template v-if="openTasks.length">
+          <p class="end-confirm-copy">
+            It still has {{ openTasks.length }}
+            unfinished {{ openTasks.length === 1 ? 'task' : 'tasks' }}:
+          </p>
+          <ul class="end-task-list">
+            <li v-for="task in previewTasks" :key="task._id">{{ task.title }}</li>
+            <li v-if="openTasks.length > previewTasks.length" class="end-task-more">
+              and {{ openTasks.length - previewTasks.length }} more
+            </li>
+          </ul>
+
+          <div class="end-choices" role="radiogroup" aria-label="What to do with the unfinished tasks">
+            <label v-for="choice in taskChoices" :key="choice.value" class="end-choice">
+              <input
+                v-model="taskAction"
+                type="radio"
+                name="compass-end-task-action"
+                :value="choice.value"
+              />
+              <span>
+                <strong>{{ choice.label }}</strong>
+                <small>{{ choice.hint }}</small>
+              </span>
+            </label>
+          </div>
+        </template>
+        <p v-else class="end-confirm-copy">
+          Nothing unfinished is left under it.
+        </p>
+      </div>
+
+      <div v-else class="drawer-body">
         <div class="form-group">
           <label :for="'compass-title'">Title*</label>
           <input
@@ -72,14 +112,25 @@
         </div>
       </div>
 
-      <footer class="drawer-footer">
+      <footer v-if="confirmingEnd" class="drawer-footer">
+        <div class="drawer-footer-left"></div>
+        <div class="drawer-footer-right">
+          <button class="btn btn-secondary" @click="confirmingEnd = false">Back</button>
+          <button class="btn btn-danger" data-test="confirm-end" @click="confirmEnd">
+            {{ endActionLabel }}
+          </button>
+        </div>
+      </footer>
+
+      <footer v-else class="drawer-footer">
         <div class="drawer-footer-left">
           <button
             v-if="existing && !existing.endDate"
             class="btn btn-secondary"
+            data-test="end-item"
             :disabled="!canEnd"
             :title="canEnd ? '' : endBlockedHint"
-            @click="$emit('end', { level, item: existing })"
+            @click="confirmingEnd = true"
           >
             End {{ level }}
           </button>
@@ -111,6 +162,8 @@ export default {
     roles: { type: Array, default: () => [] },
     // Preselected parent when adding from a role or goal card.
     parentId: { type: String, default: null },
+    // The item's unfinished tasks, so ending can offer what to do with them.
+    openTasks: { type: Array, default: () => [] },
     error: { type: String, default: "" },
   },
   emits: ["save", "cancel", "delete", "end"],
@@ -124,10 +177,13 @@ export default {
         parentId: null,
       },
       isActive: true,
+      confirmingEnd: false,
+      taskAction: "keep",
     };
   },
   computed: {
     heading() {
+      if (this.confirmingEnd) return `End ${this.level}`;
       return `${this.existing ? "Edit" : "New"} ${this.level}`;
     },
     parentLabel() {
@@ -183,6 +239,36 @@ export default {
         `${this.childLabel} too. End or move ${this.liveChildCount === 1 ? "it" : "them"} first.`
       );
     },
+    // A long list would push the choices off screen, so only the first few are named.
+    previewTasks() {
+      return this.openTasks.slice(0, 5);
+    },
+    taskChoices() {
+      const them = this.openTasks.length === 1 ? "it" : "them";
+      return [
+        {
+          value: "keep",
+          label: `Leave ${them} alone`,
+          hint: `Still on your calendar, just no longer under a ${this.level}.`,
+        },
+        {
+          value: "unlink",
+          label: `Unlink ${them}`,
+          hint: "Keeps the work and lists it as unaligned, ready to reassign.",
+        },
+        {
+          value: "complete",
+          label: `Mark ${them} done`,
+          hint: "Completes the work and clears it off your calendar.",
+        },
+      ];
+    },
+    endActionLabel() {
+      if (!this.openTasks.length) return `End ${this.level}`;
+      if (this.taskAction === "unlink") return "End and unlink";
+      if (this.taskAction === "complete") return "End and complete";
+      return "End anyway";
+    },
   },
   created() {
     const item = this.existing;
@@ -222,6 +308,13 @@ export default {
       }
 
       this.$emit("save", { level: this.level, payload, isEdit: !!this.existing });
+    },
+    confirmEnd() {
+      this.$emit("end", {
+        level: this.level,
+        item: this.existing,
+        taskAction: this.openTasks.length ? this.taskAction : "keep",
+      });
     },
   },
 };
@@ -306,6 +399,65 @@ export default {
   margin-top: 6px;
   color: #d9a441;
   font-size: 0.82rem;
+}
+
+.end-confirm-title {
+  font-size: 1rem;
+  color: #e0e0e0;
+  margin: 0 0 10px;
+}
+
+.end-confirm-copy {
+  color: #b0b0b0;
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+}
+
+.end-task-list {
+  margin: 0 0 16px;
+  padding-left: 18px;
+  color: #d0d0d0;
+  font-size: 0.88rem;
+}
+
+.end-task-more {
+  color: #9aa0a6;
+  list-style: none;
+  margin-left: -18px;
+}
+
+.end-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.end-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 400;
+  margin: 0;
+}
+
+.end-choice:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.end-choice strong {
+  display: block;
+  color: #e0e0e0;
+  font-size: 0.92rem;
+}
+
+.end-choice small {
+  display: block;
+  color: #9aa0a6;
+  font-size: 0.8rem;
 }
 
 .drawer-footer button:disabled {
