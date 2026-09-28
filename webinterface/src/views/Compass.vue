@@ -11,6 +11,11 @@
         </div>
       </div>
 
+      <p v-if="notice" class="compass-notice" role="status" data-test="compass-notice">
+        {{ notice }}
+        <button class="notice-dismiss" aria-label="Dismiss" @click="notice = ''">✕</button>
+      </p>
+
       <div v-if="loading" class="text-center py-5">
         <div class="spinner-border text-primary" role="status">
           <span class="visually-hidden">Loading...</span>
@@ -132,6 +137,7 @@
       :existing="editor.existing"
       :roles="roles"
       :parent-id="editor.parentId"
+      :open-tasks="editorOpenTasks"
       :error="editor.error"
       @save="save"
       @cancel="closeEditor"
@@ -142,7 +148,7 @@
 </template>
 
 <script>
-import { dateOnlyInTimeZone, formatCivilDate } from "../utils/temporal";
+import { formatCivilDate } from "../utils/temporal";
 import { BContainer } from "bootstrap-vue-next";
 import CompassEditorDrawer from "../components/CompassEditorDrawer.vue";
 import { buildRoleColorMap } from "../utils/roleColors";
@@ -166,6 +172,7 @@ export default {
       archiveLevels: ["role", "goal", "project"],
       archive: { level: "role", items: [], totalCount: 0, hasMore: false, loading: false, loaded: false },
       editor: { open: false, level: "role", existing: null, parentId: null, error: "", key: 0 },
+      notice: "",
     };
   },
   computed: {
@@ -206,16 +213,31 @@ export default {
         `${projects} ended projects`,
       ].join(", ");
     },
-    // Active task count per project, derived from the task list the app already loads.
+    // Active tasks per project, derived from the task list the app already loads.
     activeTasksByProject() {
-      const counts = {};
+      const grouped = {};
 
       for (const task of this.taskList || []) {
         if (task.completed || !task.projectRef) continue;
-        counts[task.projectRef] = (counts[task.projectRef] || 0) + 1;
+        if (!grouped[task.projectRef]) grouped[task.projectRef] = [];
+        grouped[task.projectRef].push(task);
       }
 
-      return counts;
+      return grouped;
+    },
+    // The unfinished tasks the editor would affect if this item were ended.
+    editorOpenTasks() {
+      const item = this.editor.existing;
+      if (!item) return [];
+
+      if (this.editor.level === "project") {
+        return this.activeTasksByProject[item._id] || [];
+      }
+
+      const goals = this.editor.level === "role" ? item.goalList || [] : [item];
+
+      return goals.flatMap((goal) => (goal.projectList || [])
+        .flatMap((project) => this.activeTasksByProject[project._id] || []));
     },
   },
   methods: {
@@ -227,7 +249,7 @@ export default {
       return (goal.projectList || []).filter((project) => project.startDate);
     },
     activeTaskCount(projectId) {
-      return this.activeTasksByProject[projectId] || 0;
+      return (this.activeTasksByProject[projectId] || []).length;
     },
     formatDate(value) {
       return formatCivilDate(value, { month: "short", year: "numeric" });
@@ -349,16 +371,40 @@ export default {
       }
     },
     // Ending is the gentle option: it keeps the item and its history.
-    async endItem({ level, item }) {
+    async endItem({ level, item, taskAction }) {
       try {
-        const url = this.endpointFor("edit", level);
-        const endDate = dateOnlyInTimeZone(this.$store.state.user.timeZone);
-        if (await this.post(url, { _id: item._id, endDate })) {
-          this.closeEditor();
+        const url = this.endpointFor("end", level);
+        const response = await this.$http.post(url, { _id: item._id, taskAction });
+
+        if (!response.data.success) {
+          this.editor.error = response.data.log || "Something went wrong";
+          return;
         }
+
+        this.applyPayload(response.data);
+        // The task list moves too when tasks were completed or unlinked.
+        if (taskAction && taskAction !== "keep") this.reloadTasks();
+        this.notice = this.endNotice(item, response.data);
+        this.closeEditor();
       } catch (error) {
         console.error(error);
         this.editor.error = "Something went wrong";
+      }
+    },
+    // Ending makes the item vanish, so say what happened rather than leaving it silent.
+    endNotice(item, data) {
+      const count = data.affectedTaskCount || 0;
+      const noun = count === 1 ? "task" : "tasks";
+      if (!count) return `“${item.title}” ended. Find it in the Archive.`;
+      const verb = data.taskAction === "complete" ? "completed" : "unlinked";
+      return `“${item.title}” ended · ${count} ${noun} ${verb}.`;
+    },
+    async reloadTasks() {
+      try {
+        const tasks = await this.$http.get("/api/getUserTasks");
+        if (tasks.data.success) this.taskList = tasks.data.taskList || [];
+      } catch (error) {
+        console.error(error);
       }
     },
     async deleteItem({ level, item }) {
@@ -402,6 +448,28 @@ export default {
 .compass-page {
   text-align: left;
   padding-bottom: 40px;
+}
+
+.compass-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(40, 167, 69, 0.14);
+  border: 1px solid rgba(40, 167, 69, 0.35);
+  color: #a3d9b1;
+  font-size: 0.9rem;
+}
+
+.notice-dismiss {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.85rem;
 }
 
 .compass-header {

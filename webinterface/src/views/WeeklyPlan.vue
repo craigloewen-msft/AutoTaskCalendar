@@ -191,6 +191,30 @@
       </main>
 
       <div v-if="!loading && !loadError" class="loose-ends">
+        <!-- A promise outlives its project: committed work under an ended project still
+             shows, so the week's totals match what is on screen. -->
+        <section
+          v-for="group in endedCommitmentGroups"
+          :key="group._id"
+          class="ended-commitment"
+          :data-test="`ended-commitment-${group._id}`"
+        >
+          <header class="ended-head">
+            <h3>{{ group.title }}</h3>
+            <span class="ended-badge">project ended</span>
+          </header>
+          <p class="drawer-copy">
+            You committed to this before the project ended. It stays here so the week reads
+            honestly.
+          </p>
+          <WeeklyCommitmentProgress
+            :project-id="String(group._id)"
+            :items="group.items"
+            :tasks-by-id="tasksById"
+            @open="(task, event) => openTask(task, event)"
+          />
+        </section>
+
         <details v-if="somedayProjects.length" class="drawer" data-test="someday-projects">
           <summary>
             Someday · {{ somedayProjects.length }} parked projects<span v-if="somedayWeeklyTasks.length">
@@ -222,6 +246,75 @@
         </details>
 
         <details
+          v-if="endedProjectGroups.length"
+          class="drawer"
+          data-test="ended-project-tasks"
+        >
+          <summary>
+            Ended projects · {{ endedProjectTaskCount }}
+            {{ taskNoun(endedProjectTaskCount) }} due this week
+          </summary>
+          <p class="drawer-copy">
+            These projects have ended but still have work due this week. Reassign anything
+            that should carry on, or finish it off on the calendar.
+          </p>
+          <div
+            v-for="group in endedProjectGroups"
+            :key="group._id"
+            class="ended-group"
+            :data-test="`ended-project-${group._id}`"
+          >
+            <h4 class="ended-group-title">{{ group.title }}</h4>
+            <ul class="unaligned-list">
+              <li v-for="task in group.tasks" :key="task._id" class="unaligned-row">
+                <button class="loose-task" type="button" @click="openTask(task, $event)">
+                  <span>{{ task.title }}</span>
+                  <span class="loose-meta">
+                    {{ dueLabel(task) }} · {{ formatDuration(Number(task.duration) || 0) }}
+                  </span>
+                </button>
+                <div class="align-controls">
+                  <label :for="`realign-${task._id}`" class="visually-hidden">
+                    Project for {{ task.title }}
+                  </label>
+                  <select
+                    :id="`realign-${task._id}`"
+                    v-model="alignmentSelections[task._id]"
+                    class="form-control"
+                  >
+                    <option value="">Choose a project</option>
+                    <optgroup
+                      v-for="optionGroup in projectOptionGroups"
+                      :key="optionGroup.label"
+                      :label="optionGroup.label"
+                    >
+                      <option
+                        v-for="project in optionGroup.projects"
+                        :key="project._id"
+                        :value="project._id"
+                      >
+                        {{ project.title }}
+                      </option>
+                    </optgroup>
+                  </select>
+                  <button
+                    class="btn btn-outline-primary"
+                    type="button"
+                    :disabled="!alignmentSelections[task._id] || aligningTaskId === task._id"
+                    @click="alignTask(task)"
+                  >
+                    {{ aligningTaskId === task._id ? "Assigning…" : "Reassign" }}
+                  </button>
+                </div>
+                <p v-if="alignmentMessages[task._id]" class="form-message error" role="alert">
+                  {{ alignmentMessages[task._id] }}
+                </p>
+              </li>
+            </ul>
+          </div>
+        </details>
+
+        <details
           v-if="outsideCompassWeeklyTasks.length"
           class="drawer"
           data-test="outside-compass-tasks"
@@ -231,7 +324,7 @@
             {{ taskNoun(outsideCompassWeeklyTasks.length) }} due this week
           </summary>
           <p class="drawer-copy">
-            These tasks belong to a project that is no longer in the active Compass hierarchy.
+            These tasks belonged to a project that has since been deleted.
           </p>
           <ul class="loose-task-list">
             <li v-for="task in outsideCompassWeeklyTasks" :key="task._id">
@@ -324,6 +417,7 @@
 
 <script>
 import TaskEditor from "../components/TaskEditor.vue";
+import WeeklyCommitmentProgress from "../components/WeeklyCommitmentProgress.vue";
 import WeeklyLastWeekReview from "../components/WeeklyLastWeekReview.vue";
 import WeeklyProjectCard from "../components/WeeklyProjectCard.vue";
 import { buildRoleColorMap } from "../utils/roleColors";
@@ -344,12 +438,14 @@ import {
  */
 export default {
   name: "WeeklyPlan",
-  components: { TaskEditor, WeeklyLastWeekReview, WeeklyProjectCard },
+  components: { TaskEditor, WeeklyCommitmentProgress, WeeklyLastWeekReview, WeeklyProjectCard },
   data() {
     const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
 
     return {
       roles: [],
+      endedProjects: [],
+      planProjects: [],
       taskList: [],
       projectCompletions: [],
       plans: [],
@@ -526,8 +622,55 @@ export default {
     },
     outsideCompassWeeklyTasks() {
       return this.weeklyTasks.filter((task) => {
-        return task.projectRef && !this.compassProjectIds.has(task.projectRef);
+        return task.projectRef
+          && !this.compassProjectIds.has(task.projectRef)
+          && !this.endedProjectsById[task.projectRef];
       });
+    },
+    endedProjectsById() {
+      const byId = {};
+      for (const project of this.endedProjects) byId[project._id] = project;
+      // A plan can name a project the compass payload no longer mentions at all.
+      for (const project of this.planProjects) {
+        if (project.ended && !byId[project._id]) byId[project._id] = project;
+      }
+      return byId;
+    },
+    // This week's live work under projects that have ended, named and grouped.
+    endedProjectGroups() {
+      const grouped = new Map();
+
+      for (const task of this.weeklyTasks) {
+        const project = task.projectRef && this.endedProjectsById[task.projectRef];
+        if (!project) continue;
+        if (!grouped.has(project._id)) {
+          grouped.set(project._id, { _id: project._id, title: project.title, tasks: [] });
+        }
+        grouped.get(project._id).tasks.push(task);
+      }
+
+      return [...grouped.values()];
+    },
+    endedProjectTaskCount() {
+      return this.endedProjectGroups.reduce((total, group) => total + group.tasks.length, 0);
+    },
+    /**
+     * Committed work whose project is no longer on the board.
+     *
+     * Without this the items would count towards the week's totals while rendering
+     * nowhere, so the header would promise rows that do not exist.
+     */
+    endedCommitmentGroups() {
+      if (!this.isCommitted) return [];
+
+      const groups = [];
+      for (const [projectId, items] of Object.entries(this.committedItemsByProject)) {
+        if (!projectId || this.compassProjectIds.has(projectId)) continue;
+        const project = this.endedProjectsById[projectId]
+          || this.planProjects.find((entry) => entry._id === projectId);
+        groups.push({ _id: projectId, title: project?.title || "Former project", items });
+      }
+      return groups;
     },
     somedayProjects() {
       const projects = [];
@@ -598,6 +741,7 @@ export default {
 
       if (compassResult.status === "fulfilled" && compassResult.value.data.success) {
         this.roles = compassResult.value.data.roles || [];
+        this.endedProjects = compassResult.value.data.endedProjects || [];
         this.initializeForms();
       } else {
         this.compassError = compassResult.status === "fulfilled"
@@ -636,7 +780,7 @@ export default {
           this.planError = response.data.log || "Weekly plans could not be loaded.";
           return;
         }
-        this.applyPlans(response.data.plans);
+        this.applyPlans(response.data.plans, response.data.projects);
       } catch (error) {
         if (requestId === this.planRequestId) {
           this.planError = "Weekly plans could not be loaded.";
@@ -646,13 +790,19 @@ export default {
       }
     },
     // Commit and read return the same shape, so one reducer serves both.
-    applyPlans(plans) {
+    applyPlans(plans, projects) {
       const incoming = plans || [];
       const replaced = new Set(incoming.map((plan) => plan.weekStart));
       this.plans = [
         ...this.plans.filter((plan) => !replaced.has(plan.weekStart)),
         ...incoming,
       ];
+      // Identity for projects a plan references, including ones that have since ended.
+      if (projects) {
+        const byId = new Map(this.planProjects.map((entry) => [entry._id, entry]));
+        for (const project of projects) byId.set(project._id, project);
+        this.planProjects = [...byId.values()];
+      }
       this.planError = "";
     },
     async loadProjectCompletions() {
@@ -721,7 +871,7 @@ export default {
           this.commitError = response.data.log || "This week could not be committed.";
           return;
         }
-        this.applyPlans(response.data.plans);
+        this.applyPlans(response.data.plans, response.data.projects);
       } catch (error) {
         this.commitError = "This week could not be committed.";
       } finally {
@@ -765,7 +915,7 @@ export default {
             return;
           }
           this.taskList = response.data.taskList || this.taskList;
-          this.applyPlans(response.data.plans);
+          this.applyPlans(response.data.plans, response.data.projects);
         }
       } catch (error) {
         this.carryError = "That work could not be carried forward.";
@@ -1382,6 +1532,45 @@ export default {
   display: grid;
   gap: 10px;
   margin-top: 34px;
+}
+
+.ended-commitment {
+  padding: 14px 18px;
+  border: 1px solid rgba(217, 164, 65, 0.28);
+  border-radius: 12px;
+  background: rgba(40, 33, 20, 0.45);
+}
+
+.ended-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ended-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #d8dee5;
+}
+
+.ended-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(217, 164, 65, 0.18);
+  color: #d9a441;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ended-group + .ended-group {
+  margin-top: 14px;
+}
+
+.ended-group-title {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: #c8d1da;
 }
 
 .drawer {

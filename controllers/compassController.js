@@ -1,6 +1,7 @@
 const { TaskDetails, RoleDetails, GoalDetails, ProjectDetails } = require('../models');
-const { parseDateOnly, addDateOnlyDays, todayInZone } = require('../utils/temporal');
+const { parseDateOnly, dateOnlyFromMarker, todayInZone } = require('../utils/temporal');
 const { clearProjectRecommendationCache } = require('./projectRecommendation');
+const { completeTask } = require('./taskController');
 
 /**
  * Compass: roles > goals > projects. See docs/COMPASS.md.
@@ -72,7 +73,7 @@ function parseDateOrIgnore(value) {
     return parseDateOnly(value).date;
 }
 
-// End dates are inclusive civil dates. An item archives on the following UTC marker.
+// Ending is immediate: an end date of today or earlier means ended, right now.
 function todayMarker(timeZone, now = new Date()) {
     return parseDateOnly(todayInZone(timeZone, now)).date;
 }
@@ -82,7 +83,7 @@ function liveFilter(timeZone, now = new Date()) {
         $or: [
             { endDate: null },
             { endDate: { $exists: false } },
-            { endDate: { $gte: todayMarker(timeZone, now) } },
+            { endDate: { $gt: todayMarker(timeZone, now) } },
         ],
     };
 }
@@ -189,6 +190,126 @@ async function editItem(level, body, user) {
     return existing;
 }
 
+// What ending does with the unfinished tasks underneath. `keep` leaves them alone.
+const TASK_ACTIONS = ['keep', 'unlink', 'complete'];
+
+/**
+ * End a role, goal, or project as of today in the caller's timezone.
+ *
+ * Ending is immediate: liveFilter() treats today's end date as ended, so the item leaves
+ * the board and the Weekly Plan hierarchy on this same request. `editItem` with an explicit
+ * endDate stays available for backdating or scheduling an end.
+ *
+ * `taskAction` decides what happens to the unfinished tasks under the item -- for a role or
+ * goal that means every task in the branch, matching the fact that ending a parent archives
+ * it whole.
+ */
+async function endItem(level, body, user, now = new Date()) {
+    const doc = await findOwned(level, body._id || body.id, user._id);
+    const taskAction = body.taskAction || 'keep';
+
+    if (!TASK_ACTIONS.includes(taskAction)) {
+        fail(`Task action must be one of ${TASK_ACTIONS.join(', ')}`);
+    }
+
+    const endDate = todayMarker(user.timeZone, now);
+
+    // Ending something that starts later would leave an impossible range behind.
+    if (doc.startDate && doc.startDate > endDate) {
+        fail(`This ${LEVELS[level].label.toLowerCase()} starts in the future. Edit its start date first.`);
+    }
+
+    doc.endDate = endDate;
+    await doc.save();
+
+    // Ending a parent archives its whole branch, so the children carry the date too --
+    // otherwise they would be merely unreachable, missing from the archive and from the
+    // ended-project naming that left-behind tasks rely on.
+    const projectIds = await endBranch(level, doc, user._id, endDate);
+
+    const tasks = taskAction === 'keep' ? [] : await openTasksIn(projectIds, user._id);
+    let affected = 0;
+
+    for (const task of tasks) {
+        if (taskAction === 'unlink') {
+            task.projectRef = null;
+            await task.save();
+        } else {
+            // Reuse the real completion path so events and recurrence stay correct.
+            await completeTask(task, user);
+        }
+        affected++;
+    }
+
+    // Completing a legacy `repeat` task clones it forward, carrying its projectRef, which
+    // would leave brand new work inside a project that was just ended. Keep the work and
+    // unlink it instead -- ending must never quietly resurrect a dead project.
+    if (taskAction === 'complete') {
+        await TaskDetails.updateMany(
+            {
+                userRef: user._id,
+                projectRef: { $in: projectIds },
+                $or: [{ completed: false }, { completed: null }],
+            },
+            { $set: { projectRef: null } }
+        );
+    }
+
+    clearProjectRecommendationCache(user._id);
+
+    return { item: doc, taskAction, affectedTaskCount: affected };
+}
+
+/**
+ * Stamp the same end date down the branch, returning every project id it covers.
+ *
+ * A project is the leaf, so for that level there is nothing to cascade and the id is just
+ * the item itself.
+ */
+async function endBranch(level, doc, userId, endDate) {
+    if (level === 'project') return [doc._id];
+
+    let goalIds = [doc._id];
+
+    if (level === 'role') {
+        const goals = await GoalDetails.find({ roleRef: doc._id, userRef: userId }).select('_id');
+        goalIds = goals.map((goal) => goal._id);
+        if (goalIds.length) {
+            await GoalDetails.updateMany(
+                { _id: { $in: goalIds }, userRef: userId },
+                { $set: { endDate } }
+            );
+        }
+    }
+
+    if (!goalIds.length) return [];
+
+    const projects = await ProjectDetails
+        .find({ goalRef: { $in: goalIds }, userRef: userId })
+        .select('_id');
+    const projectIds = projects.map((project) => project._id);
+
+    if (projectIds.length) {
+        await ProjectDetails.updateMany(
+            { _id: { $in: projectIds }, userRef: userId },
+            { $set: { endDate } }
+        );
+    }
+
+    return projectIds;
+}
+
+// Every unfinished task under the given projects.
+async function openTasksIn(projectIds, userId) {
+    if (!projectIds.length) return [];
+
+    return TaskDetails.find({
+        userRef: userId,
+        projectRef: { $in: projectIds },
+        $or: [{ completed: false }, { completed: null }],
+    });
+}
+
 /**
  * Delete a role, goal, or project.
  *
@@ -270,14 +391,14 @@ async function setTaskProject(taskId, projectId, user) {
     return task;
 }
 
-// Finished means an end date that has already passed, optionally inside a window.
+// Finished means an end date of today or earlier -- the exact complement of liveFilter().
 function completedFilter(userId, timeZone, from, to) {
-    const endDate = { $ne: null, $lt: todayMarker(timeZone) };
+    const endDate = { $ne: null, $lte: todayMarker(timeZone) };
 
     if (from) endDate.$gte = from;
     if (to) {
-        const exclusive = parseDateOnly(addDateOnlyDays(to, 1)).date;
-        if (exclusive < endDate.$lt) endDate.$lt = exclusive;
+        const inclusive = parseDateOnly(to).date;
+        if (inclusive < endDate.$lte) endDate.$lte = inclusive;
     }
 
     return { userRef: userId, endDate };
@@ -331,6 +452,7 @@ async function getCompassPayload(user, { completedFrom, completedTo } = {}) {
 
     return {
         roles,
+        endedProjects: await endedProjectsWithOpenTasks(user),
         completedCounts: {
             roles: completedRoles,
             goals: completedGoals,
@@ -338,6 +460,38 @@ async function getCompassPayload(user, { completedFrom, completedTo } = {}) {
         },
         unalignedTaskCount,
     };
+}
+
+/**
+ * Ended projects that unfinished tasks still point at.
+ *
+ * Ending a project can leave live work behind, and that work would otherwise show up with
+ * no name attached to it. This is identity only -- titles for ids the client already holds
+ * -- not a rollup, and it is bounded by how many ended projects still have open work.
+ */
+async function endedProjectsWithOpenTasks(user) {
+    const refs = await TaskDetails.distinct('projectRef', {
+        userRef: user._id,
+        $or: [{ completed: false }, { completed: null }],
+        projectRef: { $ne: null },
+    });
+
+    if (!refs.length) return [];
+
+    const projects = await ProjectDetails.find({
+        _id: { $in: refs },
+        userRef: user._id,
+        endDate: { $ne: null, $lte: todayMarker(user.timeZone) },
+    })
+        .select('_id title endDate')
+        .lean();
+
+    // .lean() skips the schema's civil-date transform, so serialise the date by hand.
+    return projects.map((project) => ({
+        _id: String(project._id),
+        title: project.title,
+        endDate: dateOnlyFromMarker(project.endDate),
+    }));
 }
 
 /**
@@ -385,6 +539,7 @@ module.exports = {
     getCompassArchive,
     createItem,
     editItem,
+    endItem,
     deleteItem,
     setTaskProject,
     findOwned,

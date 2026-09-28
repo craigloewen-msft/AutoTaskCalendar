@@ -233,6 +233,22 @@ week. `weekStart`, `weekEnd`, and each item's `dueDate` are civil-date markers w
 No status field exists, and `taskInfo` gained no new field. Deleting a task never touches a
 plan document.
 
+### When a project ends mid-week
+
+Ending a project archives it out of `getCompass` immediately, but it does **not** un-promise
+the work: a commitment is a snapshot, and quietly dropping it would let a bad week be tidied
+into a good one. So `GET /api/getWeeklyPlans` also returns a `projects` array —
+`{ _id, title, endDate, ended }` for exactly the projects its own items reference — and the
+page renders that work in a read-only block badged **project ended**, above the drawers.
+
+That block exists to keep the arithmetic honest. The header's `X of Y done` and its minute
+totals count every committed item, so without it the page would claim rows that render
+nowhere. The block is not selectable and has no quick-add: an ended project takes on no new
+work.
+
+Work due this week that was merely *left behind* by an ended project (`taskAction: keep`) is
+a different question, and appears in the **Ended projects** drawer with a reassign control.
+
 ---
 
 ## Endpoints
@@ -271,7 +287,7 @@ The page also reads:
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/getCompass` | Live roles with goals and projects. |
+| `GET /api/getCompass` | Live roles with goals and projects, plus `endedProjects` for naming work left behind. |
 | `GET /api/getUserTasks` | Incomplete tasks and materialised occurrences. |
 | `GET /api/getProjectCompletions` | Previous-week completion history. |
 

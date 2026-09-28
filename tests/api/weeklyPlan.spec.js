@@ -104,6 +104,36 @@ test.describe('weekly plan commitments', () => {
         expect(rejected.log).toContain('not found');
     });
 
+    test('a commitment survives its project being ended mid-week', async ({ seed, api }) => {
+        const data = await seed();
+        await clearPlans(data);
+        const week = currentWeek();
+        const projectId = String(data.named.migrationProject._id);
+
+        const promised = await weekTask(data, week, { title: 'Promised before the end' });
+        const committed = await commit(api, week.startDate, [String(promised._id)]);
+        expect(committed.success).toBe(true);
+
+        const ended = await (await api.post('/api/endProject', {
+            data: { _id: projectId, taskAction: 'keep' },
+        })).json();
+        expect(ended.success).toBe(true);
+
+        const body = await (await api.get(
+            `/api/getWeeklyPlans?from=${week.startDate}&to=${week.startDate}`
+        )).json();
+
+        // The promise is still there, and the page can still name the project it belongs to.
+        const item = itemFor(body.plans[0], promised._id);
+        expect(item.status).toBe('open');
+        expect(item.projectRef).toBe(projectId);
+
+        const project = body.projects.find((entry) => entry._id === projectId);
+        expect(project).toBeTruthy();
+        expect(project.title).toBe('Migration plan');
+        expect(project.ended).toBe(true);
+    });
+
     test('amending only ever adds, so a promise is never erased', async ({ seed, api }) => {
         const data = await seed();
         await clearPlans(data);
