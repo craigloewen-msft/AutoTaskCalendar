@@ -10,6 +10,21 @@
       </span>
     </header>
 
+    <!-- Last week reads as the prelude to this week, inline under its own project. -->
+    <WeeklyLastWeekProject
+      v-if="showLastWeek"
+      :project-id="String(project._id)"
+      :items="lastWeekItems"
+      :unplanned="completions"
+      :tasks-by-id="tasksById"
+      :week="week"
+      :previous-week-start="previousWeek.startDate || ''"
+      :today="today"
+      :busy="carrying"
+      :open="!committed"
+      @carry="(entries) => $emit('carry', entries)"
+    />
+
     <WeeklyCommitmentProgress
       v-if="showProgress"
       :project-id="String(project._id)"
@@ -84,36 +99,6 @@
         </ul>
       </details>
 
-      <details
-        v-if="completions.length"
-        class="drawer completed-last-week"
-        :data-test="`completed-last-week-${project._id}`"
-        :data-completed-from="previousWeek.startDate"
-        :data-completed-to="previousWeek.endDate"
-      >
-        <summary>
-          <span class="completion-check" aria-hidden="true">✓</span>
-          {{ completions.length }} {{ taskNoun(completions.length) }} completed last week ·
-          {{ previousRangeLabel }}
-        </summary>
-        <ul class="task-list compact">
-          <li
-            v-for="task in completions"
-            :key="task._id"
-            class="task-line completed-line"
-            :data-test="`completed-last-week-row-${task._id}`"
-          >
-            <span class="task-row static">
-              <span class="task-name">
-                <span class="completion-check" aria-hidden="true">✓</span>
-                <span v-if="task.seriesRef" class="task-marker" aria-label="Repeating task">↻</span>
-                <strong class="title-text">{{ task.title }}</strong>
-              </span>
-              <span class="task-meta">{{ completionLabel(task) }}</span>
-            </span>
-          </li>
-        </ul>
-      </details>
     </div>
 
     <div class="quick-add" :data-test="`quick-task-${project._id}`">
@@ -212,6 +197,7 @@
 
 <script>
 import WeeklyCommitmentProgress from "./WeeklyCommitmentProgress.vue";
+import WeeklyLastWeekProject from "./WeeklyLastWeekProject.vue";
 import { formatCivilDate } from "../utils/temporal";
 
 /**
@@ -221,25 +207,26 @@ import { formatCivilDate } from "../utils/temporal";
  */
 export default {
   name: "WeeklyProjectCard",
-  components: { WeeklyCommitmentProgress },
+  components: { WeeklyCommitmentProgress, WeeklyLastWeekProject },
   props: {
     project: { type: Object, required: true },
     weekTasks: { type: Array, default: () => [] },
     otherTasks: { type: Array, default: () => [] },
     completions: { type: Array, default: () => [] },
     committedItems: { type: Array, default: () => [] },
+    lastWeekItems: { type: Array, default: () => [] },
+    today: { type: String, default: "" },
+    carrying: { type: Boolean, default: false },
     addedTasks: { type: Array, default: () => [] },
     tasksById: { type: Object, default: () => ({}) },
     form: { type: Object, required: true },
     week: { type: Object, required: true },
     weekDays: { type: Array, default: () => [] },
     previousWeek: { type: Object, default: () => ({}) },
-    previousRangeLabel: { type: String, default: "" },
     selectable: { type: Boolean, default: false },
     selectedIds: { type: Object, default: () => ({}) },
     foldingIn: { type: Boolean, default: false },
     committed: { type: Boolean, default: false },
-    timeZone: { type: String, default: "UTC" },
     planDateFor: { type: Function, required: true },
   },
   emits: [
@@ -250,6 +237,7 @@ export default {
     "submit",
     "fold-in",
     "update-field",
+    "carry",
   ],
   computed: {
     // The progress block owns the commitment AND anything added since it, so it renders
@@ -260,6 +248,10 @@ export default {
     // The live list is the fallback for whatever the progress block did not render.
     showWeekList() {
       return !this.showProgress;
+    },
+    // A project with no history last week says nothing rather than adding an empty row.
+    showLastWeek() {
+      return !!(this.lastWeekItems.length || this.completions.length);
     },
     summaryLabel() {
       if (this.committed) {
@@ -301,16 +293,6 @@ export default {
         month: "short",
         day: "numeric",
       });
-    },
-    completionLabel(task) {
-      const date = new Date(task.completedDate);
-      if (Number.isNaN(date.getTime())) return "";
-      return `Completed ${new Intl.DateTimeFormat(undefined, {
-        timeZone: this.timeZone || "UTC",
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-      }).format(date)}`;
     },
     formatDuration(minutes) {
       const safe = Math.max(0, Math.round(Number(minutes) || 0));
@@ -502,26 +484,6 @@ button.task-row:focus-visible {
   outline: none;
   background: rgba(255, 255, 255, 0.04);
   color: #c8d1da;
-}
-
-.completed-last-week summary {
-  color: #8fa79b;
-}
-
-.completed-last-week summary:hover,
-.completed-last-week summary:focus-visible {
-  background: rgba(110, 231, 183, 0.07);
-  color: #b5c7bf;
-}
-
-.completion-check {
-  color: #6ee7b7;
-  font-weight: 700;
-}
-
-.completed-line .task-row {
-  background: rgba(110, 231, 183, 0.04);
-  color: #a4b3ab;
 }
 
 .quick-add {
