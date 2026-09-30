@@ -270,4 +270,64 @@ test.describe('weekly plan commitments', () => {
         const unchanged = await withDb(() => TaskDetails.findById(slipped._id).lean());
         expect(dateOnlyFromMarker(unchanged.dueDate)).toBe(target);
     });
+    /**
+     * The per-project layout partitions last week on projectRef: live projects render
+     * inline, everything else renders at the top. That is only possible if every item
+     * carries its projectRef and the projects array says which ones have ended.
+     */
+    test('last week comes back partitionable by project', async ({ seed, api }) => {
+        const data = await seed();
+        await clearPlans(data);
+        const week = currentWeek();
+        const lastWeek = {
+            startDate: addDateOnlyDays(week.startDate, -7),
+            endDate: addDateOnlyDays(week.startDate, -1),
+        };
+
+        const liveProjectId = String(data.named.migrationProject._id);
+        const endedProjectId = String(data.named.perfProject._id);
+
+        const live = await weekTask(data, lastWeek, { title: 'On a live project' });
+        const ending = await weekTask(data, lastWeek, {
+            title: 'On a project about to end',
+            projectRef: data.named.perfProject._id,
+        });
+        const loose = await weekTask(data, lastWeek, { title: 'On no project', projectRef: null });
+
+        // Only the current week can be committed, so last week's snapshot is written directly.
+        await withDb(() => WeeklyPlanDetails.create({
+            userRef: data.primary.user._id,
+            weekStart: parseDateOnly(lastWeek.startDate).date,
+            weekEnd: parseDateOnly(lastWeek.endDate).date,
+            timeZone: 'UTC',
+            committedAt: new Date(),
+            items: [live, ending, loose].map((task) => ({
+                taskRef: task._id,
+                projectRef: task.projectRef,
+                title: task.title,
+                duration: task.duration,
+                dueDate: task.dueDate,
+                addedAt: new Date(),
+            })),
+        }));
+
+        const ended = await (await api.post('/api/endProject', {
+            data: { _id: endedProjectId, taskAction: 'keep' },
+        })).json();
+        expect(ended.success).toBe(true);
+
+        const body = await (await api.get(
+            `/api/getWeeklyPlans?from=${lastWeek.startDate}&to=${lastWeek.startDate}`
+        )).json();
+        const plan = body.plans.find((entry) => entry.weekStart === lastWeek.startDate);
+
+        expect(itemFor(plan, live._id).projectRef).toBe(liveProjectId);
+        expect(itemFor(plan, ending._id).projectRef).toBe(endedProjectId);
+        // Work with no project is still promised, and is what the top panel must show.
+        expect(itemFor(plan, loose._id).projectRef).toBe(null);
+
+        const byId = new Map(body.projects.map((entry) => [entry._id, entry]));
+        expect(byId.get(liveProjectId).ended).toBe(false);
+        expect(byId.get(endedProjectId).ended).toBe(true);
+    });
 });

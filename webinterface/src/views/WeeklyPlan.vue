@@ -64,7 +64,7 @@
         v-if="!loading && !loadError && showLastWeek"
         :plan="previousPlan"
         :unplanned="unplannedLastWeekCompletions"
-        :project-titles="projectTitles"
+        :groups="homelessLastWeekGroups"
         :tasks-by-id="tasksById"
         :range-label="formattedPreviousWeekRange"
         :week="week"
@@ -170,12 +170,13 @@
                 :week="week"
                 :week-days="weekDays"
                 :previous-week="previousWeek"
-                :previous-range-label="formattedPreviousWeekRange"
+                :last-week-items="previousItemsForProject(project._id)"
+                :today="today"
+                :carrying="carrying"
                 :selectable="!isCommitted"
                 :selected-ids="selection"
                 :folding-in="committing"
                 :committed="isCommitted"
-                :time-zone="timeZone"
                 :plan-date-for="weeklyPlanDate"
                 @open-task="openTask"
                 @toggle-task="toggleTask"
@@ -184,6 +185,7 @@
                 @update-field="(field, value) => updateForm(project._id, field, value)"
                 @submit="createTask(project)"
                 @fold-in="commitWeek()"
+                @carry="carryForward"
               />
             </div>
           </div>
@@ -567,6 +569,68 @@ export default {
       );
       return this.projectCompletions.filter((task) => !promised.has(String(task._id)));
     },
+    previousItems() {
+      return this.previousPlan?.items || [];
+    },
+    previousItemsByProject() {
+      const grouped = {};
+      for (const item of this.previousItems) {
+        const key = item.projectRef || "";
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(item);
+      }
+      return grouped;
+    },
+    unplannedCompletionsByProject() {
+      const promised = new Set(this.previousItems.map((item) => String(item.taskRef)));
+      const grouped = {};
+      for (const [projectId, tasks] of Object.entries(this.projectCompletionsByProject)) {
+        grouped[projectId] = tasks.filter((task) => !promised.has(String(task._id)));
+      }
+      return grouped;
+    },
+    // Projects that actually render a card below, so the partition matches the page.
+    startedCompassProjectIds() {
+      const ids = new Set();
+      for (const role of this.roles) {
+        for (const goal of role.goalList || []) {
+          for (const project of this.startedProjects(goal)) ids.add(project._id);
+        }
+      }
+      return ids;
+    },
+    /**
+     * Last week's work with no project below to sit under.
+     *
+     * A strict partition against the rendered project cards: ended, parked, deleted, or no
+     * project at all. Anything else reads inline under its project, never in both places.
+     */
+    homelessLastWeekGroups() {
+      const keys = new Set([
+        ...Object.keys(this.previousItemsByProject),
+        ...Object.keys(this.unplannedCompletionsByProject),
+      ]);
+      const groups = [];
+
+      for (const key of keys) {
+        if (key && this.startedCompassProjectIds.has(key)) continue;
+        const items = this.previousItemsByProject[key] || [];
+        const unplanned = this.unplannedCompletionsByProject[key] || [];
+        if (!items.length && !unplanned.length) continue;
+
+        const ended = key ? this.endedProjectsById[key] : null;
+        const title = ended?.title || this.projectTitles[key] || "";
+        groups.push({
+          key: key || "none",
+          title: key ? title || "No longer tracked" : "No project",
+          badge: this.homelessBadge(key, !!ended),
+          items,
+          unplanned,
+        });
+      }
+
+      return groups.sort((left, right) => left.title.localeCompare(right.title));
+    },
     projectTitles() {
       const titles = {};
       for (const role of this.roles) {
@@ -828,7 +892,7 @@ export default {
         if (focusAfterRetry) {
           this.$nextTick(() => {
             const target = this.$refs.weeklyHierarchy?.querySelector(
-              ".completed-last-week summary"
+              "[data-test^='last-week-project-toggle-']"
             ) || this.$refs.weeklyHierarchy;
             target?.focus();
           });
@@ -1034,7 +1098,17 @@ export default {
       );
     },
     completionsForProject(projectId) {
-      return this.projectCompletionsByProject[projectId] || [];
+      return this.unplannedCompletionsByProject[projectId] || [];
+    },
+    previousItemsForProject(projectId) {
+      return this.previousItemsByProject[projectId] || [];
+    },
+    // Why this project has no card below, named rather than left as a mystery.
+    homelessBadge(projectId, ended) {
+      if (!projectId) return "";
+      if (ended) return "project ended";
+      if (this.compassProjectIds.has(projectId)) return "not started";
+      return "no longer tracked";
     },
     roleSummary(role) {
       const projectIds = [];

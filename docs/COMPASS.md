@@ -368,9 +368,10 @@ events, and a failure there is logged but never blocks the calendar.
 `/weekly-plan` is the Monday–Sunday planning and review workflow over Compass. It renders the
 same live Role → Goal → Project hierarchy with descriptions, groups existing incomplete tasks
 by `projectRef` and `dueDate`, and offers a compact normal-task form under every started
-project. When a project has matching history, a collapsed **Completed last week** disclosure
-uses the bounded `/api/getProjectCompletions` read to show task titles completed during the
-previous Monday–Sunday in the user's saved timezone. Clicking any active task opens the full
+project. When a project has history, a **Last week** strip above that project's work uses the
+bounded `/api/getProjectCompletions` read, plus last week's commitment, to show what was
+unfinished, kept, and finished-but-never-promised during the previous Monday–Sunday in the
+user's saved timezone. Clicking any active task opens the full
 task editor in place, so its details can be changed, completed, or deleted without leaving the
 review.
 

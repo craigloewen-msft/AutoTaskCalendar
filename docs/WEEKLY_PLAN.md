@@ -46,7 +46,7 @@ Before this week has a commitment:
 1. Read each role's description and its goals.
 2. Review each started project and the tasks already due this week.
 3. Open **Other active tasks** to avoid duplicating work due outside the week.
-4. Open **Completed last week** for context from the previous Monday–Sunday.
+4. Read each project's **Last week** strip for context from the previous Monday–Sunday.
 5. Add the concrete tasks that should be due this week.
 6. Uncheck anything you do not actually intend to commit to.
 7. Choose **Commit to this week**.
@@ -107,34 +107,68 @@ be a way to quietly delete a promise you did not keep.
 
 ### Last week's review
 
-The page opens with a review of the previous Monday–Sunday, because the first question a
-planner has on Monday is not "what shall I do" but "what happened". It is **expanded while
-this week is uncommitted** — exactly when you are planning — and **collapsed once you have
-committed**, so Review mode leads with the current week. The toggle is per-visit, not stored.
+Last week is read **where the work belongs**: inside each project, beside this week's work
+for that same project, so planning a project means thinking about only that project. The
+panel at the top of the page keeps the week-level verdict and carries only the work that has
+no project below to sit under.
 
-It answers three questions, in this order, and every part of it is named work rather than a
-number:
+#### Inside each project
 
-| Block | The question | Source |
+Every project card opens with a **Last week** strip above this week's list, summarised as
+named work — `2 unfinished · 1 kept · 5 unplanned` — and expanding into rows in that order:
+
+```text
+  Migration plan                              5 tasks · 4h 15m
+    ▾ Last week   2 unfinished · 1 kept · 5 unplanned
+                                     [Carry 1 into this week]
+      ✗ Spike the rollback tooling     deleted after committing
+      ● Write the rollback runbook  was due Thu · 1h 15m  [Carry → Thu]
+      ✓ Draft the migration plan             finished Thu · 1h
+      + Unblock the staging database  finished Wed · never promised
+```
+
+| Row | Meaning | Source |
 | --- | --- | --- |
-| Headline and bar | How did last week go? | `You kept 4 of 7 promises`, plus minutes done of minutes promised |
-| **Unfinished** | What do I still owe? | Plan items whose status is not `done`, grouped by project |
-| **Kept** | What did I actually land? | Plan items with status `done`, with the day each finished |
-| **Also finished, never promised** | Where did the week really go? | `getProjectCompletions` for last week, minus anything in the snapshot |
+| Unfinished | What I still owe on this project | last week's plan items whose status is not `done` |
+| Kept | What I landed | plan items with status `done` |
+| Unplanned (`+`) | Where the week really went | `getProjectCompletions` for last week, minus the snapshot |
 
-The third block matters as much as the first two: unplanned work is usually *why* the
-promises slipped, and a review that hides it makes the week look like a failure of will
-rather than a failure of capacity. It is capped at four rows with the rest behind a
-`+ N more` link — it is context, not a to-do list, and a long tail of it would bury the two
-blocks you can actually act on. Project headers appear only when more than one project is
-involved.
+Unfinished leads because it is the only part that can still be acted on, and it keeps the
+**Carry →** actions. Unplanned rows are capped at four with the rest behind `+ N more`:
+context, not a to-do list. A project with nothing last week shows no strip at all.
+
+The strip is **expanded while this week is uncommitted** — exactly when you are planning —
+and **collapsed once you have committed**, so Review mode leads with the current week. Each
+strip can be toggled on its own; the choice is per-visit, not stored.
+
+There is no separate *Completed last week* drawer: a project has exactly one last-week story.
+
+#### At the top: the week, and the homeless work
+
+The panel keeps the verdict, because *how the week went* is a week-level question: the
+headline (`You kept 4 of 7 promises`), the minutes done of minutes promised, and the bar.
+
+Its body lists only last week's work whose project is **not rendered below**, a strict
+partition on `projectRef` so nothing is shown twice and nothing is dropped:
+
+| Group | Badge | When |
+| --- | --- | --- |
+| An ended project | `project ended` | the project ended, so it left the Compass hierarchy |
+| A parked project | `not started` | a Someday project, which renders no card |
+| A deleted project | `no longer tracked` | the `projectRef` matches no project at all |
+| No project | — | the item was never aligned |
+
+Each group uses the same rows, ordering and carry actions as the inline strips. When every
+group is empty the body reads *Every task from last week is shown under its own project
+below* — the headline and bar still stand.
 
 When no plan exists for last week the panel does not disappear silently — if anything was
 finished it still says so (*No commitment last week. You finished 3 tasks anyway.*). Only a
 week with neither a commitment nor a completion hides it.
 
-This is distinct from the per-project **Completed last week** disclosure, which answers the
-same "what got finished" question from inside a single project.
+The row logic — carry eligibility, carry date, and every label — lives once in
+`webinterface/src/utils/lastWeek.js`, used by both `WeeklyLastWeekProject.vue` (one
+project's strip, inline or homeless) and `WeeklyLastWeekReview.vue` (the panel).
 
 ### Carrying work forward
 
@@ -170,7 +204,8 @@ boxes:
   hairline rule, not a raised panel.
 - **Goals are labelled dividers**, not containers.
 - **Projects are the only panels**, and they are uniform — identical width, padding, and
-  radius, so a column of them reads as one rhythm. This is the level you act on.
+  radius, so a column of them reads as one rhythm. This is the level you act on, and it is
+  where last week reads too: a **Last week** strip above this week's work, same rows.
 - **Tasks are dense rows** with right-aligned tabular due day and duration, so they line up
   vertically down the whole page.
 - The header is a **sticky week bar** carrying the range, totals, a seven-segment Mon–Sun load
@@ -312,7 +347,9 @@ Calendar. Compass scheduling influence remains a separate, higher-risk feature.
 | File | Role |
 | --- | --- |
 | `webinterface/src/views/WeeklyPlan.vue` | The page. Owns all state and every mutation. |
-| `webinterface/src/components/WeeklyLastWeekReview.vue` | Last week's review and the carry-forward action. |
+| `webinterface/src/components/WeeklyLastWeekReview.vue` | The week-level verdict, plus last week's work with no project below. |
+| `webinterface/src/components/WeeklyLastWeekProject.vue` | One project's last week, inline in its card or in the top panel. |
+| `webinterface/src/utils/lastWeek.js` | Shared row labels and carry rules for both of those. |
 | `webinterface/src/components/WeeklyProjectCard.vue` | One project panel. Presentation only; emits events. |
 | `webinterface/src/components/WeeklyCommitmentProgress.vue` | Committed items, progress bar, added-since list. |
 | `webinterface/src/components/TaskEditor.vue` | The shared editor, used by Calendar too. |
