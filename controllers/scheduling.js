@@ -21,7 +21,11 @@ const {
     removeExpiredOccurrences,
     validateNoCycles,
 } = require('./schedulePlanner');
-const { intentionExclusionClauses } = require('./intentions');
+const {
+    intentionExclusionClausesFor,
+    personalProjectIds,
+    taskIsIntention,
+} = require('./intentions');
 
 const SCHEDULING_HORIZON_DAYS = 60;
 const FORECAST_WINDOW_DAYS = 21;
@@ -63,10 +67,18 @@ async function seriesBehaviorMap(tasks, userId) {
     ]));
 }
 
+/**
+ * Every task the scheduler may place. Intentions are never among them.
+ *
+ * The personal-project set is resolved once and used twice: as query clauses that keep the
+ * read small, and then as the in-memory `taskIsIntention` check, which is the same rule the
+ * rest of the app derives from and so is the authority. See docs/INTENTIONS.md.
+ */
 async function loadSchedulingTasks(userId) {
     const filter = incompleteTaskFilter(userId);
     // Intentions are personal work: they carry a duration but are never given a slot.
-    const notIntention = await intentionExclusionClauses(userId);
+    const personalIds = await personalProjectIds(userId);
+    const notIntention = intentionExclusionClausesFor(personalIds);
     const [regular, backlog] = await Promise.all([
         TaskDetails.find({
             ...filter,
@@ -78,7 +90,9 @@ async function loadSchedulingTasks(userId) {
         }).sort({ dueDate: 1, priority: 1 }),
         TaskDetails.find({ ...filter, isBacklog: true }).sort({ startDate: 1 }),
     ]);
-    return [...regular, ...backlog];
+
+    // Is it an intention? Then don't schedule it.
+    return [...regular, ...backlog].filter((task) => !taskIsIntention(task, personalIds));
 }
 
 async function loadPlanningInput(user, currentTime = new Date()) {

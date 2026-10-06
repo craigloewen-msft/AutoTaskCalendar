@@ -95,13 +95,30 @@ and the next schedule run places it like any other.
 
 ---
 
-## The three places you see one
+## Where you meet one
 
-### 1. Weekly Plan — this week's band
+### 1. Weekly Plan — creating one
 
-Appears **only after you have committed the week**. Before that, Weekly Plan is about
-building the work week, and the band's absence is itself the signal that you are not done
-planning.
+A project under a personal role is an **intention project**, and Weekly Plan's quick-add says
+so: the trigger reads *Add an intention*, the Mon–Sun day chips are replaced by a static
+`Due Sunday, 11 Oct · never scheduled`, and the button reads *Add intention*. The client sends
+no `dueDate` at all for these — `createTask` owns the Sunday — so the form cannot offer a day
+the server is about to discard.
+
+An intention in the week is **never selected for the commitment** and is given no selection
+checkbox, because `selectCommittableTasks` refuses one. The week's header count, the selected
+minutes, and the capacity strip therefore all describe work only. This matters more than it
+looks: when the page did sweep intentions into the commit payload, a single personal task made
+the *entire week* fail to commit, with an error naming a task the user never chose.
+
+A project card's summary counts them separately (`3 tasks · 2h · 1 intention`) rather than
+adding minutes that will never occupy a slot.
+
+### 2. Weekly Plan — this week's band
+
+Appears **only after you have committed the week**, or as soon as the week contains an
+intention. Before either, Weekly Plan is about building the work week, and the band's absence
+is itself the signal that you are not done planning.
 
 ```text
   Committed week · Oct 6 – Oct 12              1 of 3 done · 45m of 1h 35m
@@ -114,12 +131,16 @@ weekday in your saved timezone. That is the entire reminder mechanism: no notifi
 email, no badge, no red. It gets your attention when the week is running out, on a page you
 already open, and otherwise stays out of the way.
 
+It also appears **before** the week is committed if there is already an intention in it, so
+something you just created is visible where it belongs rather than only as a row in a project
+card. With no intentions, its absence still reads as "you are not done planning".
+
 One click on a checkbox is the whole check-in.
 
 The band is shown **regardless of the Work/Personal context filter**. Hiding your personal
 life because you are "in work mode" would defeat the purpose of the feature.
 
-### 2. Weekly Plan — last week's review
+### 3. Weekly Plan — last week's review
 
 The last-week panel carries a second band with the same component in `review` mode: what
 you kept, what you missed, and a **Carry →** on each miss that moves it to *this* week's
@@ -127,7 +148,7 @@ Sunday via the existing `carryTasksForward`.
 
 Missed intentions render in muted grey, never red, and the band never says "failed".
 
-### 3. Calendar — the sidebar, never the grid
+### 4. Calendar — the sidebar, never the grid
 
 **An intention never appears as a block on the calendar grid.** Since the scheduler skips
 them, no `eventInfo` exists, so this is true by construction rather than by a rendering
@@ -184,18 +205,43 @@ Everything derived lives in two files, one per side:
 
 - **`controllers/intentions.js`** — `personalProjectIds`, `isPersonalProject`,
   `taskIsIntention`, `attachIntentionFlags`, `getIntentions`, and
-  `intentionExclusionClauses`.
+  `intentionExclusionClausesFor`, which takes an already-resolved personal-project id set so
+  a caller that also filters in memory walks role -> goal -> project only once.
 - **`webinterface/src/utils/intentions.js`** — `isIntention`, `intentionsForWeek`,
   `intentionSummary`, `intentionUrgency`, `intentionHeadline`.
 
 Two things to keep in step if you change the rule:
 
-1. `taskIsIntention` (in memory) and `intentionExclusionClauses` (as a Mongo query) are the
+1. `taskIsIntention` (in memory) and `intentionExclusionClausesFor` (as a Mongo query) are the
    same predicate written twice, and `getIntentions` writes it a third time as its own
    query. Change one, change all three.
-2. `intentionExclusionClauses` returns **`$and` clauses, not a whole filter**, because the
+2. `intentionExclusionClausesFor` returns **`$and` clauses, not a whole filter**, because the
    scheduler's query already uses `$or`/`$and` and merging by spread would silently clobber
    them.
+
+`simulateBlockedSlots` and the slip forecast both read through `loadSchedulingTasks`, so they
+inherit the exclusion for free.
+
+### The scheduler's guard
+
+`loadSchedulingTasks` in `controllers/scheduling.js` resolves the personal-project set **once**
+and uses it twice: to build the query clauses that keep the read small, and then to filter
+every loaded task through `taskIsIntention` — plainly, *is this an intention? then don't
+schedule it*.
+
+The filter is redundant while the two forms agree, and that is deliberate: the query is the
+hand-maintained mirror, while the in-memory check is the rule everything else derives from, so
+putting the authoritative one last means a drift can only make the read wider, never the
+placement wrong.
+
+**What removal from the list does mean.** An intention is simply absent from the scheduler's
+task list, and `areDependenciesMet` (`controllers/schedulePlanner.js`) treats an absent
+dependency as **met** — so a work task that `dependsOn` an intention schedules immediately
+rather than waiting. That is the behaviour you want (an intention is never scheduled, so
+blocking on one would block forever) but it is worth knowing it is silent: nothing warns that a
+prerequisite was dropped. For the same reason `validateNoCycles` cannot see a cycle that runs
+through an intention. Both have been true since intentions were excluded by query; the
+in-memory filter does not change them.
 
 ### Dates: anchor on civil dates, never stored markers
 

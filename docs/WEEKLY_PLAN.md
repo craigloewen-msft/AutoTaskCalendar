@@ -377,11 +377,19 @@ mutate the form prop, they emit `update-field`.
 The client sends **only additions** when committing. It never re-sends already-committed ids,
 because a `removed` item has no live task and a `moved` item would fail the in-week check.
 
+It also never sends an **intention**. A task under a personal project is not committable work
+— the server refuses one by name — so intentions are excluded from the selection, given no
+checkbox, and left out of the week's selected count, selected minutes and capacity strip.
+Adding a task to a personal project here files it as an intention, due Sunday, and the
+quick-add form says so instead of offering a day. See `docs/INTENTIONS.md`.
+
 Tests:
 
 - `tests/api/weeklyPlan.spec.js` — three specs covering what is unique to commitments: status
   derivation from the live task (including ownership), additive amendment, and carrying work
   forward without rewriting the promise.
+- `tests/ui/weeklyPlan-intentions.spec.js` — adding a task to a personal project files it as an
+  intention and the week still commits.
 - `tests/api/temporal.spec.js` — Monday bounds across DST and year boundaries.
 - `tests/api/tasks.spec.js` — the bounded completion-history query.
 

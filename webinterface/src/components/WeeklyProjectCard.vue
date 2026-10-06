@@ -43,7 +43,7 @@
     >
       <li v-for="task in weekTasks" :key="task._id" class="task-line">
         <label
-          v-if="selectable"
+          v-if="selectable && !task.isIntention"
           class="task-check"
           :data-test="`select-task-${task._id}`"
           @click.stop
@@ -111,7 +111,7 @@
         :data-test="`quick-add-open-${project._id}`"
         @click="$emit('open-form')"
       >
-        <span aria-hidden="true">+</span> Add a task
+        <span aria-hidden="true">+</span> {{ isIntentionProject ? "Add an intention" : "Add a task" }}
       </button>
 
       <form v-else class="quick-form" @submit.prevent="$emit('submit')">
@@ -143,7 +143,17 @@
           </div>
         </div>
 
-        <fieldset class="day-chips">
+        <!-- An intention's due date is the week's Sunday, set by the server, so there is
+             nothing to choose. See docs/INTENTIONS.md. -->
+        <p
+          v-if="isIntentionProject"
+          class="intention-note"
+          :data-test="`quick-intention-note-${project._id}`"
+        >
+          Due {{ sundayLabel }} · never scheduled
+        </p>
+
+        <fieldset v-else class="day-chips">
           <legend>Due</legend>
           <label
             v-for="day in weekDays"
@@ -180,7 +190,7 @@
             Cancel
           </button>
           <button class="btn btn-primary btn-sm" type="submit" :disabled="form.saving">
-            {{ form.saving ? "Adding…" : "Add task" }}
+            {{ form.saving ? "Adding…" : addLabel }}
           </button>
         </div>
       </form>
@@ -227,6 +237,8 @@ export default {
     weekDays: { type: Array, default: () => [] },
     previousWeek: { type: Object, default: () => ({}) },
     selectable: { type: Boolean, default: false },
+    // This project's role is personal, so anything added here is filed as an intention.
+    isIntentionProject: { type: Boolean, default: false },
     selectedIds: { type: Object, default: () => ({}) },
     foldingIn: { type: Boolean, default: false },
     committed: { type: Boolean, default: false },
@@ -256,6 +268,20 @@ export default {
     showLastWeek() {
       return !!(this.lastWeekItems.length || this.completions.length);
     },
+    addLabel() {
+      return this.isIntentionProject ? "Add intention" : "Add task";
+    },
+    // The Sunday the server will set, shown so the fixed date is never a surprise.
+    sundayLabel() {
+      if (!this.week?.endDate) return "Sunday";
+      return formatCivilDate(this.week.endDate, {
+        weekday: "long",
+        month: "short",
+        day: "numeric",
+      });
+    },
+    // Intentions carry a duration but never a slot, so they are counted apart from the
+    // project's planned time rather than folded into it.
     summaryLabel() {
       if (this.committed) {
         if (this.committedItems.length) {
@@ -270,11 +296,17 @@ export default {
         return "nothing committed";
       }
       if (!this.weekTasks.length) return "nothing planned";
-      const minutes = this.weekTasks.reduce(
+      const work = this.weekTasks.filter((task) => !task.isIntention);
+      const intentions = this.weekTasks.length - work.length;
+      const intentionLabel = intentions ? `${intentions} ${this.intentionNoun(intentions)}` : "";
+      if (!work.length) return intentionLabel || "nothing planned";
+
+      const minutes = work.reduce(
         (total, task) => total + (Number(task.duration) || 0),
         0
       );
-      return `${this.weekTasks.length} ${this.taskNoun(this.weekTasks.length)} · ${this.formatDuration(minutes)}`;
+      const workLabel = `${work.length} ${this.taskNoun(work.length)} · ${this.formatDuration(minutes)}`;
+      return intentionLabel ? `${workLabel} · ${intentionLabel}` : workLabel;
     },
   },
   watch: {
@@ -288,6 +320,9 @@ export default {
     },
     taskNoun(count) {
       return count === 1 ? "task" : "tasks";
+    },
+    intentionNoun(count) {
+      return count === 1 ? "intention" : "intentions";
     },
     dueLabel(task) {
       if (!task.seriesRef && (task.isBacklog || !task.dueDate)) return "Backlog";
@@ -535,6 +570,12 @@ button.task-row:focus-visible {
   min-height: 36px;
   padding: 6px 9px;
   font-size: 0.84rem;
+}
+
+.intention-note {
+  margin: 0;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .day-chips {
