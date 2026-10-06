@@ -118,9 +118,12 @@ async function attachIntentionFlags(taskList, userId) {
  * `$or`/`$and`, and merging by spread would silently clobber them. This is
  * `taskIsIntention` expressed as a query, and the two must stay in step: a task is kept
  * unless it is a non-backlog, non-repeating task under a personal project.
+ *
+ * Takes an already-resolved id set when the caller has one, so a caller that also filters in
+ * memory does not walk role -> goal -> project twice.
  */
-async function intentionExclusionClauses(userId) {
-    const personalIds = [...await personalProjectIds(userId)];
+function intentionExclusionClausesFor(personalIdSet) {
+    const personalIds = [...personalIdSet];
     if (!personalIds.length) return [];
 
     return [{
@@ -222,5 +225,5 @@ module.exports = {
     attachIntentionFlags,
     clearIntentionPlacements,
     getIntentions,
-    intentionExclusionClauses,
+    intentionExclusionClausesFor,
 };

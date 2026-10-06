@@ -74,7 +74,10 @@ test.describe('intentions', () => {
             projectRef: String(data.named.trainingProject._id),
         });
 
-        expect(byTitle(body.taskList, 'Long run').duration).toBe(90);
+        const created = byTitle(body.taskList, 'Long run');
+        expect(created.duration).toBe(90);
+        // The default applies only when no duration is given; it is still an intention.
+        expect(created.isIntention).toBe(true);
     });
 
     test('backlog and repeating tasks are never intentions', async ({ seed, api }) => {
@@ -101,6 +104,32 @@ test.describe('intentions', () => {
             projectRef: personal,
         });
         expect(repeating.success).toBe(true);
+        // The template is hidden from the task list, so the series' occurrences answer for it:
+        // a repeating personal task is a series, never an intention.
+        const occurrences = (await taskList(api)).filter((task) => task.title === 'Weekly tidy');
+        expect(occurrences.length).toBeGreaterThan(0);
+        for (const occurrence of occurrences) expect(occurrence.isIntention).toBe(false);
+    });
+
+    test('a quick-add with no due date lands on the week\'s Sunday', async ({ seed, api }) => {
+        const data = await seed();
+        const week = currentWeek();
+
+        // Weekly Plan's quick-add sends no due date for a personal project: the server owns it.
+        const body = await createTask(api, {
+            title: 'Phone a friend',
+            startDate: week.startDate,
+            dueDate: null,
+            duration: 20,
+            projectRef: String(data.named.weekendProject._id),
+        });
+        expect(body.success).toBe(true);
+
+        const created = byTitle(body.taskList, 'Phone a friend');
+        expect(created.isIntention).toBe(true);
+        expect(created.dueDate).toBe(week.endDate);
+        // A duration that was given is kept; only the date is the server's to decide.
+        expect(created.duration).toBe(20);
     });
 
     test('the scheduler never gives an intention a slot', async ({ seed, api }) => {
@@ -121,6 +150,36 @@ test.describe('intentions', () => {
         // Ordinary work around it still schedules, so the exclusion is not over-broad.
         const ordinary = await withDb(() => TaskDetails.findById(data.named.weekOpen._id));
         expect(ordinary.scheduledDate).toBeTruthy();
+    });
+
+    test('a task written straight to the database under a personal project is still never scheduled', async ({ seed, api }) => {
+        const data = await seed();
+        const user = data.primary.user;
+        const week = currentWeek();
+
+        // Bypasses createTask entirely, so nothing forced the Sunday due date -- the task is an
+        // intention purely by its role. Both of the scheduler's defences (the query clauses and
+        // the in-memory `taskIsIntention` check) must agree for this to stay unplaced.
+        const raw = await withDb(() => TaskDetails.create({
+            title: 'Smuggled in behind createTask',
+            userRef: user._id,
+            projectRef: data.named.weekendProject._id,
+            startDate: parseDateOnly(week.startDate).date,
+            dueDate: parseDateOnly(week.startDate).date,
+            duration: 60,
+            isBacklog: false,
+            priority: 100,
+        }));
+
+        expect((await (await api.get('/api/scheduletasks')).json()).success).toBe(true);
+
+        const after = await withDb(() => TaskDetails.findById(raw._id));
+        expect(after.scheduledDate).toBeFalsy();
+        const blocks = await withDb(() => EventDetails.find({
+            userRef: user._id,
+            taskRef: raw._id,
+        }));
+        expect(blocks).toHaveLength(0);
     });
 
     test('a scheduled task edited into a personal project loses its slot', async ({ seed, api }) => {
@@ -247,6 +306,9 @@ test.describe('intentions', () => {
         const titles = items.map((item) => item.title);
         expect(titles).not.toContain('One evening with no laptop');
         expect(titles).not.toContain('Call Mum');
+        // Added after the seed's own commit, so its arrival proves work was swept in and the
+        // absences above are a real exclusion rather than an empty amendment.
+        expect(titles).toContain('Handle the rollback question');
     });
 
     test('moving a task into a personal project makes it an intention and moves it to Sunday', async ({ seed, api }) => {
@@ -290,7 +352,8 @@ test.describe('intentions', () => {
         }));
 
         const found = byTitle(await taskList(api), 'Legacy weekly personal task');
-        if (found) expect(found.isIntention).toBe(false);
+        expect(found).toBeTruthy();
+        expect(found.isIntention).toBe(false);
 
         const items = (await (await api.get(
             `/api/getIntentions?from=${week.startDate}&to=${week.endDate}`

@@ -61,9 +61,10 @@
         </button>
       </div>
 
-      <!-- Personal work, after committing only. See docs/INTENTIONS.md. -->
+      <!-- Personal work. Shown once the week is committed, or earlier if there is already
+           an intention to answer for. See docs/INTENTIONS.md. -->
       <IntentionBand
-        v-if="!loading && !loadError && isCommitted"
+        v-if="!loading && !loadError && (isCommitted || weekIntentions.length)"
         :intentions="weekIntentions"
         :urgency="intentionUrgency"
         :open="intentionBandOpen"
@@ -195,6 +196,7 @@
                 :today="today"
                 :carrying="carrying"
                 :selectable="!isCommitted"
+                :is-intention-project="personalProjectIds.has(project._id)"
                 :selected-ids="selection"
                 :folding-in="committing"
                 :committed="isCommitted"
@@ -525,6 +527,19 @@ export default {
     visibleRoles() {
       return filterRolesByContext(this.roles, this.contextFilter);
     },
+    // Projects under a role with `context: 'personal'`, whose tasks are intentions. The same
+    // ladder controllers/intentions.js walks, defaulting the context exactly as the server's
+    // schema does, so the page cannot disagree with it. Used only to decide what to show.
+    personalProjectIds() {
+      const ids = new Set();
+      for (const role of this.roles) {
+        if ((role.context || "personal") !== "personal") continue;
+        for (const goal of role.goalList || []) {
+          for (const project of goal.projectList || []) ids.add(project._id);
+        }
+      }
+      return ids;
+    },
     formattedWeekRange() {
       if (!this.week) return "";
       const options = { weekday: "short", month: "short", day: "numeric" };
@@ -717,10 +732,13 @@ export default {
     weeklyTasks() {
       return this.sortTasks(this.taskList.filter((task) => this.isDueThisWeek(task)));
     },
-    // Every in-week project task is committed unless explicitly unchecked.
+    // Every in-week project task is committed unless explicitly unchecked. An intention is
+    // never committable work, so it is never selected. See docs/INTENTIONS.md.
     selectedTasks() {
       return this.weeklyTasks.filter(
-        (task) => task.projectRef && this.selection[task._id] !== false
+        (task) => task.projectRef
+          && !task.isIntention
+          && this.selection[task._id] !== false
       );
     },
     selectedMinutes() {
@@ -1362,6 +1380,7 @@ export default {
       form.message = "";
       const title = form.title.trim();
       const duration = Number(form.duration);
+      const intention = this.personalProjectIds.has(project._id);
 
       if (!title) {
         form.error = true;
@@ -1373,7 +1392,9 @@ export default {
         form.message = "Duration must be at least one minute.";
         return;
       }
-      if (form.dueDate < this.week.startDate || form.dueDate > this.week.endDate) {
+      // An intention's due date is the week's Sunday, set by the server, so there is no
+      // chosen date to validate.
+      if (!intention && (form.dueDate < this.week.startDate || form.dueDate > this.week.endDate)) {
         form.error = true;
         form.message = "Choose a due date in the displayed week.";
         return;
@@ -1385,7 +1406,7 @@ export default {
           title,
           duration,
           startDate: this.today,
-          dueDate: form.dueDate,
+          dueDate: intention ? null : form.dueDate,
           projectRef: project._id,
           isBacklog: false,
           breakUpTask: false,
@@ -1405,9 +1426,15 @@ export default {
         form.duration = 30;
         form.dueDate = this.quickTaskDueDate();
         form.open = false;
-        form.message = this.isCommitted
-          ? "Task added since commit."
-          : "Task added to this week.";
+        if (intention) {
+          // The band reads its own endpoint, so a new intention needs it re-read.
+          form.message = "Added as an intention, due Sunday.";
+          this.loadIntentions();
+        } else {
+          form.message = this.isCommitted
+            ? "Task added since commit."
+            : "Task added to this week.";
+        }
       } catch (error) {
         form.error = true;
         form.message = "Task could not be created.";

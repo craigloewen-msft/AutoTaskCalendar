@@ -1,5 +1,6 @@
 {
   "name": "autotaskcalendar",
+  "version": "1.6.0",
   "private": true,
   "description": "Web interface to manage daily tasks and automatically schedule them on your calendar.",
   "dependencies": {
