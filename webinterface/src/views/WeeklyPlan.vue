@@ -147,7 +147,7 @@
               <div class="role-name-row">
                 <h2>{{ role.title }}</h2>
                 <span class="context-badge" data-test="role-context">
-                  {{ contextMeta(role.context).icon }} {{ contextMeta(role.context).label }}
+                  {{ contextMeta(roleContextOf(role)).icon }} {{ contextMeta(roleContextOf(role)).label }}
                 </span>
               </div>
               <p v-if="role.description" class="description">{{ role.description }}</p>
@@ -452,7 +452,7 @@ import {
 } from "../utils/intentions";
 import { buildRoleColorMap } from "../utils/roleColors";
 import ContextFilter from "../components/ContextFilter.vue";
-import { contextMeta, filterRolesByContext, readContextFilter } from "../utils/roleContext";
+import { contextMeta, filterRolesByContext, isPersonalRole, readContextFilter, roleContextOf } from "../utils/roleContext";
 import {
   addCalendarDays,
   apiDateOnly,
@@ -533,7 +533,7 @@ export default {
     personalProjectIds() {
       const ids = new Set();
       for (const role of this.roles) {
-        if ((role.context || "personal") !== "personal") continue;
+        if (!isPersonalRole(role)) continue;
         for (const goal of role.goalList || []) {
           for (const project of goal.projectList || []) ids.add(project._id);
         }
@@ -859,7 +859,7 @@ export default {
             groups.push({
               label: `${role.title} → ${goal.title}`,
               projects,
-              context: role.context || "personal",
+              context: roleContextOf(role),
             });
           }
         }
@@ -869,6 +869,7 @@ export default {
   },
   methods: {
     contextMeta,
+    roleContextOf,
     async load() {
       this.refreshTemporal();
       this.loading = true;

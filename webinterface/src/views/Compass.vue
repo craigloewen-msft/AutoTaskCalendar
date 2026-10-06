@@ -45,7 +45,7 @@
             <span class="role-swatch" :style="{ backgroundColor: roleColors[role._id] }"></span>
             <span class="role-title">{{ role.title }}</span>
             <span class="context-badge" data-test="role-context">
-              {{ contextMeta(role.context).icon }} {{ contextMeta(role.context).label }}
+              {{ contextMeta(roleContextOf(role)).icon }} {{ contextMeta(roleContextOf(role)).label }}
             </span>
             <span class="item-dates">{{ dateRange(role) }}</span>
             <button class="link-btn" :aria-label="'Edit ' + role.title" @click="openEdit('role', role)">✎</button>
@@ -160,7 +160,7 @@ import { BContainer } from "bootstrap-vue-next";
 import CompassEditorDrawer from "../components/CompassEditorDrawer.vue";
 import { buildRoleColorMap } from "../utils/roleColors";
 import ContextFilter from "../components/ContextFilter";
-import { contextMeta, filterRolesByContext, readContextFilter } from "../utils/roleContext";
+import { contextMeta, filterRolesByContext, readContextFilter, roleContextOf } from "../utils/roleContext";
 
 /**
  * Compass: roles > goals > projects.
@@ -252,6 +252,7 @@ export default {
   },
   methods: {
     contextMeta,
+    roleContextOf,
     activeGoals(role) {
       return role.goalList || [];
     },

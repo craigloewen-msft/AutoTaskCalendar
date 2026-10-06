@@ -253,7 +253,21 @@ start date. There is a spec for this.
 
 ### A note on roles with no context
 
-`context` defaults to **`personal`**, so a role created without one makes its tasks
+Roles saved before `context` existed have **no stored value**. The schema default makes a
+hydrated read say `personal`, but a raw query or `.lean()` read sees `undefined`. So:
+
+- Server: match personal roles with `PERSONAL_ROLE_FILTER` (`{ context: { $ne: 'work' } }`),
+  never `{ context: 'personal' }`, and go through `personalProjectIds()` rather than reading a
+  role's `context` yourself. `isPersonalProject()` is just a lookup in that set.
+- Client: use `roleContextOf()` / `isPersonalRole()` from `utils/roleContext.js`.
+
+When these disagreed, Weekly Plan showed a legacy role as personal and sent no due date,
+while `createTask` read it as work and failed with "Due date is required for non-backlog
+tasks"; its tasks were also still scheduled. The `no stored context` specs in
+`tests/api/intentions.spec.js` and `tests/ui/weeklyPlan-intentions.spec.js` cover this by
+`$unset`-ing the field on a seeded role.
+
+The personal default also means a role created without a context makes its tasks
 unschedulable. That is the right default for humans but a trap for fixtures: seed roles
 whose tasks must schedule need `context: 'work'` set explicitly. The slip-forecast and
 other-user fixtures in `seed/dataset.js` do exactly this, with a comment saying why.

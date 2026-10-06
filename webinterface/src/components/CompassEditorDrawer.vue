@@ -165,7 +165,7 @@
 
 <script>
 import { apiDateOnly, dateOnlyInTimeZone } from "../utils/temporal";
-import { CONTEXTS } from "../utils/roleContext";
+import { CONTEXTS, roleContextOf } from "../utils/roleContext";
 import DateField from "./DateField.vue";
 // One editor for all three Compass levels: they differ only by parent and a couple fields.
 export default {
@@ -293,7 +293,7 @@ export default {
     if (item) {
       this.form.title = item.title || "";
       this.form.description = item.description || "";
-      this.form.context = item.context || "personal";
+      this.form.context = roleContextOf(item);
       this.form.startDate = this.toInputDate(item.startDate);
       this.form.endDate = this.toInputDate(item.endDate);
       this.form.parentId = item.roleRef || item.goalRef || null;

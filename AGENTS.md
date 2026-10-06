@@ -35,8 +35,8 @@ Read `docs/SHARED_DATABASE.md` before writing anything that touches the database
 
 ## Verify
 
-`npm test` must pass — it builds the frontend if `dist/` is stale, installs the Playwright
-browser if missing, and runs twelve isolated Playwright workers against the shared database,
+`npm test` must pass — when browser specs are included it builds the frontend if `dist/` is
+stale and installs the Playwright browser if missing, then runs twelve isolated Playwright workers against the shared database,
 each in its own seed namespace. **Any behaviour change ships with a spec.**
 
 While iterating, stay narrow: `npm test -- tests/api` (~1 min) or `npm test -- -g "<name>"`
@@ -60,7 +60,7 @@ dataset.
   through `components/DateField.vue`; see `docs/DATE_PICKER.md`.
 - `seed/` — the fake-data factories and dataset; `scripts/seed.js` is the CLI.
 - `tests/` — Playwright specs (`api/`, `ui/`) and shared `fixtures/`. The `ui` project drives
-  a real browser against the built `dist/`, so rebuild the frontend before running it.
+  a real browser against the built `dist/`; `npm test` rebuilds it when stale.
 - `scripts/` — `dev.js` (dev stack), `db.js` (MongoDB container), `test.js` (test stack).
 - `docs/` — one file per broad concept, each a standalone instruction manual.
   `docs/COMPASS.md` covers roles/goals/projects; `docs/WEEKLY_PLAN.md` covers the weekly

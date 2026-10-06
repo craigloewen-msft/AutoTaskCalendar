@@ -9,7 +9,8 @@
  * rejects -- making the whole week uncommittable. See docs/INTENTIONS.md.
  */
 
-const { test, expect } = require('../fixtures');
+const { test, expect, withDb } = require('../fixtures');
+const { RoleDetails } = require('../../models');
 const { mondayWeekBounds, todayInZone } = require('../../utils/temporal');
 
 async function login(page, username, password) {
@@ -82,5 +83,30 @@ test.describe('weekly plan intentions', () => {
 
         // The intention was left out of the very commit that succeeded.
         expect(await committedTitles(api, week)).not.toContain('Swim on Saturday');
+    });
+
+    // The reported bug: a role saved before work/personal existed has no stored context. The
+    // page showed it as personal and sent no due date, but the server read it as work.
+    test('a role with no stored context still takes an intention from quick-add', async ({ page, seed }) => {
+        const data = await seed();
+        const projectId = String(data.named.weekendProject._id);
+        await withDb(() => RoleDetails.collection.updateOne(
+            { _id: data.named.fatherRole._id },
+            { $unset: { context: '' } }
+        ));
+
+        await login(page, data.primary.username, data.primary.password);
+        await page.goto('/#/weekly-plan');
+        await expect(page.locator('[data-test=week-range]')).toBeVisible();
+
+        const trigger = page.locator(`[data-test=quick-add-open-${projectId}]`);
+        await expect(trigger).toHaveText(/Add an intention/);
+        await trigger.click();
+        await page.locator(`#quick-title-${projectId}`).fill('Board games night');
+        await page.getByRole('button', { name: 'Add intention' }).click();
+
+        const status = page.locator(`[data-test=quick-status-${projectId}]`);
+        await expect(status).toHaveText(/Added as an intention/);
+        await expect(status).not.toContainText('Due date is required');
     });
 });

@@ -394,3 +394,89 @@ test.describe('intentions', () => {
         expect(after.dueDate).toBe(week.endDate);
     });
 });
+
+/**
+ * Roles saved before `context` existed store no value at all. Mongoose reads them back as
+ * `personal` through the schema default, which is what the UI shows, but a raw query or lean
+ * read does not apply defaults. Every server path must still treat them as personal.
+ */
+test.describe('intentions under a role with no stored context', () => {
+    // Strip the field on the raw collection, exactly as a pre-feature role looks on disk.
+    async function makeLegacy(role) {
+        await withDb(() => RoleDetails.collection.updateOne(
+            { _id: role._id },
+            { $unset: { context: '' } }
+        ));
+        const raw = await withDb(() => RoleDetails.collection.findOne({ _id: role._id }));
+        expect(raw).not.toHaveProperty('context');
+    }
+
+    test('quick-add with no due date files an intention rather than failing', async ({ seed, api }) => {
+        const data = await seed();
+        const week = currentWeek();
+        await makeLegacy(data.named.fatherRole);
+
+        // The exact payload Weekly Plan sends for a project it shows as personal.
+        const body = await createTask(api, {
+            title: 'Legacy quick-add',
+            startDate: week.startDate,
+            dueDate: null,
+            duration: 30,
+            projectRef: String(data.named.weekendProject._id),
+            isBacklog: false,
+            recurrence: null,
+        });
+        expect(body.log).toBeUndefined();
+        expect(body.success).toBe(true);
+
+        const created = byTitle(body.taskList, 'Legacy quick-add');
+        expect(created.isIntention).toBe(true);
+        expect(created.dueDate).toBe(week.endDate);
+    });
+
+    test('its tasks are never scheduled, appear in the band, and are not committable', async ({ seed, api }) => {
+        const data = await seed();
+        const week = currentWeek();
+        await makeLegacy(data.named.fatherRole);
+
+        expect(byTitle(await taskList(api), 'One evening with no laptop').isIntention).toBe(true);
+
+        expect((await (await api.get('/api/scheduletasks')).json()).success).toBe(true);
+        const task = await withDb(() => TaskDetails.findById(data.named.intentionOpen._id));
+        expect(task.scheduledDate).toBeNull();
+        const blocks = await withDb(() => EventDetails.find({
+            userRef: data.primary.user._id,
+            taskRef: task._id,
+        }));
+        expect(blocks).toHaveLength(0);
+
+        const items = (await (await api.get(
+            `/api/getIntentions?from=${week.startDate}&to=${week.endDate}`
+        )).json()).items;
+        expect(items.map((item) => item.title)).toContain('One evening with no laptop');
+
+        const commit = await (await api.post('/api/commitWeeklyPlan', {
+            data: { weekStart: week.startDate, taskIds: [String(task._id)] },
+        })).json();
+        expect(commit.success).toBe(false);
+        expect(commit.log).toContain('intention');
+    });
+
+    test('editing a task into a legacy personal project moves it to Sunday', async ({ seed, api }) => {
+        const data = await seed();
+        const week = currentWeek();
+        await makeLegacy(data.named.fatherRole);
+
+        const body = await (await api.post('/api/editTask', {
+            data: { task: {
+                _id: String(data.named.weekOpen._id),
+                projectRef: String(data.named.weekendProject._id),
+            } },
+        })).json();
+        expect(body.success).toBe(true);
+
+        const moved = byTitle(await taskList(api), data.named.weekOpen.title);
+        expect(moved.isIntention).toBe(true);
+        expect(moved.dueDate).toBe(week.endDate);
+    });
+});

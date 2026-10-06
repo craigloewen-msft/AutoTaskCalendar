@@ -1,8 +1,9 @@
 # Testing
 
-AutoTaskCalendar has one test suite: **Playwright**, covering the HTTP API. The browser
-(UI) specs were removed as chronically flaky, so the Vue front end has no automated
-coverage — verify UI changes by hand. This file is the whole manual — how to run it, how to add to it, and how to debug
+AutoTaskCalendar has one test suite: **Playwright**, with two projects. `api` (`tests/api/`)
+covers the HTTP API; `ui` (`tests/ui/`) is a small set of browser specs that drive Chromium
+against the built front end. Keep browser specs few and focused on journeys an API spec
+cannot prove. This file is the whole manual — how to run it, how to add to it, and how to debug
 a failure.
 
 **The rule: any behaviour change ships with a focused spec.** If you fix a bug, add the
@@ -66,7 +67,12 @@ by Playwright.
 seconds; save the full run for just before you commit.
 
 `npm test` handles the setup itself: it makes sure the shared database is answering, then
-starts the app and runs the suite. No browser download or front-end build is needed. This is
+starts the app and runs the suite. When the run includes browser specs it also builds the
+front end into `dist/` if anything under `webinterface/` is newer than the last build, and
+installs Playwright's Chromium if missing (a no-op once present). A run limited to the API
+(`npm test -- tests/api` or `--project api`) skips both. Run the browser specs through
+`npm test`, not bare `npx playwright test`: the latter does neither step and fails with
+`Cannot GET /` when `dist/` is missing or stale. This is
 also the CI contract; workflows do not need a separate MongoDB service. There is nothing to
 install or export beforehand.
 
@@ -236,5 +242,8 @@ behind. Call `seed(...)` at the top of the test so it owns its state.
 `docker logs autotaskcalendar-mongo`, or recreate it with
 `docker rm -f autotaskcalendar-mongo`.
 
-**A front-end change broke something.** There are no automated UI tests any more; run
-`npm run dev` and check the change in a browser yourself.
+**Every browser spec times out at login, page shows `Cannot GET /`.** `dist/` is missing.
+Run through `npm test`, which builds it, or run `npm run build` once.
+
+**A front-end change broke something.** Run `npm test -- tests/ui`, then `npm run dev` and
+check the change in a browser yourself; the browser specs cover only a few journeys.

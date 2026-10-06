@@ -17,9 +17,18 @@ export function contextMeta(context) {
   return CONTEXTS.find((entry) => entry.id === context) || CONTEXTS[1];
 }
 
+// A role with no stored context is personal, matching the schema default and the server.
+export function roleContextOf(role) {
+  return role?.context === "work" ? "work" : "personal";
+}
+
+export function isPersonalRole(role) {
+  return roleContextOf(role) === "personal";
+}
+
 export function filterRolesByContext(roles = [], context = "all") {
   if (context === "all") return roles;
-  return roles.filter((role) => (role.context || "personal") === context);
+  return roles.filter((role) => roleContextOf(role) === context);
 }
 
 // One remembered choice shared by Compass and Weekly Plan.

@@ -26,6 +26,10 @@ const REPEAT_FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'];
 // Minutes an intention is assumed to need when the client does not say.
 const DEFAULT_INTENTION_DURATION = 30;
 
+// A role is personal unless it says `work`. Roles saved before `context` existed store no
+// value and only read as `personal` through the schema default, so never match 'personal'.
+const PERSONAL_ROLE_FILTER = { context: { $ne: 'work' } };
+
 /**
  * Every project id belonging to a personal role, for one user.
  *
@@ -33,7 +37,7 @@ const DEFAULT_INTENTION_DURATION = 30;
  * under a role you have stepped away from is no more schedulable than one you have not.
  */
 async function personalProjectIds(userId) {
-    const roles = await RoleDetails.find({ userRef: userId, context: 'personal' })
+    const roles = await RoleDetails.find({ userRef: userId, ...PERSONAL_ROLE_FILTER })
         .select('_id')
         .lean();
     if (!roles.length) return new Set();
@@ -52,31 +56,11 @@ async function personalProjectIds(userId) {
     return new Set(projects.map((project) => String(project._id)));
 }
 
-// One project, asked directly. Used on create/edit, where only the chosen project matters.
+// One project, used on create/edit. Goes through the same set so the rule exists once;
+// a malformed or foreign id is simply absent, and the caller validates it separately.
 async function isPersonalProject(projectId, userId) {
     if (!projectId) return false;
-
-    let project = null;
-    try {
-        project = await ProjectDetails.findOne({ _id: projectId, userRef: userId })
-            .select('goalRef')
-            .lean();
-    } catch (error) {
-        // A malformed id is not a personal project; the caller validates it separately.
-        return false;
-    }
-    if (!project?.goalRef) return false;
-
-    const goal = await GoalDetails.findOne({ _id: project.goalRef, userRef: userId })
-        .select('roleRef')
-        .lean();
-    if (!goal?.roleRef) return false;
-
-    const role = await RoleDetails.findOne({ _id: goal.roleRef, userRef: userId })
-        .select('context')
-        .lean();
-
-    return role?.context === 'personal';
+    return (await personalProjectIds(userId)).has(String(projectId));
 }
 
 // True when this already-loaded task is an intention, given the set above.
