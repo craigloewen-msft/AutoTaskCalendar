@@ -294,6 +294,54 @@
                 </li>
               </ul>
             </div>
+
+            <!-- Personal work: present and tickable, but never given a slot on the grid.
+                 See docs/INTENTIONS.md. -->
+            <details
+              v-if="sidebarIntentions.length"
+              class="intention-group"
+              data-test="calendar-intentions"
+            >
+              <summary>
+                <span class="intention-group-title">This week, beyond work</span>
+                <span class="intention-group-count">
+                  {{ sidebarIntentions.length }} to do
+                </span>
+              </summary>
+              <ul class="task-items">
+                <li
+                  v-for="task in sidebarIntentions"
+                  :key="task._id"
+                  class="task-item intention-task"
+                  :data-test="`task-item-${task._id}`"
+                  v-on:click="openEditTaskModal(task)"
+                >
+                  <span class="task-primary-row">
+                    <span class="task-title">{{ task.title }}</span>
+                    <span class="task-row-meta">
+                      <!-- No day-count and no NEEDS TIME: there is no schedule to be late
+                           against, so either would be a lie. -->
+                      <span class="task-badge intention-badge">INTENTION</span>
+                      <button
+                        class="quick-complete-button"
+                        :class="{ armed: isCompletionArmed(task) }"
+                        type="button"
+                        :data-test="`quick-complete-${task._id}`"
+                        :aria-label="quickCompleteLabel(task)"
+                        :aria-busy="isQuickCompleting(task)"
+                        :title="quickCompleteLabel(task)"
+                        :disabled="isQuickCompleting(task)"
+                        @click.stop="toggleQuickComplete(task)"
+                        @keydown.esc.stop="disarmCompletion()"
+                        @blur="disarmCompletion()"
+                      >
+                        <span aria-hidden="true">{{ quickCompleteGlyph(task) }}</span>
+                      </button>
+                    </span>
+                  </span>
+                </li>
+              </ul>
+            </details>
           </div>
       </div>
         <div class="main-calendar">
@@ -362,7 +410,9 @@ import {
   instantToDayPilotWall,
   instantPartsInTimeZone,
   localDateOnly,
+  mondayWeekBounds,
 } from "../utils/temporal";
+import { isIntention, intentionsForWeek } from "../utils/intentions";
 
 // The sidebar shows this far ahead; the scheduler materialises 60 days of occurrences.
 const SIDEBAR_WINDOW_DAYS = 21;
@@ -951,8 +1001,13 @@ export default {
       for (const role of this.compassRoles || []) {
         for (const goal of role.goalList || []) {
           const projects = goal.projectList || [];
+          // The role's context rides along so the editor can tell an intention.
           if (projects.length) {
-            groups.push({ label: `${role.title} \u2192 ${goal.title}`, projects });
+            groups.push({
+              label: `${role.title} \u2192 ${goal.title}`,
+              projects,
+              context: role.context || "personal",
+            });
           }
         }
       }
@@ -1039,8 +1094,11 @@ export default {
       const groupedTasks = {};
       if (this.taskList) {
         // Keep ordinary unscheduled work visible, but hide unplaced recurring occurrences
-        // and recurring occurrences beyond the shorter sidebar window.
-        const visibleTasks = this.taskList.filter((task) => this.isInSidebarWindow(task));
+        // and recurring occurrences beyond the shorter sidebar window. Intentions are
+        // never scheduled, so they get their own group rather than reading as unscheduled.
+        const visibleTasks = this.taskList.filter(
+          (task) => !isIntention(task) && this.isInSidebarWindow(task)
+        );
 
         visibleTasks.forEach((task) => {
           const date = this.getTaskDate(task);
@@ -1060,6 +1118,18 @@ export default {
       } else {
         return null;
       }
+    },
+    /**
+     * This week's unfinished intentions.
+     *
+     * Scoped to the current Monday-Sunday so the heading is true, and counted as
+     * outstanding rather than "N of M": the task list omits completed work, so a done/total
+     * ratio here would always understate what you have actually finished.
+     */
+    sidebarIntentions() {
+      // The saved timezone, like every other date on this page -- not the browser clock.
+      const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
+      return intentionsForWeek(this.taskList || [], mondayWeekBounds(today));
     },
     tasksDatesArray() {
       if (this.taskGroupedByDate) {
@@ -1431,6 +1501,41 @@ export default {
   .quick-complete-button {
     opacity: 0.55;
   }
+}
+
+/* Collapsed by default: context, not a to-do list competing with scheduled work. */
+.intention-group {
+  margin-top: 14px;
+  border-top: 1px solid rgba(118, 134, 168, 0.25);
+  padding-top: 10px;
+}
+
+.intention-group > summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  opacity: 0.85;
+  list-style: revert;
+}
+
+.intention-group-title {
+  font-weight: 600;
+}
+
+.intention-group-count {
+  opacity: 0.75;
+}
+
+/* No deadline colouring: an intention has no schedule to be early or late against. */
+.task-item.intention-task {
+  border-left-color: rgba(118, 134, 168, 0.5);
+}
+
+.intention-badge {
+  background: rgba(118, 134, 168, 0.25);
 }
 
 .quick-complete-error {

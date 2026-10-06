@@ -91,6 +91,17 @@ Goals, projects, and tasks **never** store it — they derive it by walking up t
 exactly like role colours. Adding it to a goal body is silently ignored, which has a test.
 Existing roles read back as `personal`, so no migration was needed.
 
+#### The context now has a server-side consequence
+
+`context` is no longer only a filter. A task whose project ladders up to a **personal** role
+is an **intention**: it is due that Sunday and the scheduler never gives it a calendar slot.
+That too is derived on every read rather than stored, so flipping a role between work and
+personal immediately changes what its tasks are. See `docs/INTENTIONS.md`.
+
+One consequence worth knowing: because `context` defaults to `personal`, a role created
+without one makes its tasks unschedulable. Seed fixtures whose tasks must schedule set
+`context: 'work'` explicitly.
+
 ### Why `userRef` is on all three levels
 
 Every ownership check in this codebase is `findOne({ _id, userRef: user._id })`. Carrying

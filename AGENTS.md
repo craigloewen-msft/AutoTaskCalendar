@@ -64,6 +64,7 @@ dataset.
   `docs/COMPASS.md` covers roles/goals/projects; `docs/WEEKLY_PLAN.md` covers the weekly
   commit-and-review workflow; `docs/TASK_SLIP_FORECAST.md` covers blocked-slot reschedule previews;
   `docs/TASK_COMPLETION.md` covers the ways a task gets marked done, including the inline button;
+  `docs/INTENTIONS.md` covers personal work that is tracked weekly but never scheduled;
   `docs/ADMIN.md` covers the admin dashboard and how a user is made an admin;
   `docs/REFACTOR_OVERVIEW.md` is the small risk-driven refactor roadmap;
   `docs/SHARED_DATABASE.md` covers the one shared database and seed namespaces.

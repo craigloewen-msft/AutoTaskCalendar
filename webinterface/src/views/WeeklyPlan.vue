@@ -61,6 +61,19 @@
         </button>
       </div>
 
+      <!-- Personal work, after committing only. See docs/INTENTIONS.md. -->
+      <IntentionBand
+        v-if="!loading && !loadError && isCommitted"
+        :intentions="weekIntentions"
+        :urgency="intentionUrgency"
+        :open="intentionBandOpen"
+        :busy="completingIntentionId !== null"
+        :error="intentionError || intentionLoadError"
+        @toggle="intentionOpenOverride = !intentionBandOpen"
+        @complete="completeIntention"
+        @open="openTask"
+      />
+
       <WeeklyLastWeekReview
         v-if="!loading && !loadError && showLastWeek"
         :plan="previousPlan"
@@ -73,8 +86,10 @@
         :open="lastWeekOpen"
         :busy="carrying"
         :error="carryError"
+        :intentions="previousIntentions"
         @toggle="lastWeekOpenOverride = !lastWeekOpen"
         @carry="carryForward"
+        @carry-intention="carryIntention"
       />
 
       <div
@@ -428,6 +443,11 @@ import TaskEditor from "../components/TaskEditor.vue";
 import WeeklyCommitmentProgress from "../components/WeeklyCommitmentProgress.vue";
 import WeeklyLastWeekReview from "../components/WeeklyLastWeekReview.vue";
 import WeeklyProjectCard from "../components/WeeklyProjectCard.vue";
+import IntentionBand from "../components/IntentionBand.vue";
+import {
+  intentionsForWeek,
+  intentionUrgency as urgencyForWeek,
+} from "../utils/intentions";
 import { buildRoleColorMap } from "../utils/roleColors";
 import ContextFilter from "../components/ContextFilter.vue";
 import { contextMeta, filterRolesByContext, readContextFilter } from "../utils/roleContext";
@@ -448,7 +468,7 @@ import {
  */
 export default {
   name: "WeeklyPlan",
-  components: { ContextFilter, TaskEditor, WeeklyCommitmentProgress, WeeklyLastWeekReview, WeeklyProjectCard },
+  components: { ContextFilter, IntentionBand, TaskEditor, WeeklyCommitmentProgress, WeeklyLastWeekReview, WeeklyProjectCard },
   data() {
     const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
 
@@ -468,6 +488,11 @@ export default {
       carrying: false,
       carryError: "",
       lastWeekOpenOverride: null,
+      intentionOpenOverride: null,
+      intentionError: "",
+      intentions: [],
+      intentionLoadError: "",
+      completingIntentionId: null,
       committing: false,
       commitError: "",
       selection: {},
@@ -572,9 +597,28 @@ export default {
     lastWeekOpen() {
       return this.lastWeekOpenOverride === null ? !this.isCommitted : this.lastWeekOpenOverride;
     },
-    // A week with neither a commitment nor a completion has nothing to review.
+    // Intentions due inside this Monday-Sunday. Deliberately NOT narrowed by the
+    // work/personal filter: hiding your personal life in "work mode" defeats the point.
+    weekIntentions() {
+      return intentionsForWeek(this.intentions, this.week);
+    },
+    // Last week's, for the review band: the honest end-of-week answer.
+    previousIntentions() {
+      return intentionsForWeek(this.intentions, this.previousWeek);
+    },
+    intentionUrgency() {
+      return urgencyForWeek(this.today, this.week);
+    },
+    // Quiet until Friday, then open by itself as the week runs out.
+    intentionBandOpen() {
+      if (this.intentionOpenOverride !== null) return this.intentionOpenOverride;
+      return this.intentionUrgency === "nudge";
+    },
+    // A week with neither a commitment, a completion, nor an intention has nothing to review.
     showLastWeek() {
-      return !!this.previousPlan?.items?.length || !!this.unplannedLastWeekCompletions.length;
+      return !!this.previousPlan?.items?.length
+        || !!this.unplannedLastWeekCompletions.length
+        || !!this.previousIntentions.length;
     },
     // Completed last week but never promised -- the other half of where the week went.
     unplannedLastWeekCompletions() {
@@ -792,7 +836,14 @@ export default {
       for (const role of this.roles) {
         for (const goal of role.goalList || []) {
           const projects = goal.projectList || [];
-          if (projects.length) groups.push({ label: `${role.title} → ${goal.title}`, projects });
+          // The role's context rides along so the editor can tell an intention.
+          if (projects.length) {
+            groups.push({
+              label: `${role.title} → ${goal.title}`,
+              projects,
+              context: role.context || "personal",
+            });
+          }
         }
       }
       return groups;
@@ -812,6 +863,7 @@ export default {
       this.completionError = "";
       this.loadProjectCompletions();
       this.loadPlans();
+      this.loadIntentions();
 
       const [compassResult, taskResult] = await Promise.allSettled([
         this.$http.get("/api/getCompass"),
@@ -1005,6 +1057,79 @@ export default {
     toggleTask(task) {
       this.selection[task._id] = this.selection[task._id] === false;
     },
+    // A missed intention moves to THIS week's Sunday: the same intent, a fresh week.
+    async carryIntention(task) {
+      if (!task?._id || this.carrying) return;
+
+      this.carrying = true;
+      this.carryError = "";
+
+      try {
+        const response = await this.$http.post("/api/carryTasksForward", {
+          taskIds: [String(task._id)],
+          dueDate: this.week.endDate,
+        });
+        if (!response.data.success) {
+          this.carryError = response.data.log || "That could not be carried forward.";
+          return;
+        }
+        this.taskList = response.data.taskList || this.taskList;
+        this.applyPlans(response.data.plans, response.data.projects);
+        await this.loadIntentions();
+      } catch (error) {
+        this.carryError = "That could not be carried forward.";
+      } finally {
+        this.carrying = false;
+      }
+    },
+    // Both weeks in one call: this week's band and last week's review band.
+    async loadIntentions() {
+      const from = this.previousWeek?.startDate;
+      const to = this.week?.endDate;
+      if (!from || !to) return;
+
+      try {
+        const response = await this.$http.get("/api/getIntentions", {
+          params: { from, to },
+        });
+        if (!response.data.success) {
+          this.intentionLoadError = response.data.log || "Intentions could not be loaded.";
+          return;
+        }
+        this.intentions = response.data.items || [];
+        this.intentionLoadError = "";
+      } catch (error) {
+        this.intentionLoadError = "Intentions could not be loaded.";
+      }
+    },
+    /**
+     * The whole check-in: one click marks an intention done.
+     *
+     * Completion is an ordinary task completion, so there is no intention-specific
+     * endpoint and the Calendar stays in step without anything to synchronise.
+     */
+    async completeIntention(task) {
+      const taskId = task?._id;
+      if (!taskId || this.completingIntentionId) return;
+
+      this.completingIntentionId = taskId;
+      this.intentionError = "";
+
+      try {
+        const response = await this.$http.post("/api/completeTask", { taskId });
+        if (!response.data.success || !Array.isArray(response.data.taskList)) {
+          this.intentionError = response.data.log || "That could not be marked done.";
+          return;
+        }
+        this.taskList = response.data.taskList;
+        // The completed task leaves the task list, so re-read the band's own source.
+        await this.loadIntentions();
+      } catch (error) {
+        this.intentionError = "That could not be marked done.";
+      } finally {
+        this.completingIntentionId = null;
+      }
+    },
     refreshTemporal() {
       const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
       const nextWeek = mondayWeekBounds(today);
@@ -1013,9 +1138,14 @@ export default {
       this.week = nextWeek;
 
       if (weekChanged) {
-        // A new week starts uncommitted and with a fresh selection.
+        // A new week starts uncommitted, with a fresh selection, and with both bands back
+        // to their default open state for the new week's weekday.
         this.selection = {};
         this.commitError = "";
+        this.intentionOpenOverride = null;
+        this.lastWeekOpenOverride = null;
+        // The loaded range is keyed to the old week, so every caller needs it re-read.
+        this.loadIntentions();
         for (const form of Object.values(this.forms)) {
           form.dueDate = this.quickTaskDueDate(nextWeek);
           form.error = false;
@@ -1222,6 +1352,8 @@ export default {
       this.taskList = taskList;
       this.closeTaskEditor();
       if (this.isCommitted) this.loadPlans();
+      // The band reads its own endpoint, so an edited task will not appear without this.
+      this.loadIntentions();
     },
     async createTask(project) {
       if (this.refreshTemporal()) this.loadProjectCompletions();

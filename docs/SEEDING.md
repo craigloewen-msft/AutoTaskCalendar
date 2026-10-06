@@ -106,6 +106,15 @@ All of it belongs to `testuser` unless noted:
     That combination is what last week's review reads.
   - Both anchor on real Mondays (`b.thisMondayDate` / `b.lastMondayDate`), so the fixture is
     correct whichever day the seed runs on.
+- **Five intentions** (see `docs/INTENTIONS.md`), under the personal *Father* and *Health*
+  roles. Nothing marks them as intentions — they are intentions because their projects
+  ladder up to a role with `context: 'personal'`:
+  - This week, all due Sunday: `intentionDone` (*Run three times*, completed Wednesday),
+    `intentionOpen`, `intentionShort`, and `intentionStretch`, so the band opens at 1 of 4.
+  - Last week: `intentionLastKept`, completed, and `intentionLastMissed`, not — so the
+    review band has both answers and a **Carry** subject.
+  - The `slipuser` and other-user roles set `context: 'work'` explicitly, because their
+    tasks must schedule. A role with no context defaults to `personal` and so would not.
 - **A second user** with 5 tasks, 1 event, and a role/goal/project, all titled
   `OTHER USER SECRET ...`.
 
