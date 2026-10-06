@@ -66,6 +66,7 @@
             <span v-if="task.seriesRef" class="task-marker" aria-label="Repeating task">↻</span>
             <span class="title-text">{{ task.title }}</span>
             <span v-if="task.isBacklog" class="task-badge">Backlog</span>
+            <span v-else-if="task.isIntention" class="task-badge">Intention</span>
           </span>
           <span class="task-meta">
             <span>{{ dueLabel(task) }}</span>
@@ -89,6 +90,7 @@
                 <span v-if="task.seriesRef" class="task-marker" aria-label="Repeating task">↻</span>
                 <span class="title-text">{{ task.title }}</span>
                 <span v-if="task.isBacklog" class="task-badge">Backlog</span>
+                <span v-else-if="task.isIntention" class="task-badge">Intention</span>
               </span>
               <span class="task-meta">
                 <span>{{ dueLabel(task) }}</span>

@@ -21,6 +21,7 @@ const {
     removeExpiredOccurrences,
     validateNoCycles,
 } = require('./schedulePlanner');
+const { intentionExclusionClauses } = require('./intentions');
 
 const SCHEDULING_HORIZON_DAYS = 60;
 const FORECAST_WINDOW_DAYS = 21;
@@ -64,12 +65,15 @@ async function seriesBehaviorMap(tasks, userId) {
 
 async function loadSchedulingTasks(userId) {
     const filter = incompleteTaskFilter(userId);
+    // Intentions are personal work: they carry a duration but are never given a slot.
+    const notIntention = await intentionExclusionClauses(userId);
     const [regular, backlog] = await Promise.all([
         TaskDetails.find({
             ...filter,
             $and: [
                 { $or: [{ completed: false }, { completed: null }] },
                 { $or: [{ isBacklog: false }, { isBacklog: null }] },
+                ...notIntention,
             ],
         }).sort({ dueDate: 1, priority: 1 }),
         TaskDetails.find({ ...filter, isBacklog: true }).sort({ startDate: 1 }),

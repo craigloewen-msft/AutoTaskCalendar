@@ -91,6 +91,20 @@ always distinguish the original promise from work added later.
 
 Quick add stays available in both modes. Adding a task after committing is normal.
 
+### Intentions sit beside the commitment, never inside it
+
+Once the week is committed, a second band appears under the week header for **intentions**
+-- personal work that is never scheduled. See `docs/INTENTIONS.md`.
+
+It is a separate verdict on purpose. `You kept 4 of 7 promises` is about work; if a missed
+personal intention counted against it, a good working week would read as a bad one because
+you did not call your mother. Intentions are excluded from `selectCommittableTasks`, and
+committing one explicitly fails.
+
+The band renders **only after committing** -- before that this page is about building the
+work week -- and it is collapsed Monday to Thursday, expanding by itself from Friday. Last
+week's review carries the same band, with a **Carry** on each miss.
+
 The panel's right-hand label tracks whichever halves are shown, so the header can never
 disagree with the body: `3 of 5 done` with a commitment, `2 added` when only later additions
 exist, and `nothing committed` when the project has no work this week at all. Role headers

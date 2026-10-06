@@ -36,7 +36,7 @@
 
       <!-- Only work with no project below to sit under. Everything else reads inline,
            beneath its own project. -->
-      <p v-if="!groups.length" class="lw-pointer" data-test="last-week-all-inline">
+      <p v-if="!groups.length && !intentions.length" class="lw-pointer" data-test="last-week-all-inline">
         Every task from last week is shown under its own project below.
       </p>
 
@@ -55,12 +55,24 @@
         :busy="busy"
         @carry="(entries) => $emit('carry', entries)"
       />
+
+      <!-- Personal work gets its own verdict, never folded into the promise count. -->
+      <IntentionBand
+        v-if="intentions.length"
+        review
+        :intentions="intentions"
+        :open="true"
+        :busy="busy"
+        headline-override="Beyond work"
+        @carry="(task) => $emit('carry-intention', task)"
+      />
     </div>
   </section>
 </template>
 
 <script>
 import WeeklyLastWeekProject from "./WeeklyLastWeekProject.vue";
+import IntentionBand from "./IntentionBand.vue";
 import { lastWeekRows } from "../utils/lastWeek";
 
 /**
@@ -72,7 +84,7 @@ import { lastWeekRows } from "../utils/lastWeek";
  */
 export default {
   name: "WeeklyLastWeekReview",
-  components: { WeeklyLastWeekProject },
+  components: { IntentionBand, WeeklyLastWeekProject },
   mixins: [lastWeekRows],
   props: {
     plan: { type: Object, default: null },
@@ -85,8 +97,10 @@ export default {
     open: { type: Boolean, default: false },
     busy: { type: Boolean, default: false },
     error: { type: String, default: "" },
+    // Last week's personal work, counted separately from the promises.
+    intentions: { type: Array, default: () => [] },
   },
-  emits: ["carry", "toggle"],
+  emits: ["carry", "carry-intention", "toggle"],
   computed: {
     items() {
       return this.plan?.items || [];

@@ -12,9 +12,16 @@ const mongoose = require('mongoose');
 const moment = require('moment');
 const { mondayWeekBounds, parseDateOnly } = require('../utils/temporal');
 
+/**
+ * Collapse a seed value to the canonical UTC marker for its civil date.
+ *
+ * `moment.utc` is deliberate: the factories build dates as UTC-midnight markers, and
+ * reading one back with plain `moment()` converts it into the machine's zone, which lands
+ * on the previous day west of UTC and silently shifts every seeded date by one.
+ */
 function seedCivilDate(value) {
     if (!value) return null;
-    return parseDateOnly(moment(value).format('YYYY-MM-DD')).date;
+    return parseDateOnly(moment.utc(value).format('YYYY-MM-DD')).date;
 }
 
 function normalizeCivilFields(doc, fields) {

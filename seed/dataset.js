@@ -391,9 +391,62 @@ module.exports = {
         await b.alignTasks([research, draft, publish], migrationProject);
         await b.alignTasks([proposal], perfProject);
         await b.alignTasks([codeReview, documentation], hiringProject);
-        await b.alignTasks([backlogIdea], weekendProject);
-        await b.alignTasks(active.slice(0, 6), trainingProject);
+        await b.alignTasks(active.slice(0, 6), perfProject);
         await b.alignTasks(completed.slice(0, 12), migrationProject);
+
+        // --- Intentions: personal work, never scheduled. See docs/INTENTIONS.md. ---------
+        // Nothing marks these as intentions; they are intentions because `trainingProject`
+        // and `weekendProject` ladder up to the personal Health and Father roles. Due
+        // Sunday, so each one belongs to exactly one week.
+        const intentionDone = await b.createTask(user, {
+            title: 'Run three times',
+            dueDate: b.civilDate(b.thisMonday, 6),
+            startDate: b.civilDate(b.thisMonday, 0),
+            duration: 60,
+            completed: true,
+            completedDate: b.at(b.thisMonday, { days: 2, hours: 19 }),
+            projectRef: trainingProject._id,
+        });
+        const intentionOpen = await b.createTask(user, {
+            title: 'One evening with no laptop',
+            dueDate: b.civilDate(b.thisMonday, 6),
+            startDate: b.civilDate(b.thisMonday, 0),
+            duration: 120,
+            projectRef: weekendProject._id,
+        });
+        const intentionShort = await b.createTask(user, {
+            title: 'Call Mum',
+            dueDate: b.civilDate(b.thisMonday, 6),
+            startDate: b.civilDate(b.thisMonday, 0),
+            duration: 30,
+            projectRef: weekendProject._id,
+        });
+        // Open, under the Health role, so each personal project has live work too.
+        const intentionStretch = await b.createTask(user, {
+            title: 'Stretch after every run',
+            dueDate: b.civilDate(b.thisMonday, 6),
+            startDate: b.civilDate(b.thisMonday, 0),
+            duration: 20,
+            projectRef: trainingProject._id,
+        });
+        // Last week's pair: one kept, one missed, so the review band has both answers and
+        // the missed one is a carry-forward subject.
+        const intentionLastKept = await b.createTask(user, {
+            title: 'Swim on Saturday',
+            dueDate: b.civilDate(b.lastMonday, 6),
+            startDate: b.civilDate(b.lastMonday, 0),
+            duration: 45,
+            completed: true,
+            completedDate: b.at(b.lastMonday, { days: 5, hours: 10 }),
+            projectRef: trainingProject._id,
+        });
+        const intentionLastMissed = await b.createTask(user, {
+            title: 'Book the dentist',
+            dueDate: b.civilDate(b.lastMonday, 6),
+            startDate: b.civilDate(b.lastMonday, 0),
+            duration: 15,
+            projectRef: weekendProject._id,
+        });
 
         // --- Weekly Plan: a committed current week and a finished previous one ------------
         // Tasks due inside the current Monday-Sunday, so the seeded account opens Weekly
@@ -492,7 +545,10 @@ module.exports = {
             dueDate: b.endOfDay(b.anchor, i + 1),
         }));
         await b.createEvent(other.user, { title: 'OTHER USER SECRET EVENT' });
-        const otherRole = await b.createRole(other.user, { title: 'OTHER USER SECRET ROLE' });
+        const otherRole = await b.createRole(other.user, {
+            title: 'OTHER USER SECRET ROLE',
+            context: 'work',
+        });
         const otherGoal = await b.createGoal(other.user, otherRole, { title: 'OTHER USER SECRET GOAL' });
         const otherProject = await b.createProject(other.user, otherGoal, {
             title: 'OTHER USER SECRET PROJECT',
@@ -539,6 +595,8 @@ module.exports = {
         const capacityRole = await b.createRole(slipUser, {
             title: 'Delivery lead',
             description: 'Protect committed delivery capacity',
+            // Work: these tasks must schedule, which intentions deliberately do not.
+            context: 'work',
             startDate: nextMonday.clone().subtract(30, 'days').toDate(),
         });
         const capacityGoal = await b.createGoal(slipUser, capacityRole, {
@@ -721,6 +779,13 @@ module.exports = {
                 lastWeekDropped,
                 lastWeekSlipped,
                 lastWeekUnplanned,
+                // Intentions
+                intentionDone,
+                intentionOpen,
+                intentionShort,
+                intentionStretch,
+                intentionLastKept,
+                intentionLastMissed,
                 otherRole,
                 otherGoal,
                 otherProject,

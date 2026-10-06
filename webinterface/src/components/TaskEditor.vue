@@ -78,7 +78,7 @@
               />
             </div>
 
-            <div v-if="!draft.isBacklog" class="form-group">
+            <div v-if="!draft.isBacklog && !isIntentionDraft" class="form-group">
               <label for="task-due-date">Due date*</label>
               <DateField
                 id="task-due-date"
@@ -87,9 +87,19 @@
                 :disabled="isSeriesTask"
               />
             </div>
+
+            <!-- Derived from the role, so it is reported rather than chosen. -->
+            <div v-else-if="isIntentionDraft" class="form-group">
+              <label>Due</label>
+              <p class="intention-note" data-test="intention-due-note">
+                Sunday {{ intentionDueLabel }}
+                <small>An intention is personal work for the whole week, so it is never
+                given a time on your calendar.</small>
+              </p>
+            </div>
           </div>
 
-          <label class="checkbox-row" for="task-is-backlog">
+          <label v-if="!isIntentionDraft" class="checkbox-row" for="task-is-backlog">
             <input id="task-is-backlog" v-model="draft.isBacklog" type="checkbox" />
             Backlog task
           </label>
@@ -267,7 +277,13 @@
 import RepeatEditor from "./RepeatEditor.vue";
 import ProjectSuggestions from "./ProjectSuggestions.vue";
 import DateField from "./DateField.vue";
-import { addCalendarDays, apiDateOnly, dateOnlyInTimeZone } from "../utils/temporal";
+import {
+  addCalendarDays,
+  apiDateOnly,
+  dateOnlyInTimeZone,
+  formatCivilDate,
+  mondayWeekBounds,
+} from "../utils/temporal";
 
 export default {
   name: "TaskEditor",
@@ -313,6 +329,28 @@ export default {
         return group.projects.some((project) => project._id === this.draft.projectRef);
       });
     },
+    /**
+     * Whether this draft would be an intention, by the same rule the server applies.
+     *
+     * Derived from the chosen project's role, never stored, so the editor cannot disagree
+     * with what the server will do. See docs/INTENTIONS.md.
+     */
+    isIntentionDraft() {
+      if (this.draft.isBacklog || this.draft.recurrence) return false;
+      if (this.isSeriesTask) return false;
+      if (!this.draft.projectRef) return false;
+
+      const group = this.projectGroups.find((entry) =>
+        entry.projects.some((project) => project._id === this.draft.projectRef)
+      );
+      return group?.context === "personal";
+    },
+    // The Sunday the server will set, shown so the fixed date is never a surprise.
+    intentionDueLabel() {
+      const week = mondayWeekBounds(this.draft.startDate);
+      if (!week) return "";
+      return formatCivilDate(week.endDate, { month: "short", day: "numeric" });
+    },
     dependencyCandidates() {
       return this.tasks.filter((candidate) => candidate._id !== this.task?._id);
     },
@@ -352,7 +390,10 @@ export default {
         return "Duration must be at least one minute.";
       }
       if (!this.draft.startDate) return "Choose a start date.";
-      if (!this.draft.isBacklog && !this.draft.dueDate) return "Choose a due date.";
+      // An intention's due date comes from its week, so there is nothing to choose.
+      if (!this.draft.isBacklog && !this.isIntentionDraft && !this.draft.dueDate) {
+        return "Choose a due date.";
+      }
       if (
         this.draft.breakUpTask
         && (!Number.isFinite(Number(this.draft.breakUpTaskChunkDuration))
@@ -628,6 +669,22 @@ function clone(value) {
   display: block;
   margin-top: 4px;
   color: #7d8792;
+}
+
+/* States the derived outcome; there is no control here because there is no choice. */
+.intention-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(118, 134, 168, 0.12);
+  font-size: 0.9rem;
+}
+
+.intention-note small {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.75;
+  font-size: 0.78rem;
 }
 
 .checkbox-row {

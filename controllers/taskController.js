@@ -8,6 +8,7 @@ const {
 } = require('../utils/temporal');
 const mongoose = require('mongoose');
 const { generateTaskEvents } = require('./scheduling');
+const { attachIntentionFlags } = require('./intentions');
 const { effectiveRule } = require('./recurrence');
 
 async function getTaskListFromUsername(inUsername) {
@@ -22,7 +23,7 @@ async function getTaskListFromUsername(inUsername) {
         options: { sort: { dueDate: 1, priority: 1 } },
     });
 
-    return attachSeriesRules(user.taskList, user._id);
+    return attachIntentionFlags(await attachSeriesRules(user.taskList, user._id), user._id);
 }
 
 async function getProjectCompletions(user, completedFrom, completedTo) {

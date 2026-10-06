@@ -14,7 +14,13 @@ const {
     MAX_BLOCKED_SLOT_SELECTION,
     analyzeBlockedSlots,
 } = require('../controllers/scheduling');
-const { parseDateOnly } = require('../utils/temporal');
+const { parseDateOnly, dateOnlyFromMarker, mondayWeekBounds } = require('../utils/temporal');
+const {
+    DEFAULT_INTENTION_DURATION,
+    getIntentions,
+    isPersonalProject,
+    isRepeating,
+} = require('../controllers/intentions');
 const { createCompletedTaskReport } = require('../controllers/completedTaskExport');
 const {
     recommendTaskProjects,
@@ -108,7 +114,30 @@ function createTaskRoutes(config, authenticateSession) {
         let { title, dueDate, notes, duration, startDate, breakUpTask, breakUpTaskChunkDuration, repeat, taskRepeat, recurrence, isBacklog, dependsOn, priority, projectRef } = req.body;
         const repeatValue = repeat !== undefined ? repeat : taskRepeat;
 
-        if (!title || !duration || !startDate) {
+        if (!title || !startDate) {
+            return res.send(returnFailure('Title, duration, and start date are required'));
+        }
+
+        // Being an intention is derived from the role, never asked for: a personal project
+        // means an intention. Backlog and repeating tasks are excluded by definition, so
+        // they are simply not intentions rather than an error.
+        const isIntention = await isPersonalProject(projectRef, user._id)
+            && !isBacklog
+            && !recurrence
+            && !repeatValue;
+
+        if (isIntention) {
+            // An intention is a whole-week commitment: it is due Sunday and assumed to
+            // need half an hour unless the author says otherwise.
+            duration = duration || DEFAULT_INTENTION_DURATION;
+            const week = mondayWeekBounds(startDate, user.timeZone);
+            if (!week) {
+                return res.send(returnFailure('Start date must use YYYY-MM-DD'));
+            }
+            dueDate = week.endDate;
+        }
+
+        if (!duration) {
             return res.send(returnFailure('Title, duration, and start date are required'));
         }
 
@@ -164,7 +193,7 @@ function createTaskRoutes(config, authenticateSession) {
                 title: req.body.title,
                 dueDate: parsedDue.date,
                 notes: notes,
-                duration: req.body.duration,
+                duration: duration,
                 startDate: parsedStart.date,
                 userRef: user._id,
                 breakUpTask: breakUpTask,
@@ -280,6 +309,40 @@ function createTaskRoutes(config, authenticateSession) {
             delete update.seriesRef;
             if (parsedStart) update.startDate = parsedStart.date;
             if (parsedDue) update.dueDate = parsedDue.date;
+
+            /**
+             * Being an intention is derived from the project, so an edit that moves a task
+             * into (or within) a personal project re-applies the Sunday due date here.
+             * Nothing records the flag: the role remains the only source of truth.
+             */
+            const effectiveProject = task.projectRef !== undefined
+                ? task.projectRef
+                : existing?.projectRef;
+            const willBacklog = update.isBacklog !== undefined
+                ? update.isBacklog
+                : existing?.isBacklog;
+            // The edit's own fields where given, else what the task already is. A legacy
+            // `repeat` string repeats just as a rule does, so both are consulted.
+            const willRepeat = isRepeating({
+                recurrence: task.recurrence !== undefined
+                    ? normaliseRecurrence(task.recurrence)
+                    : existing?.recurrence,
+                repeat: task.repeat !== undefined ? task.repeat : existing?.repeat,
+            });
+
+            if (!isOccurrence
+                && !willBacklog
+                && !willRepeat
+                && await isPersonalProject(effectiveProject, user._id)) {
+                // Anchor on the civil date, never the stored UTC marker: converting that
+                // marker back into a western timezone lands on the previous day, and so
+                // on the previous week's Sunday.
+                const anchor = task.startDate !== undefined
+                    ? task.startDate
+                    : dateOnlyFromMarker(existing?.startDate);
+                const week = anchor ? mondayWeekBounds(anchor, user.timeZone) : null;
+                if (week) update.dueDate = parseDateOnly(week.endDate).date;
+            }
 
             // An occurrence's dates come from the rule, so they are not authored here.
             if (isOccurrence) {
@@ -507,6 +570,39 @@ function createTaskRoutes(config, authenticateSession) {
         } catch (error) {
             console.error(error);
             return res.send(returnFailure('Completion history could not be loaded'));
+        }
+    });
+
+    /**
+     * Intentions for a Monday-Sunday range, including completed ones.
+     *
+     * Two weeks at most: this week's band and last week's review. See docs/INTENTIONS.md.
+     */
+    router.get('/getIntentions', authenticateSession, async (req, res) => {
+        try {
+            const user = await UserDetails.findOne({ username: req.user.username });
+
+            if (!req.user || !user) {
+                return res.send(returnFailure('Not logged in'));
+            }
+
+            const from = parseDateOnly(req.query.from);
+            const to = parseDateOnly(req.query.to);
+            if (!from.provided || !to.provided) {
+                return res.send(returnFailure('from and to are required'));
+            }
+            if (!from.valid || !to.valid) {
+                return res.send(returnFailure('Dates must use YYYY-MM-DD'));
+            }
+            if (from.value > to.value) {
+                return res.send(returnFailure('from must be on or before to'));
+            }
+
+            const items = await getIntentions(user, from.value, to.value);
+            return res.json({ success: true, from: from.value, to: to.value, items });
+        } catch (error) {
+            console.error(error);
+            return res.send(returnFailure('Intentions could not be loaded'));
         }
     });
 

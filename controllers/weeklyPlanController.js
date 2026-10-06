@@ -7,6 +7,7 @@ const {
     parseDateOnly,
     todayInZone,
 } = require('../utils/temporal');
+const { personalProjectIds, taskIsIntention } = require('./intentions');
 
 /**
  * Weekly Plan commitments. See docs/WEEKLY_PLAN.md.
@@ -255,6 +256,10 @@ async function commitWeeklyPlan(user, { weekStart, taskIds } = {}, now = new Dat
  * task currently in the week.
  */
 async function selectCommittableTasks(user, week, taskIds, alreadyCommitted = new Set()) {
+    // Intentions are personal and tracked in their own band, so a missed one never drags
+    // down "you kept N of M promises". See docs/INTENTIONS.md.
+    const personalIds = await personalProjectIds(user._id);
+
     if (taskIds === undefined) {
         const candidates = await TaskDetails.find({
             userRef: user._id,
@@ -262,7 +267,9 @@ async function selectCommittableTasks(user, week, taskIds, alreadyCommitted = ne
             'recurrence.freq': { $exists: false },
         });
         return candidates.filter(
-            (task) => inCommittableWeek(task, week) && !alreadyCommitted.has(String(task._id))
+            (task) => inCommittableWeek(task, week)
+                && !alreadyCommitted.has(String(task._id))
+                && !taskIsIntention(task, personalIds)
         );
     }
 
@@ -284,6 +291,9 @@ async function selectCommittableTasks(user, week, taskIds, alreadyCommitted = ne
         const task = byId.get(id);
         if (!task) fail('Task not found');
         if (task.recurrence?.freq) fail(`"${task.title}" is a repeating series, not a task`);
+        if (taskIsIntention(task, personalIds)) {
+            fail(`"${task.title}" is an intention, not committed work`);
+        }
         if (!inCommittableWeek(task, week)) {
             fail(`"${task.title}" is not due during this week`);
         }
