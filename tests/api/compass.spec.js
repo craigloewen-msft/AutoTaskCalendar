@@ -80,6 +80,72 @@ test.describe('compass', () => {
         expect(body.completedCounts.roles).toBe(beforeArchive + 1);
     });
 
+    test('stores work vs personal context on the role only', async ({ seed, api }) => {
+        await seed();
+        let body = await compass(api);
+
+        expect(findRole(body, 'Engineer').context).toBe('work');
+        expect(findRole(body, 'Father').context).toBe('personal');
+
+        // Explicit on create.
+        body = await (await api.post('/api/createRole', {
+            data: { title: 'Consultant', context: 'work', startDate: daysFromNow(-3) },
+        })).json();
+        const consultant = findRole(body, 'Consultant');
+        expect(consultant.context).toBe('work');
+
+        // Omitted on create defaults to personal.
+        body = await (await api.post('/api/createRole', {
+            data: { title: 'Gardener', startDate: daysFromNow(-3) },
+        })).json();
+        expect(findRole(body, 'Gardener').context).toBe('personal');
+
+        // An unrelated edit leaves it alone.
+        body = await (await api.post('/api/editRole', {
+            data: { _id: String(consultant._id), description: 'Billable work' },
+        })).json();
+        expect(findRole(body, 'Consultant').context).toBe('work');
+
+        // And it can be switched.
+        body = await (await api.post('/api/editRole', {
+            data: { _id: String(consultant._id), context: 'personal' },
+        })).json();
+        expect(findRole(body, 'Consultant').context).toBe('personal');
+
+        // A bad value is fatal.
+        const bad = await (await api.post('/api/editRole', {
+            data: { _id: String(consultant._id), context: 'hobby' },
+        })).json();
+        expect(bad.success).toBe(false);
+        expect(bad.log).toContain('Context must be work or personal');
+    });
+
+    test('ignores context on goals and projects', async ({ seed, api }) => {
+        const data = await seed();
+
+        let body = await (await api.post('/api/createGoal', {
+            data: {
+                title: 'Contextless goal',
+                startDate: daysFromNow(-2),
+                roleRef: String(data.named.engineerRole._id),
+                context: 'work',
+            },
+        })).json();
+        expect(body.success).toBe(true);
+
+        const goal = findGoal(findRole(body, 'Engineer'), 'Contextless goal');
+        expect(goal.context).toBeUndefined();
+
+        body = await (await api.post('/api/createProject', {
+            data: { title: 'Contextless project', goalRef: String(goal._id), context: 'nonsense' },
+        })).json();
+        expect(body.success).toBe(true);
+
+        const project = findGoal(findRole(body, 'Engineer'), 'Contextless goal')
+            .projectList.find((p) => p.title === 'Contextless project');
+        expect(project.context).toBeUndefined();
+    });
+
     test('requires cascade for a populated role and unlinks tasks when deleting the subtree', async ({ seed, api }) => {
         const data = await seed();
         const migrationId = String(data.named.migrationProject._id);

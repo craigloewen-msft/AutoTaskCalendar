@@ -149,6 +149,8 @@ const virtualsOn = {
 const RoleDetail = new Schema({
     title: String,
     description: String,
+    // Work vs personal. Lives only here; everything below derives it by walking the chain.
+    context: { type: String, enum: ['work', 'personal'], default: 'personal' },
     startDate: Date,
     // No end date means the role is still active.
     endDate: Date,
