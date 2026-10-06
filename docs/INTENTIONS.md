@@ -70,6 +70,29 @@ The Sunday rule is applied **when the task is authored**, by `createTask` and `e
 It is a default, not an invariant: a task whose due date was set some other way still
 reads as an intention, it simply sits in whichever week its due date falls in.
 
+### Becoming an intention later
+
+Being an intention is derived, but `scheduledDate` and the task's `eventInfo` rows are
+**stored**. So a task that was scheduled as ordinary work and *then* becomes an intention
+would keep the slot it was already given — an intention sitting on the real calendar —
+until the next full "Schedule Tasks" run happened to clear it.
+
+`clearIntentionPlacements(userId)` in `controllers/intentions.js` closes that gap. It
+nulls `scheduledDate` and `slipForecast` and deletes the `task`/`task-chunk` events of
+every intention still holding a placement. It sweeps the whole user rather than named
+tasks, because re-parenting a goal or flipping a role reclassifies a whole branch at once.
+
+Three write paths call it — these are every way a task can become an intention:
+
+| Path | What changed |
+| --- | --- |
+| `editTask` (`routes/tasks.js`) | The task moved into a personal project |
+| `editItem` (`controllers/compassController.js`) | A role flipped to `personal`, or a goal/project was re-parented under one |
+| `setTaskProject` (`controllers/compassController.js`) | Compass assigned the task to a personal project |
+
+The reverse needs nothing: a role flipped back to `work` leaves the task simply unplaced,
+and the next schedule run places it like any other.
+
 ---
 
 ## The three places you see one

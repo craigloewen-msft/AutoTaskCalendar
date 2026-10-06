@@ -1,4 +1,10 @@
-const { RoleDetails, GoalDetails, ProjectDetails, TaskDetails } = require('../models');
+const {
+    RoleDetails,
+    GoalDetails,
+    ProjectDetails,
+    TaskDetails,
+    EventDetails,
+} = require('../models');
 const { addDateOnlyDays, startOfDateInZone } = require('../utils/temporal');
 
 // Legacy `repeat` strings repeat just like a rule does. See controllers/recurrence.js.
@@ -161,6 +167,52 @@ async function getIntentions(user, from, to) {
     });
 }
 
+/**
+ * Clear any calendar placement held by this user's intentions.
+ *
+ * The scheduler never gives an intention a slot, but `scheduledDate` and its events are
+ * stored, so a task that *becomes* an intention -- moved into a personal project, or under
+ * a role flipped to personal -- would keep the slot it was given while it was work until
+ * the next full schedule run. Every write that can reclassify a task calls this.
+ *
+ * It sweeps the whole user rather than named tasks because re-parenting a goal or role
+ * reclassifies a whole branch at once.
+ */
+async function clearIntentionPlacements(userId) {
+    const personalIds = [...await personalProjectIds(userId)];
+    if (!personalIds.length) return 0;
+
+    // `taskIsIntention` as a query, limited to the ones still holding a placement.
+    const stranded = await TaskDetails.find({
+        userRef: userId,
+        projectRef: { $in: personalIds },
+        seriesRef: null,
+        'recurrence.freq': { $exists: false },
+        repeat: { $nin: REPEAT_FREQUENCIES },
+        $and: [
+            { $or: [{ isBacklog: false }, { isBacklog: null }] },
+            { $or: [{ scheduledDate: { $ne: null } }, { slipForecast: { $ne: null } }] },
+        ],
+    }).select('_id').lean();
+
+    const ids = stranded.map((task) => task._id);
+    if (!ids.length) return 0;
+
+    await Promise.all([
+        TaskDetails.updateMany(
+            { _id: { $in: ids }, userRef: userId },
+            { $set: { scheduledDate: null, slipForecast: null } }
+        ),
+        EventDetails.deleteMany({
+            userRef: userId,
+            taskRef: { $in: ids },
+            type: { $in: ['task', 'task-chunk'] },
+        }),
+    ]);
+
+    return ids.length;
+}
+
 module.exports = {
     DEFAULT_INTENTION_DURATION,
     personalProjectIds,
@@ -168,6 +220,7 @@ module.exports = {
     isRepeating,
     taskIsIntention,
     attachIntentionFlags,
+    clearIntentionPlacements,
     getIntentions,
     intentionExclusionClauses,
 };
