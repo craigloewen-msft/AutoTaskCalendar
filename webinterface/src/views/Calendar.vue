@@ -413,6 +413,7 @@ import {
   mondayWeekBounds,
 } from "../utils/temporal";
 import { isIntention, intentionsForWeek } from "../utils/intentions";
+import { roleContextOf } from "../utils/roleContext";
 
 // The sidebar shows this far ahead; the scheduler materialises 60 days of occurrences.
 const SIDEBAR_WINDOW_DAYS = 21;
@@ -1006,7 +1007,7 @@ export default {
             groups.push({
               label: `${role.title} \u2192 ${goal.title}`,
               projects,
-              context: role.context || "personal",
+              context: roleContextOf(role),
             });
           }
         }

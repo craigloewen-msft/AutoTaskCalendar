@@ -89,7 +89,12 @@ context: { type: String, enum: ['work', 'personal'], default: 'personal' },
 
 Goals, projects, and tasks **never** store it — they derive it by walking up to their role,
 exactly like role colours. Adding it to a goal body is silently ignored, which has a test.
-Existing roles read back as `personal`, so no migration was needed.
+Roles saved before this field existed store **no** `context` and were never backfilled.
+Only a hydrated Mongoose read applies the default, so a raw query or `.lean()` sees
+`undefined`. Treat a missing context as personal everywhere: on the server query
+`{ context: { $ne: 'work' } }` (never `'personal'`), and in the client use `roleContextOf()`
+from `utils/roleContext.js`. Getting this wrong once made the UI and server disagree about
+which roles were personal; see `docs/INTENTIONS.md`.
 
 #### The context now has a server-side consequence
 
