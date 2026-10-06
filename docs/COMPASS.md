@@ -78,6 +78,19 @@ Tasks gained one optional field, and nothing else about them changed:
 projectRef: { type: Schema.Types.ObjectId, ref: 'projectInfo', default: null },
 ```
 
+### Work vs personal lives only on the Role
+
+A role already answers *"which part of my life is this?"*, so work/personal is one enum on
+the role and nothing else:
+
+```js
+context: { type: String, enum: ['work', 'personal'], default: 'personal' },
+```
+
+Goals, projects, and tasks **never** store it — they derive it by walking up to their role,
+exactly like role colours. Adding it to a goal body is silently ignored, which has a test.
+Existing roles read back as `personal`, so no migration was needed.
+
 ### Why `userRef` is on all three levels
 
 Every ownership check in this codebase is `findOne({ _id, userRef: user._id })`. Carrying
@@ -230,6 +243,8 @@ through finished goals the same way it pages through finished tasks.
 
 - `title` is required everywhere. `startDate` is required on roles and goals, optional on
   projects.
+- `context` is accepted **on roles only**, must be `work` or `personal`, and defaults to
+  `personal` on create. A bad value fails with `Context must be work or personal`.
 - `endDate`, when present, must be on or after `startDate`.
 - Dates are strict civil dates (`YYYY-MM-DD`), not instants.
 - **Ending is immediate.** An `endDate` of today or earlier means ended: the item leaves
@@ -270,8 +285,8 @@ agree.
 is a single editor shared by all three levels.
 
 ```
-Compass                                                                 [ + Role ]
-▌ Engineer                          since Jan 2024   ✎        [+ Goal]
+Compass                       [ All ] [ 💼 Work ] [ 🏠 Personal ]      [ + Role ]
+▌ Engineer  💼 Work                 since Jan 2024   ✎        [+ Goal]
     Ship v2 by June                 Jan – Jun 2024   ✎     [+ Project]
         Migration plan              since Feb 2024   ✎        3 active
         Perf pass                   since Apr 2024   ✎        1 active
@@ -294,6 +309,25 @@ All of the interpretation happens in the page:
 | **Someday** drawer | project with no `startDate` (client-side) |
 | **Archive** drawer | fetched on demand from `/api/getCompassArchive`, one level at a time |
 | `N active` | count of incomplete tasks whose `projectRef` matches (client-side) |
+
+### The context filter
+
+One segmented **All / 💼 Work / 🏠 Personal** control sits in the header of both `/compass`
+and `/weekly-plan`. It is `components/ContextFilter.vue` over `utils/roleContext.js`, and
+the choice is kept in `localStorage` under a single key, so the two pages always agree and
+"work mode" survives a reload.
+
+It narrows **only the rendered role tree**, client-side, from the payload the page already
+holds. Nothing else moves: unaligned counts, the Someday and Archive drawers, and Weekly
+Plan's partitioning of left-behind work all still run over every role, so hiding a context
+never makes its tasks look orphaned.
+
+Role colours are built from the **unfiltered** list (`buildRoleColorMap` keys off array
+position), so a role keeps its colour when you switch filters.
+
+Work vs personal is set in one place: a two-button toggle on the role editor, shown only
+when `level === 'role'`. Each role row then carries a small `💼 Work` / `🏠 Personal` pill
+next to its title on Compass and Weekly Plan. The Calendar is deliberately untouched.
 
 The archive drawer only calls the API when you actually open it, and pages 20 at a time, so
 a long history costs nothing until you go looking for it.

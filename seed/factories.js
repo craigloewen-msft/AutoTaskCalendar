@@ -117,6 +117,7 @@ function makeRole(overrides = {}) {
     return {
         title: faker.person.jobTitle(),
         description: faker.lorem.sentence(),
+        context: 'personal',
         startDate: at(anchor, { days: -365 }),
         endDate: null,
         sortOrder: 0,

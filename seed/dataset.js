@@ -283,24 +283,28 @@ module.exports = {
         const engineerRole = await b.createRole(user, {
             title: 'Engineer',
             description: 'Build and ship good software',
+            context: 'work',
             startDate: b.at(b.anchor, { days: -400 }),
             sortOrder: 0,
         });
         const fatherRole = await b.createRole(user, {
             title: 'Father',
             description: 'Be present for my family',
+            context: 'personal',
             startDate: b.at(b.anchor, { days: -900 }),
             sortOrder: 1,
         });
         const healthRole = await b.createRole(user, {
             title: 'Health',
             description: 'Stay strong enough to enjoy the rest',
+            context: 'personal',
             startDate: b.at(b.anchor, { days: -200 }),
             sortOrder: 2,
         });
         const endedRole = await b.createRole(user, {
             title: 'Volunteer board member',
             description: 'A role I have since stepped away from',
+            context: 'personal',
             startDate: b.at(b.anchor, { days: -700 }),
             endDate: b.at(b.anchor, { days: -120 }),
             sortOrder: 3,

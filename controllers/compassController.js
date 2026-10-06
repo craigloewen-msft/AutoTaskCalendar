@@ -37,6 +37,9 @@ const LEVELS = {
     },
 };
 
+// The only two values a role's context may take.
+const ROLE_CONTEXTS = ['work', 'personal'];
+
 class CompassError extends Error {}
 
 function fail(message) {
@@ -136,6 +139,15 @@ async function buildFields(level, body, user, existing) {
 
     if (isCreate || body.description !== undefined) {
         fields.description = body.description || '';
+    }
+
+    // Work vs personal lives only on the role; goals and projects derive it.
+    if (level === 'role' && (isCreate || body.context !== undefined)) {
+        const context = body.context || (isCreate ? 'personal' : undefined);
+        if (!ROLE_CONTEXTS.includes(context)) {
+            fail('Context must be work or personal');
+        }
+        fields.context = context;
     }
 
     if (isCreate || body.startDate !== undefined) {

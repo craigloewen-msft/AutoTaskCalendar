@@ -39,6 +39,7 @@
         </div>
 
         <div class="week-actions">
+          <ContextFilter v-model="contextFilter" />
           <router-link class="btn btn-link calendar-link" to="/calendar">Go to calendar</router-link>
         </div>
       </header>
@@ -118,7 +119,7 @@
         tabindex="-1"
       >
         <section
-          v-for="role in roles"
+          v-for="role in visibleRoles"
           :key="role._id"
           class="role"
           data-test="role-section"
@@ -127,7 +128,12 @@
           <header class="role-head">
             <span class="role-bar" :style="{ backgroundColor: roleColors[role._id] }"></span>
             <div class="role-identity">
-              <h2>{{ role.title }}</h2>
+              <div class="role-name-row">
+                <h2>{{ role.title }}</h2>
+                <span class="context-badge" data-test="role-context">
+                  {{ contextMeta(role.context).icon }} {{ contextMeta(role.context).label }}
+                </span>
+              </div>
               <p v-if="role.description" class="description">{{ role.description }}</p>
             </div>
             <div class="role-meta">
@@ -423,6 +429,8 @@ import WeeklyCommitmentProgress from "../components/WeeklyCommitmentProgress.vue
 import WeeklyLastWeekReview from "../components/WeeklyLastWeekReview.vue";
 import WeeklyProjectCard from "../components/WeeklyProjectCard.vue";
 import { buildRoleColorMap } from "../utils/roleColors";
+import ContextFilter from "../components/ContextFilter.vue";
+import { contextMeta, filterRolesByContext, readContextFilter } from "../utils/roleContext";
 import {
   addCalendarDays,
   apiDateOnly,
@@ -440,7 +448,7 @@ import {
  */
 export default {
   name: "WeeklyPlan",
-  components: { TaskEditor, WeeklyCommitmentProgress, WeeklyLastWeekReview, WeeklyProjectCard },
+  components: { ContextFilter, TaskEditor, WeeklyCommitmentProgress, WeeklyLastWeekReview, WeeklyProjectCard },
   data() {
     const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
 
@@ -474,6 +482,7 @@ export default {
       taskError: "",
       today,
       week: mondayWeekBounds(today),
+      contextFilter: readContextFilter(),
     };
   },
   computed: {
@@ -485,6 +494,11 @@ export default {
     },
     roleColors() {
       return buildRoleColorMap(this.roles);
+    },
+    // Only the hierarchy is narrowed. Everything below still partitions over every role,
+    // so hiding a context never makes its tasks look orphaned.
+    visibleRoles() {
+      return filterRolesByContext(this.roles, this.contextFilter);
     },
     formattedWeekRange() {
       if (!this.week) return "";
@@ -785,6 +799,7 @@ export default {
     },
   },
   methods: {
+    contextMeta,
     async load() {
       this.refreshTemporal();
       this.loading = true;
@@ -1522,6 +1537,22 @@ export default {
   height: 100%;
   min-height: 34px;
   border-radius: 999px;
+}
+
+.role-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.context-badge {
+  font-size: 0.68rem;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #9aa0a6;
+  white-space: nowrap;
 }
 
 .role-identity h2 {

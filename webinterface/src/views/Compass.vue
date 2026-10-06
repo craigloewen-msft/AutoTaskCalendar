@@ -7,6 +7,7 @@
           <p class="text-muted compass-subtitle">Roles → Goals → Projects</p>
         </div>
         <div class="compass-header-right">
+          <ContextFilter v-model="contextFilter" />
           <button class="btn btn-primary" @click="openCreate('role')">+ Role</button>
         </div>
       </div>
@@ -32,6 +33,9 @@
       </div>
 
       <div v-else class="compass-tree">
+        <p v-if="!activeRoles.length" class="empty-note" data-test="context-empty">
+          No {{ contextFilter }} roles. Switch the filter above to see the rest.
+        </p>
         <section
           v-for="role in activeRoles"
           :key="role._id"
@@ -40,6 +44,9 @@
           <div class="role-row">
             <span class="role-swatch" :style="{ backgroundColor: roleColors[role._id] }"></span>
             <span class="role-title">{{ role.title }}</span>
+            <span class="context-badge" data-test="role-context">
+              {{ contextMeta(role.context).icon }} {{ contextMeta(role.context).label }}
+            </span>
             <span class="item-dates">{{ dateRange(role) }}</span>
             <button class="link-btn" :aria-label="'Edit ' + role.title" @click="openEdit('role', role)">✎</button>
             <button class="btn btn-sm btn-outline-primary" @click="openCreate('goal', role._id)">+ Goal</button>
@@ -152,6 +159,8 @@ import { formatCivilDate } from "../utils/temporal";
 import { BContainer } from "bootstrap-vue-next";
 import CompassEditorDrawer from "../components/CompassEditorDrawer.vue";
 import { buildRoleColorMap } from "../utils/roleColors";
+import ContextFilter from "../components/ContextFilter";
+import { contextMeta, filterRolesByContext, readContextFilter } from "../utils/roleContext";
 
 /**
  * Compass: roles > goals > projects.
@@ -161,7 +170,7 @@ import { buildRoleColorMap } from "../utils/roleColors";
  */
 export default {
   name: "Compass",
-  components: { BContainer, CompassEditorDrawer },
+  components: { BContainer, CompassEditorDrawer, ContextFilter },
   data() {
     return {
       roles: [],
@@ -173,6 +182,7 @@ export default {
       archive: { level: "role", items: [], totalCount: 0, hasMore: false, loading: false, loaded: false },
       editor: { open: false, level: "role", existing: null, parentId: null, error: "", key: 0 },
       notice: "",
+      contextFilter: readContextFilter(),
     };
   },
   computed: {
@@ -180,9 +190,9 @@ export default {
     roleColors() {
       return buildRoleColorMap(this.roles);
     },
-    // The API only sends live roles, so everything here is already active.
+    // The API only sends live roles; the context filter is the only narrowing on top.
     activeRoles() {
-      return this.roles;
+      return filterRolesByContext(this.roles, this.contextFilter);
     },
     // Parked projects, carrying their ladder so the drawer reads sensibly.
     somedayProjects() {
@@ -241,6 +251,7 @@ export default {
     },
   },
   methods: {
+    contextMeta,
     activeGoals(role) {
       return role.goalList || [];
     },
@@ -564,6 +575,15 @@ export default {
 
 .link-btn:hover {
   color: #58a6ff;
+}
+
+.context-badge {
+  font-size: 0.72rem;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #9aa0a6;
+  white-space: nowrap;
 }
 
 .empty-note {

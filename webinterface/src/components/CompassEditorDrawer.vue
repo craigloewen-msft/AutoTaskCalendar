@@ -60,6 +60,25 @@
           />
         </div>
 
+        <div v-if="level === 'role'" class="form-group">
+          <span class="form-label-text">Context</span>
+          <div class="context-toggle" role="radiogroup" aria-label="Context">
+            <button
+              v-for="option in contexts"
+              :key="option.id"
+              type="button"
+              role="radio"
+              class="context-choice"
+              :class="{ active: form.context === option.id }"
+              :aria-checked="form.context === option.id"
+              :data-test="'context-choice-' + option.id"
+              @click="form.context = option.id"
+            >
+              <span aria-hidden="true">{{ option.icon }}</span> {{ option.label }}
+            </button>
+          </div>
+        </div>
+
         <div class="form-group">
           <label for="compass-description">Description</label>
           <textarea
@@ -153,6 +172,7 @@
 
 <script>
 import { apiDateOnly, dateOnlyInTimeZone } from "../utils/temporal";
+import { CONTEXTS } from "../utils/roleContext";
 // One editor for all three Compass levels: they differ only by parent and a couple fields.
 export default {
   name: "CompassEditorDrawer",
@@ -172,6 +192,7 @@ export default {
       form: {
         title: "",
         description: "",
+        context: "personal",
         startDate: "",
         endDate: "",
         parentId: null,
@@ -179,6 +200,7 @@ export default {
       isActive: true,
       confirmingEnd: false,
       taskAction: "keep",
+      contexts: CONTEXTS,
     };
   },
   computed: {
@@ -276,6 +298,7 @@ export default {
     if (item) {
       this.form.title = item.title || "";
       this.form.description = item.description || "";
+      this.form.context = item.context || "personal";
       this.form.startDate = this.toInputDate(item.startDate);
       this.form.endDate = this.toInputDate(item.endDate);
       this.form.parentId = item.roleRef || item.goalRef || null;
@@ -296,6 +319,11 @@ export default {
         startDate: this.form.startDate || null,
         endDate: this.isActive ? null : this.form.endDate || null,
       };
+
+      // Work vs personal is a role-level field only.
+      if (this.level === "role") {
+        payload.context = this.form.context;
+      }
 
       if (this.level === "goal") {
         payload.roleRef = this.form.parentId;
@@ -378,6 +406,35 @@ export default {
 .drawer-body {
   padding: 20px 24px;
   flex: 1;
+}
+
+.form-label-text {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  color: #9aa0a6;
+}
+
+.context-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.context-choice {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: inherit;
+  opacity: 0.75;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.context-choice.active {
+  background: rgba(102, 126, 234, 0.35);
+  border-color: #667eea;
+  opacity: 1;
 }
 
 .drawer-body .form-group {
