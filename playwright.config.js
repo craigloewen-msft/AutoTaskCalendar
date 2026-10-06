@@ -31,6 +31,12 @@ module.exports = defineConfig({
 
     projects: [
         { name: 'api', testDir: './tests/api' },
+        // Browser specs run against the built dist/ the API already serves.
+        {
+            name: 'ui',
+            testDir: './tests/ui',
+            use: { ...require('@playwright/test').devices['Desktop Chrome'] },
+        },
     ],
 
     // The API server under test.

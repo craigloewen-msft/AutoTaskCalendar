@@ -70,11 +70,9 @@
 
             <div class="form-group">
               <label for="task-start-date">Start date*</label>
-              <input
+              <DateField
                 id="task-start-date"
                 v-model="draft.startDate"
-                class="form-control date-input"
-                type="date"
                 required
                 :disabled="isSeriesTask"
               />
@@ -82,11 +80,9 @@
 
             <div v-if="!draft.isBacklog && !isIntentionDraft" class="form-group">
               <label for="task-due-date">Due date*</label>
-              <input
+              <DateField
                 id="task-due-date"
                 v-model="draft.dueDate"
-                class="form-control date-input"
-                type="date"
                 required
                 :disabled="isSeriesTask"
               />
@@ -280,6 +276,7 @@
 <script>
 import RepeatEditor from "./RepeatEditor.vue";
 import ProjectSuggestions from "./ProjectSuggestions.vue";
+import DateField from "./DateField.vue";
 import {
   addCalendarDays,
   apiDateOnly,
@@ -290,7 +287,7 @@ import {
 
 export default {
   name: "TaskEditor",
-  components: { RepeatEditor, ProjectSuggestions },
+  components: { RepeatEditor, ProjectSuggestions, DateField },
   props: {
     task: { type: Object, default: null },
     tasks: { type: Array, default: () => [] },
@@ -741,10 +738,6 @@ function clone(value) {
 .confirm-delete .confirm-message {
   margin: 0;
   color: #fca5a5;
-}
-
-.date-input {
-  color-scheme: dark;
 }
 
 @media (max-width: 760px) {

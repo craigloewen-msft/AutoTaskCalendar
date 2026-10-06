@@ -125,13 +125,12 @@
               @change="setEndsMode('on')"
             />
             On
-            <input
-              type="date"
-              class="form-control date-input ends-input"
+            <DateField
               id="repeat-ends-on-date"
+              class="ends-input"
               :disabled="endsMode !== 'on'"
-              :value="endsOnValue"
-              @input="update({ endsOn: $event.target.value || null })"
+              :model-value="endsOnValue"
+              @update:model-value="update({ endsOn: $event || null })"
             />
           </label>
           <label class="radio-inline">
@@ -170,10 +169,12 @@
 
 <script>
 import { describeRecurrence, WEEKDAY_NAMES } from "../utils/recurrence";
+import DateField from "./DateField.vue";
 
 // Mirrors controllers/recurrence.js so the UI and the API agree about a rule.
 export default {
   name: "RepeatEditor",
+  components: { DateField },
   props: {
     // A recurrence rule object, or null for "does not repeat".
     modelValue: { type: Object, default: null },
@@ -416,9 +417,5 @@ function todayIso() {
   margin: 6px 0 0;
   font-size: 13px;
   color: #fcd34d;
-}
-
-.date-input {
-  color-scheme: dark;
 }
 </style>

@@ -101,12 +101,7 @@
 
         <div class="form-group">
           <label for="compass-start">Start date{{ level === 'project' ? '' : '*' }}</label>
-          <input
-            id="compass-start"
-            v-model="form.startDate"
-            type="date"
-            class="form-control"
-          />
+          <DateField id="compass-start" v-model="form.startDate" />
           <small v-if="level === 'project'" class="form-text text-muted">
             Leave blank to park this as a someday project.
           </small>
@@ -114,11 +109,9 @@
 
         <div class="form-group">
           <label for="compass-end">End date</label>
-          <input
+          <DateField
             id="compass-end"
             v-model="form.endDate"
-            type="date"
-            class="form-control"
             :disabled="isActive || !canEnd"
           />
           <label class="compass-active-toggle">
@@ -173,9 +166,11 @@
 <script>
 import { apiDateOnly, dateOnlyInTimeZone } from "../utils/temporal";
 import { CONTEXTS } from "../utils/roleContext";
+import DateField from "./DateField.vue";
 // One editor for all three Compass levels: they differ only by parent and a couple fields.
 export default {
   name: "CompassEditorDrawer",
+  components: { DateField },
   props: {
     level: { type: String, required: true },
     existing: { type: Object, default: null },

@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@daypilot/daypilot-lite-vue": "^3.22.4",
+    "@vuepic/vue-datepicker": "^14.0.0",
     "@vueuse/head": "^2.0.0",
     "axios": "^1.13.2",
     "bootstrap": "^5.3.4",

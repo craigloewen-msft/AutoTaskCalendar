@@ -150,22 +150,12 @@
             <BRow>
               <BCol md="6" class="mb-3">
                 <BFormGroup label="From" label-for="completedExportFrom">
-                  <BFormInput
-                    id="completedExportFrom"
-                    v-model="completedExport.from"
-                    type="date"
-                    class="modern-input"
-                  />
+                  <DateField id="completedExportFrom" v-model="completedExport.from" />
                 </BFormGroup>
               </BCol>
               <BCol md="6" class="mb-3">
                 <BFormGroup label="To" label-for="completedExportTo">
-                  <BFormInput
-                    id="completedExportTo"
-                    v-model="completedExport.to"
-                    type="date"
-                    class="modern-input"
-                  />
+                  <DateField id="completedExportTo" v-model="completedExport.to" />
                 </BFormGroup>
               </BCol>
             </BRow>
@@ -210,6 +200,7 @@
 <script>
 import { dateOnlyInTimeZone } from "../utils/temporal";
 import { BContainer, BRow, BCol, BCard, BButton, BFormGroup, BFormCheckbox, BFormInput } from 'bootstrap-vue-next';
+import DateField from "../components/DateField.vue";
 
 export default {
   name: "User",
@@ -221,7 +212,8 @@ export default {
     BButton,
     BFormGroup,
     BFormCheckbox,
-    BFormInput
+    BFormInput,
+    DateField
   },
   data() {
     const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
