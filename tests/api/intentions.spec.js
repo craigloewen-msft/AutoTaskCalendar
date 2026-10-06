@@ -123,6 +123,81 @@ test.describe('intentions', () => {
         expect(ordinary.scheduledDate).toBeTruthy();
     });
 
+    test('a scheduled task edited into a personal project loses its slot', async ({ seed, api }) => {
+        const data = await seed();
+        const user = data.primary.user;
+
+        expect((await (await api.get('/api/scheduletasks')).json()).success).toBe(true);
+        const placed = await withDb(() => TaskDetails.findById(data.named.weekOpen._id));
+        expect(placed.scheduledDate).toBeTruthy();
+
+        const body = await (await api.post('/api/editTask', {
+            data: {
+                task: {
+                    _id: String(placed._id),
+                    projectRef: String(data.named.weekendProject._id),
+                },
+            },
+        })).json();
+        expect(body.success).toBe(true);
+
+        // The slot goes at once, not at the next schedule run.
+        const after = await withDb(() => TaskDetails.findById(placed._id));
+        expect(after.scheduledDate).toBeFalsy();
+        const blocks = await withDb(() => EventDetails.find({
+            userRef: user._id,
+            taskRef: placed._id,
+        }));
+        expect(blocks).toHaveLength(0);
+    });
+
+    test('flipping a role to personal takes back its tasks\' slots', async ({ seed, api }) => {
+        const data = await seed();
+        const user = data.primary.user;
+
+        expect((await (await api.get('/api/scheduletasks')).json()).success).toBe(true);
+        const placed = await withDb(() => TaskDetails.findById(data.named.weekOpen._id));
+        expect(placed.scheduledDate).toBeTruthy();
+
+        const body = await (await api.post('/api/editRole', {
+            data: { id: String(data.named.engineerRole._id), context: 'personal' },
+        })).json();
+        expect(body.success).toBe(true);
+
+        const after = await withDb(() => TaskDetails.findById(placed._id));
+        expect(after.scheduledDate).toBeFalsy();
+        const blocks = await withDb(() => EventDetails.find({
+            userRef: user._id,
+            taskRef: placed._id,
+        }));
+        expect(blocks).toHaveLength(0);
+    });
+
+    test('assigning a scheduled task to a personal project takes back its slot', async ({ seed, api }) => {
+        const data = await seed();
+        const user = data.primary.user;
+
+        expect((await (await api.get('/api/scheduletasks')).json()).success).toBe(true);
+        const placed = await withDb(() => TaskDetails.findById(data.named.weekOpen._id));
+        expect(placed.scheduledDate).toBeTruthy();
+
+        const body = await (await api.post('/api/setTaskProject', {
+            data: {
+                taskId: String(placed._id),
+                projectId: String(data.named.weekendProject._id),
+            },
+        })).json();
+        expect(body.success).toBe(true);
+
+        const after = await withDb(() => TaskDetails.findById(placed._id));
+        expect(after.scheduledDate).toBeFalsy();
+        const blocks = await withDb(() => EventDetails.find({
+            userRef: user._id,
+            taskRef: placed._id,
+        }));
+        expect(blocks).toHaveLength(0);
+    });
+
     test('flipping the role to work makes its tasks schedulable, with no task write', async ({ seed, api }) => {
         const data = await seed();
         const fatherRole = data.named.fatherRole;

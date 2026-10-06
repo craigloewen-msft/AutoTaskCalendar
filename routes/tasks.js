@@ -17,6 +17,7 @@ const {
 const { parseDateOnly, dateOnlyFromMarker, mondayWeekBounds } = require('../utils/temporal');
 const {
     DEFAULT_INTENTION_DURATION,
+    clearIntentionPlacements,
     getIntentions,
     isPersonalProject,
     isRepeating,
@@ -330,10 +331,12 @@ function createTaskRoutes(config, authenticateSession) {
                 repeat: task.repeat !== undefined ? task.repeat : existing?.repeat,
             });
 
-            if (!isOccurrence
+            const isNowIntention = !isOccurrence
                 && !willBacklog
                 && !willRepeat
-                && await isPersonalProject(effectiveProject, user._id)) {
+                && await isPersonalProject(effectiveProject, user._id);
+
+            if (isNowIntention) {
                 // Anchor on the civil date, never the stored UTC marker: converting that
                 // marker back into a western timezone lands on the previous day, and so
                 // on the previous week's Sunday.
@@ -386,6 +389,12 @@ function createTaskRoutes(config, authenticateSession) {
                     synchronizeSeriesId: targetId,
                 });
             }
+            // A task that just became an intention may still hold the slot it was given
+            // while it was work. An intention is never placed, so take it back now.
+            if (isNowIntention) {
+                await clearIntentionPlacements(user._id);
+            }
+
             clearProjectRecommendationCache(user._id);
 
             return res.json({ success: true });

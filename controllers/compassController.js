@@ -2,6 +2,7 @@ const { TaskDetails, RoleDetails, GoalDetails, ProjectDetails } = require('../mo
 const { parseDateOnly, dateOnlyFromMarker, todayInZone } = require('../utils/temporal');
 const { clearProjectRecommendationCache } = require('./projectRecommendation');
 const { completeTask } = require('./taskController');
+const { clearIntentionPlacements } = require('./intentions');
 
 /**
  * Compass: roles > goals > projects. See docs/COMPASS.md.
@@ -198,6 +199,10 @@ async function editItem(level, body, user) {
 
     Object.assign(existing, fields);
     await existing.save();
+
+    // Flipping a role to personal, or re-parenting under one, turns a whole branch of
+    // tasks into intentions. An intention is never placed, so drop any slot they held.
+    await clearIntentionPlacements(user._id);
 
     return existing;
 }
@@ -399,6 +404,8 @@ async function setTaskProject(taskId, projectId, user) {
     }
 
     await task.save();
+    // Assigning into a personal project makes this an intention, which is never placed.
+    await clearIntentionPlacements(user._id);
     clearProjectRecommendationCache(user._id);
     return task;
 }
