@@ -56,15 +56,18 @@ dataset.
 - `models/index.js` — all Mongoose schemas. Import these; never redefine.
 - `middleware/auth.js` — JWT `authenticateToken`. `utils/helpers.js` — `returnFailure()`;
   `utils/temporal.js` owns date/time parsing and timezone boundaries.
-- `webinterface/src/` — Vue app (`views/`, `components/`, `store.js`).
+- `webinterface/src/` — Vue app (`views/`, `components/`, `store.js`). All date entry goes
+  through `components/DateField.vue`; see `docs/DATE_PICKER.md`.
 - `seed/` — the fake-data factories and dataset; `scripts/seed.js` is the CLI.
-- `tests/` — Playwright specs (`api/`, `ui/`) and shared `fixtures/`.
+- `tests/` — Playwright specs (`api/`, `ui/`) and shared `fixtures/`. The `ui` project drives
+  a real browser against the built `dist/`, so rebuild the frontend before running it.
 - `scripts/` — `dev.js` (dev stack), `db.js` (MongoDB container), `test.js` (test stack).
 - `docs/` — one file per broad concept, each a standalone instruction manual.
   `docs/COMPASS.md` covers roles/goals/projects; `docs/WEEKLY_PLAN.md` covers the weekly
   commit-and-review workflow; `docs/TASK_SLIP_FORECAST.md` covers blocked-slot reschedule previews;
   `docs/TASK_COMPLETION.md` covers the ways a task gets marked done, including the inline button;
   `docs/ADMIN.md` covers the admin dashboard and how a user is made an admin;
+  `docs/DATE_PICKER.md` covers the one date picker shared by every date field;
   `docs/REFACTOR_OVERVIEW.md` is the small risk-driven refactor roadmap;
   `docs/SHARED_DATABASE.md` covers the one shared database and seed namespaces.
 
