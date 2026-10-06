@@ -158,7 +158,8 @@
             />
             <span>{{ day.label }}</span>
           </label>
-          <!-- The native control stays as the accessible source of truth for the date. -->
+          <!-- The native control stays as the accessible source of truth for the date.
+               It is visually hidden, so it deliberately keeps no DateField picker. -->
           <label class="visually-hidden" :for="`quick-due-date-${project._id}`">Due date</label>
           <input
             :id="`quick-due-date-${project._id}`"
