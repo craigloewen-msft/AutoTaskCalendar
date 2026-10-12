@@ -136,6 +136,27 @@ Completion does not change recommendation text or assignment and needs no cache 
 
 Call it once, after all writes in a task create/edit/delete or reassignment operation succeed. Compass hierarchy metadata changes do not clear the cache; its existing behavior remains independent of this feature.
 
+## Short titles
+
+The calendar sidebar names each task's project (`docs/CALENDAR_TASK_LIST.md`), so titles no
+longer have to carry the project in their text: "Update deck" replaces "Update the deck for
+Project A". That is less text for this model to work with, and it is worth being explicit
+about the trade-off.
+
+Training data is unharmed — past tasks keep their text, and the model learns from
+`projectRef`-linked history regardless of title length. What weakens is the *query*: the long
+form was effectively leaking the answer into the request. Expect more `likely` fallbacks and
+more abstentions until enough short-title history accumulates under each project; character
+3–5-grams and word pairs still match a short title against similar short titles.
+
+This degrades quality, never correctness. Abstention is a successful response and the manual
+project selector is always present and required.
+
+No thresholds were tuned for this. If measurement later shows the suggestions have become
+unhelpful, the two levers already in the model are the weight on notes and the weight on
+project/goal/role metadata for cold start — raise those before touching the 0.16 absolute
+threshold or the 75% relative band.
+
 ## Performance and failure behavior
 
 The service bounds database reads, candidates, source text, sparse vector sizes, projects, and retained examples. The cache's estimated byte count includes a conservative allowance for JavaScript containers.

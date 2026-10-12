@@ -262,6 +262,16 @@
                       </button>
                     </span>
                   </span>
+                  <!-- Lets a title stay short: the project says what it is about. -->
+                  <span
+                    v-if="projectLabelFor(task)"
+                    class="task-project"
+                    :data-test="`task-project-${task._id}`"
+                    :title="`Project: ${projectLabelFor(task)}`"
+                    :aria-label="`Project: ${projectLabelFor(task)}`"
+                  >
+                    {{ projectLabelFor(task) }}
+                  </span>
                   <span v-if="showsSlotControl(task)" class="slip-impact-row">
                     <!-- The task that opened the panel keeps its chip; the rest offer to join it. -->
                     <button
@@ -338,6 +348,15 @@
                         <span aria-hidden="true">{{ quickCompleteGlyph(task) }}</span>
                       </button>
                     </span>
+                  </span>
+                  <span
+                    v-if="projectLabelFor(task)"
+                    class="task-project"
+                    :data-test="`task-project-${task._id}`"
+                    :title="`Project: ${projectLabelFor(task)}`"
+                    :aria-label="`Project: ${projectLabelFor(task)}`"
+                  >
+                    {{ projectLabelFor(task) }}
                   </span>
                 </li>
               </ul>
@@ -567,6 +586,8 @@ export default {
       syncing: false,
       // Compass roles, nested with their goals and projects.
       compassRoles: [],
+      // Open tasks can point at a finished project, which the roles tree no longer holds.
+      endedProjects: [],
     };
   },
   methods: {
@@ -790,6 +811,11 @@ export default {
         : "no downstream deadlines are newly missed";
       return `If another event blocks ${task.title}'s planned time: ${result}. Show cascade.`;
     },
+    // Unassigned tasks show nothing: a chip on every stray task would just be noise.
+    projectLabelFor(task) {
+      if (!task?.projectRef) return null;
+      return this.projectTitleById.get(String(task.projectRef)) || null;
+    },
     deadlineGapLabel(task) {
       const days = this.getTaskDaysBetweenDeadlineAndSchedule(task);
       if (days === null) return "No scheduled date";
@@ -810,6 +836,7 @@ export default {
       try {
         const response = await this.$http.get("/api/getCompass");
         this.compassRoles = response.data.success ? response.data.roles : [];
+        this.endedProjects = response.data.success ? response.data.endedProjects || [] : [];
       } catch (error) {
         // Compass is optional context for the task modal; never block the calendar.
         console.error(error);
@@ -1014,6 +1041,21 @@ export default {
       }
 
       return groups;
+    },
+    // Project titles for the sidebar labels, ended projects included.
+    projectTitleById() {
+      const titles = new Map();
+
+      for (const group of this.projectOptionGroups) {
+        for (const project of group.projects) {
+          titles.set(String(project._id), project.title);
+        }
+      }
+      for (const project of this.endedProjects || []) {
+        titles.set(String(project._id), project.title);
+      }
+
+      return titles;
     },
     userWorkingDays() {
       return this.$store.state.user?.workingDays || [];
@@ -1447,6 +1489,19 @@ export default {
   gap: 8px;
   flex-shrink: 0;
   margin-left: 8px;
+}
+
+/* Secondary line: present, readable, never competing with the title. */
+.task-project {
+  display: block;
+  max-width: 100%;
+  margin-top: 3px;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  color: rgba(224, 224, 224, 0.55);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .quick-complete-button {
