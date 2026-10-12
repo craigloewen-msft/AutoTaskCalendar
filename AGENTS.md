@@ -64,7 +64,9 @@ dataset.
 - `scripts/` — `dev.js` (dev stack), `db.js` (MongoDB container), `test.js` (test stack).
 - `docs/` — one file per broad concept, each a standalone instruction manual.
   `docs/COMPASS.md` covers roles/goals/projects; `docs/WEEKLY_PLAN.md` covers the weekly
-  commit-and-review workflow; `docs/TASK_SLIP_FORECAST.md` covers blocked-slot reschedule previews;
+  commit-and-review workflow; `docs/CALENDAR_TASK_LIST.md` covers the calendar sidebar and the
+  project name on each row;
+  `docs/TASK_SLIP_FORECAST.md` covers blocked-slot reschedule previews;
   `docs/TASK_COMPLETION.md` covers the ways a task gets marked done, including the inline button;
   `docs/INTENTIONS.md` covers personal work that is tracked weekly but never scheduled;
   `docs/ADMIN.md` covers the admin dashboard and how a user is made an admin;
