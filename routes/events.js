@@ -6,6 +6,7 @@ const { UserDetails, GoogleOAuthStateDetails } = require('../models');
 const { readGoogleCredentials, writeGoogleCredentials } = require('../utils/googleCredentials');
 const { returnFailure } = require('../utils/helpers');
 const { parseInstant, localWeekBounds } = require('../utils/temporal');
+const { resolveRequestOrigin } = require('../utils/requestOrigin');
 const {
   getEventListFromUsername,
   createEvent,
@@ -21,8 +22,21 @@ function digest(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-function invalidStateRedirect(res, config) {
-  return res.redirect(`${config.appUrl}?error=invalid_state`);
+/**
+ * The base URL to send the browser back to.
+ *
+ * Production uses the registered `appUrl`; development follows the request, so a stack
+ * reached through a forwarded port redirects back to that port rather than to a dead
+ * `localhost:8080` or another agent's stack. See docs/PROXIED_ACCESS.md.
+ */
+function appBaseUrl(req, config) {
+  if (process.env.NODE_ENV === 'production') return config.appUrl;
+
+  return resolveRequestOrigin(req) || config.appUrl;
+}
+
+function invalidStateRedirect(res, config, req) {
+  return res.redirect(`${appBaseUrl(req, config)}?error=invalid_state`);
 }
 
 function createEventRoutes(config, authenticateSession) {
@@ -151,7 +165,7 @@ function createEventRoutes(config, authenticateSession) {
       return res.send(returnFailure('Server configuration error: Google OAuth not configured'));
     }
 
-    const redirectUri = `${config.appUrl}/api/connectGoogleCallback`;
+    const redirectUri = `${appBaseUrl(req, config)}/api/connectGoogleCallback`;
 
     // Generate a URL for the user to connect their Google account
     const oauth2Client = new google.auth.OAuth2(
@@ -190,10 +204,10 @@ function createEventRoutes(config, authenticateSession) {
 
   router.get('/connectGoogleCallback', async (req, res) => {
     if (!req.isAuthenticated || !req.isAuthenticated() || !req.user || !req.sessionID) {
-      return invalidStateRedirect(res, config);
+      return invalidStateRedirect(res, config, req);
     }
     if (typeof req.query.state !== 'string' || req.query.state.length === 0) {
-      return invalidStateRedirect(res, config);
+      return invalidStateRedirect(res, config, req);
     }
 
     const state = await GoogleOAuthStateDetails.findOneAndDelete({
@@ -202,15 +216,15 @@ function createEventRoutes(config, authenticateSession) {
       sessionDigest: digest(req.sessionID),
       expiresAt: { $gt: new Date() },
     });
-    if (!state) return invalidStateRedirect(res, config);
+    if (!state) return invalidStateRedirect(res, config, req);
 
-    if (req.query.error) return res.redirect(`${config.appUrl}?error=oauth_error`);
-    if (!req.query.code) return res.redirect(`${config.appUrl}?error=missing_code`);
+    if (req.query.error) return res.redirect(`${appBaseUrl(req, config)}?error=oauth_error`);
+    if (!req.query.code) return res.redirect(`${appBaseUrl(req, config)}?error=missing_code`);
 
     const user = await UserDetails.findById(req.user._id);
-    if (!user) return invalidStateRedirect(res, config);
+    if (!user) return invalidStateRedirect(res, config, req);
 
-    const redirectUri = `${config.appUrl}/api/connectGoogleCallback`;
+    const redirectUri = `${appBaseUrl(req, config)}/api/connectGoogleCallback`;
 
     // Exchange the authorization code for an access token
     const oauth2Client = new google.auth.OAuth2(
@@ -228,10 +242,10 @@ function createEventRoutes(config, authenticateSession) {
       });
       await user.save();
 
-      return res.redirect(`${config.appUrl}`);
+      return res.redirect(`${appBaseUrl(req, config)}`);
     } catch (err) {
       console.error('[Google OAuth] Token exchange failed');
-      return res.redirect(`${config.appUrl}?error=token_exchange_failed`);
+      return res.redirect(`${appBaseUrl(req, config)}?error=token_exchange_failed`);
     }
   });
 
