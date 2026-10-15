@@ -1,7 +1,12 @@
 <template>
   <div id="app">
-    <BNavbar toggleable="lg" variant="dark">
-      <router-link class="navbar-brand" to="/">AutoTaskCalendar</router-link>
+    <BNavbar toggleable="lg" variant="dark" class="atc-navbar">
+      <router-link class="navbar-brand" to="/">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3M6 10l1.5 1.5L10.5 8.5"/></svg>
+        </span>
+        AutoTaskCalendar
+      </router-link>
 
       <BNavbarToggle target="nav-collapse"></BNavbarToggle>
 
@@ -17,9 +22,9 @@
         <BNavbarNav class="ms-auto">
           <!--- Right-aligned navigation items --->
           <template v-if="isLoggedIn">
-            <Bootstrapnavlinkcustom :to="'/user/' + user.username">{{
-              user.username
-            }}</Bootstrapnavlinkcustom>
+            <Bootstrapnavlinkcustom class="nav-user-link" :to="'/user/' + user.username">
+              <span class="nav-avatar" aria-hidden="true">{{ user.username.charAt(0) }}</span>{{ user.username }}
+            </Bootstrapnavlinkcustom>
             <Bootstrapnavlinkcustom to="/logout">Logout</Bootstrapnavlinkcustom>
           </template>
           <template v-else>
@@ -130,281 +135,104 @@ export default {
 
 
 <style>
-@import "./style/controlButtons.scss";
-
-#app {
-  /* font-family: "Nunito", sans-serif; */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
+/* App shell: sticky translucent navbar. Global styles live in style/base.scss. */
+.atc-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  padding: 10px 20px;
+  background: rgba(11, 13, 18, 0.78) !important;
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--atc-border);
+  --bs-navbar-color: var(--atc-text-muted);
+  --bs-navbar-hover-color: var(--atc-text);
+  --bs-navbar-active-color: var(--atc-text);
+  --bs-navbar-brand-color: var(--atc-text);
+  --bs-navbar-brand-hover-color: #fff;
 }
 
-/* Enhanced navbar styling */
-.navbar {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(10px);
-  background: rgba(33, 37, 41, 0.95) !important;
+.atc-navbar .navbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 650;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  color: var(--atc-text);
+  margin-right: 24px;
 }
 
-.navbar-brand {
+.atc-navbar .navbar-brand:hover {
+  color: #fff;
+}
+
+.brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--atc-accent);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 0 1px rgba(99, 102, 241, 0.5);
+}
+
+.atc-navbar .navbar-nav {
+  gap: 2px;
+}
+
+.atc-navbar .nav-link {
+  color: var(--atc-text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 6px 12px !important;
+  border-radius: var(--atc-radius-sm);
+  transition: color var(--atc-transition), background-color var(--atc-transition);
+}
+
+.atc-navbar .nav-link:hover {
+  color: var(--atc-text);
+  background: var(--atc-hover);
+}
+
+.atc-navbar .nav-link.active,
+.atc-navbar .nav-link.router-link-active {
+  color: var(--atc-text) !important;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.atc-navbar .navbar-toggler {
+  border-color: var(--atc-border-strong);
+  padding: 4px 8px;
+}
+
+.atc-navbar .navbar-toggler:focus {
+  box-shadow: var(--atc-focus-ring);
+}
+
+.nav-user-link .nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--atc-accent-soft);
+  color: var(--atc-accent-text);
+  font-size: 11px;
   font-weight: 700;
-  font-size: 1.5rem;
-  color: #764ba2;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  text-transform: uppercase;
 }
 
-/* Nav link styling for dark navbar */
-.navbar .nav-link {
-  color: rgba(255, 255, 255, 0.85);
-  font-weight: 500;
-  transition: color 0.3s ease;
-}
-
-.navbar .nav-link:hover {
-  color: rgba(255, 255, 255, 1);
-}
-
-.navbar-nav .nav-link.active,
-.navbar-nav .nav-link.show,
-.navbar .nav-link.router-link-active {
-  color: #667eea !important;
-}
-
-/* Enhanced button styling */
-.btn {
-  border-radius: 8px;
-  font-weight: 500;
-  padding: 8px 16px;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-}
-
-.btn-primary:hover {
-  background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
-}
-
-.btn-success {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border: none;
-}
-
-.btn-info {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  border: none;
-}
-
-.btn-outline-primary {
-  border: 2px solid #667eea;
-  color: #667eea;
-  background: transparent;
-}
-
-.btn-outline-primary:hover {
-  background: #667eea;
-  border-color: #667eea;
-  color: white;
-}
-
-/* Enhanced form styling */
-.form-control {
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: #e0e0e0;
-  padding: 10px 14px;
-  transition: all 0.3s ease;
-}
-
-.form-control:focus {
-  border-color: #667eea;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
-  color: #e0e0e0;
-}
-
-.form-group label {
-  font-weight: 500;
-  color: #d0d0d0;
-  margin-bottom: 8px;
-}
-
-/* Modal enhancements */
-.modal-content {
-  border-radius: 12px;
-  background: rgba(30, 30, 35, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
-}
-
-.modal-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.modal-title {
-  font-weight: 600;
-  color: #e0e0e0;
-}
-
-.modal-body {
-  padding: 24px;
-}
-
-.modal-footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.02);
-}
-
-a {
-  color: #c9d1d9;
-}
-
-a:hover {
-  color: #58a6ff;
-}
-
-body {
-  overflow-x: hidden;
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
-
-.pageContent {
-  margin-top: 20px;
-}
-
-.topNavigateBackContainer {
-  display: flex;
-  margin-bottom: 5px;
-}
-
-.footer {
-  margin-top: auto;
-  bottom: 0;
-  width: 100%;
-  height: 60px;
-  line-height: 60px;
-  background-color: #212529;
-}
-
-.img-responsive {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.centered-info-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-.max-width-form {
-  max-width: 400px;
-}
-
-.buttonSelect {
-  display: flex;
-  justify-content: center;
-}
-
-.buttonSelect a {
-  margin-left: 5px;
-  margin-right: 5px;
-}
-
-.buttonSelect button {
-  margin-left: 5px;
-  margin-right: 5px;
-}
-
-.Link--primary:hover {
-  color: #58a6ff !important;
-}
-
-.Link--muted:hover {
-  color: #58a6ff !important;
-}
-
-.custom-tag-box {
-  margin-left: 2px;
-  background-color: #454749;
-  border-radius: 2em;
-  padding: 0 7px;
-  font-size: 14px;
-  display: inline-block;
-  text-decoration: none;
-}
-
-.custom-tag-collection {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.custom-tag-box a:hover {
-  font-weight: 900;
-  color: #58a6ff;
-}
-
-.custom-tag-box a {
-  text-decoration: none;
-}
-
-.small-input-form-box {
-  width: 100px;
-}
-
-.issues-container {
-  text-align: left;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-}
-
-.user-form-box {
-  max-width: 450px !important;
-}
-
-.btn-block {
-  width: 100%;
-}
-
-@keyframes placeholderColorChanges {
-  0% {
-    background: rgb(200, 200, 200);
+@media (max-width: 991.98px) {
+  .atc-navbar .navbar-collapse {
+    padding-top: 10px;
   }
-  100% {
-    background: rgb(50, 50, 50);
-  }
-}
-
-.placeholder {
-  animation-name: placeholderColorChanges;
-  animation-duration: 5s;
-  animation-iteration-count: infinite;
-  animation-direction: alternate;
-  height: 20px;
-}
-
-.footer-box-right {
-  text-align: right;
 }
 </style>

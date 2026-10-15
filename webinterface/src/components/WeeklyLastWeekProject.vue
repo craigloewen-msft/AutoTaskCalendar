@@ -184,7 +184,7 @@ export default {
 .lw-project {
   margin-top: 12px;
   padding: 8px 10px;
-  border-left: 2px solid rgba(141, 162, 251, 0.45);
+  border-left: 2px solid rgba(165, 180, 252, 0.45);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.022);
 }
@@ -197,21 +197,21 @@ export default {
   padding: 0;
   border: 0;
   background: transparent;
-  color: #a8b4c0;
+  color: var(--atc-text-muted);
   font-size: 0.76rem;
   text-align: left;
   cursor: pointer;
 }
 
 .lw-summary:focus-visible {
-  outline: 1px solid rgba(141, 162, 251, 0.6);
+  outline: 1px solid rgba(165, 180, 252, 0.6);
   outline-offset: 3px;
 }
 
 .lw-caret {
   flex: 0 0 auto;
   width: 10px;
-  color: #8b949e;
+  color: var(--atc-text-muted);
 }
 
 .lw-label {
@@ -223,7 +223,7 @@ export default {
 }
 
 .lw-name {
-  color: #c3ccd6;
+  color: var(--atc-text);
   font-weight: 600;
   letter-spacing: 0.04em;
 }
@@ -238,7 +238,7 @@ export default {
 
 .lw-counts {
   flex: 0 0 auto;
-  color: #8b949e;
+  color: var(--atc-text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -255,10 +255,10 @@ export default {
 
 .carry-all {
   padding: 3px 11px;
-  border: 1px solid rgba(141, 162, 251, 0.45);
+  border: 1px solid rgba(165, 180, 252, 0.45);
   border-radius: 999px;
-  background: rgba(102, 126, 234, 0.12);
-  color: #aab8fc;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--atc-accent-text);
   font-size: 0.72rem;
   cursor: pointer;
 }
@@ -266,7 +266,7 @@ export default {
 .carry-all:hover:not(:disabled),
 .carry-all:focus-visible {
   outline: none;
-  background: rgba(102, 126, 234, 0.24);
+  background: rgba(99, 102, 241, 0.24);
 }
 
 .carry-all:disabled {
@@ -289,7 +289,7 @@ export default {
   padding: 5px 8px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.025);
-  color: #c3ccd6;
+  color: var(--atc-text);
   font-size: 0.82rem;
 }
 
@@ -308,13 +308,13 @@ export default {
 .status-glyph {
   flex: 0 0 auto;
   width: 12px;
-  color: #8b949e;
+  color: var(--atc-text-muted);
   text-align: center;
 }
 
 .lw-meta {
   flex: 0 0 auto;
-  color: #8b949e;
+  color: var(--atc-text-muted);
   font-size: 0.74rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -329,10 +329,10 @@ export default {
 
 .carry {
   padding: 2px 9px;
-  border: 1px solid rgba(141, 162, 251, 0.4);
+  border: 1px solid rgba(165, 180, 252, 0.4);
   border-radius: 999px;
   background: transparent;
-  color: #8da2fb;
+  color: var(--atc-accent-text);
   font-size: 0.71rem;
   white-space: nowrap;
   cursor: pointer;
@@ -341,7 +341,7 @@ export default {
 .carry:hover:not(:disabled),
 .carry:focus-visible {
   outline: none;
-  background: rgba(102, 126, 234, 0.16);
+  background: rgba(99, 102, 241, 0.16);
 }
 
 .carry:disabled {
@@ -355,7 +355,7 @@ export default {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #8da2fb;
+  color: var(--atc-accent-text);
   font-size: 0.76rem;
   cursor: pointer;
 }
@@ -367,11 +367,11 @@ export default {
 }
 
 .is-done .status-glyph {
-  color: #6ee7b7;
+  color: var(--atc-success-text);
 }
 
 .is-done .title-text {
-  color: #93a49c;
+  color: var(--atc-text-muted);
 }
 
 .is-moved .status-glyph {
@@ -379,16 +379,16 @@ export default {
 }
 
 .is-removed .status-glyph {
-  color: #f87171;
+  color: var(--atc-danger-text);
 }
 
 .is-removed .title-text {
-  color: #8b949e;
+  color: var(--atc-text-muted);
   text-decoration: line-through;
 }
 
 .is-unplanned .status-glyph {
-  color: #8da2fb;
+  color: var(--atc-accent-text);
 }
 
 @media (max-width: 620px) {

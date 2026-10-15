@@ -77,8 +77,10 @@ field would do nothing, so it stays as it is.
 
 The wrapper passes `form-control date-input` through to the real input, so the field sits
 with ordinary Bootstrap controls. The calendar is dark-themed by overriding the library's
-CSS variables (`--dp-background-color` and friends) in `DateField.vue`. Change them there
-and every picker in the app follows; there are no per-screen date styles left.
+CSS variables (`--dp-background-color` and friends) in `DateField.vue`, under `:root .dp--theme-dark`,
+and pointing them at the theme tokens in `style/theme.scss` (see `docs/STYLE_GUIDE.md`). Change them there
+and every picker in the app follows; there are no per-screen date styles left. The `:root`
+prefix matters: the library's own `.dp--theme-dark` rule loads later and would otherwise win.
 
 The menu is rendered with `teleport="body"`, so it is never clipped by a drawer or modal
 with `overflow: hidden`.
@@ -95,7 +97,8 @@ with `overflow: hidden`.
   (not `format`). Older examples online use the v10 names, which are ignored silently —
   the symptom is a field that still shows `, 00:00`.
 - **CSS class names changed too**, from `dp__*` to `dp--*`. Tests target `.dp--menu` and
-  `.dp--cell-inner`.
+  `.dp--cell-inner`. The theme class is `dp--theme-dark`; the old `dp__theme_dark` selector
+  silently matches nothing.
 
 ---
 

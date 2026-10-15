@@ -1,0 +1,419 @@
+// Global element and Bootstrap component styling, built on theme.scss tokens.
+@import "controlButtons";
+
+html,
+body {
+  background: var(--atc-bg);
+}
+
+body {
+  font-family: var(--atc-font);
+  color: var(--atc-text);
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+#app {
+  text-align: center;
+  flex: 1 0 auto;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: -0.015em;
+}
+
+::selection {
+  background: rgba(99, 102, 241, 0.35);
+}
+
+:focus-visible {
+  outline: 2px solid var(--atc-accent);
+  outline-offset: 2px;
+}
+
+a {
+  color: var(--atc-accent-text);
+  transition: color var(--atc-transition);
+}
+
+a:hover {
+  color: #c7d2fe;
+}
+
+// Thin, quiet scrollbars everywhere.
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+// Buttons: solid fills, colour-only hover, no lift.
+.btn {
+  border-radius: var(--atc-radius-sm);
+  box-shadow: none;
+  letter-spacing: 0.005em;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--atc-focus-ring);
+}
+
+.btn-primary {
+  --bs-btn-bg: var(--atc-accent);
+  --bs-btn-border-color: var(--atc-accent);
+  --bs-btn-hover-bg: var(--atc-accent-hover);
+  --bs-btn-hover-border-color: var(--atc-accent-hover);
+  --bs-btn-active-bg: #5558e8;
+  --bs-btn-active-border-color: #5558e8;
+  --bs-btn-color: #fff;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-color: #fff;
+  --bs-btn-disabled-bg: var(--atc-accent);
+  --bs-btn-disabled-border-color: var(--atc-accent);
+  box-shadow: var(--atc-shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.btn-secondary {
+  --bs-btn-color: var(--atc-text);
+  --bs-btn-bg: var(--atc-surface-2);
+  --bs-btn-border-color: var(--atc-border-strong);
+  --bs-btn-hover-color: var(--atc-text);
+  --bs-btn-hover-bg: var(--atc-surface-3);
+  --bs-btn-hover-border-color: rgba(255, 255, 255, 0.2);
+  --bs-btn-active-bg: var(--atc-surface-3);
+  --bs-btn-active-color: var(--atc-text);
+}
+
+.btn-success {
+  --bs-btn-color: #fff;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-bg: #0e9f6e;
+  --bs-btn-border-color: #0e9f6e;
+  --bs-btn-hover-bg: var(--atc-success);
+  --bs-btn-hover-border-color: var(--atc-success);
+}
+
+.btn-danger {
+  --bs-btn-color: #fff;
+  --bs-btn-hover-color: #fff;
+}
+
+.btn-info {
+  --bs-btn-color: #0b0d12;
+  --bs-btn-hover-color: #0b0d12;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--atc-accent-text);
+  --bs-btn-border-color: var(--atc-accent-border);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--atc-accent);
+  --bs-btn-hover-border-color: var(--atc-accent);
+  --bs-btn-active-bg: var(--atc-accent);
+  --bs-btn-active-border-color: var(--atc-accent);
+}
+
+.btn-outline-secondary,
+.btn-outline-light {
+  --bs-btn-color: var(--atc-text);
+  --bs-btn-border-color: var(--atc-border-strong);
+  --bs-btn-hover-color: var(--atc-text);
+  --bs-btn-hover-bg: var(--atc-hover);
+  --bs-btn-hover-border-color: rgba(255, 255, 255, 0.22);
+  --bs-btn-active-bg: rgba(255, 255, 255, 0.08);
+  --bs-btn-active-color: var(--atc-text);
+  --bs-btn-active-border-color: rgba(255, 255, 255, 0.22);
+}
+
+.btn-link {
+  --bs-btn-color: var(--atc-accent-text);
+  --bs-btn-hover-color: #c7d2fe;
+  box-shadow: none;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+// Forms
+.form-control,
+.form-select {
+  border-radius: var(--atc-radius-sm);
+  transition: border-color var(--atc-transition), box-shadow var(--atc-transition), background-color var(--atc-transition);
+}
+
+.form-control:hover:not(:focus):not(:disabled),
+.form-select:hover:not(:focus):not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.form-control:focus,
+.form-select:focus {
+  box-shadow: var(--atc-focus-ring);
+}
+
+.form-group label,
+label.form-label {
+  font-weight: 500;
+  color: #c3c8d3;
+  margin-bottom: 6px;
+}
+
+.form-check-input:checked {
+  background-color: var(--atc-accent);
+  border-color: var(--atc-accent);
+}
+
+// Surfaces
+.card {
+  box-shadow: var(--atc-shadow-sm);
+}
+
+.modal-content {
+  background: var(--atc-surface);
+  border: 1px solid var(--atc-border);
+  box-shadow: var(--atc-shadow-lg);
+}
+
+.modal-header,
+.modal-footer {
+  background: transparent;
+  border-color: var(--atc-border);
+}
+
+.modal-title {
+  font-weight: 600;
+  color: var(--atc-text);
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-backdrop.show {
+  backdrop-filter: blur(2px);
+}
+
+.dropdown-menu {
+  border-radius: var(--atc-radius);
+  padding: 6px;
+}
+
+.dropdown-item {
+  border-radius: var(--atc-radius-sm);
+}
+
+.table {
+  --bs-table-bg: transparent;
+}
+
+.badge {
+  letter-spacing: 0.02em;
+}
+
+.text-muted {
+  color: var(--atc-text-muted) !important;
+}
+
+// Shared layout helpers used across views.
+.pageContent {
+  padding: 28px 16px 48px;
+}
+
+.topNavigateBackContainer {
+  display: flex;
+  margin-bottom: 5px;
+}
+
+.img-responsive {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.centered-info-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.max-width-form {
+  max-width: 400px;
+}
+
+.buttonSelect {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.Link--primary:hover,
+.Link--muted:hover {
+  color: var(--atc-accent-text) !important;
+}
+
+.custom-tag-box {
+  margin-left: 2px;
+  background-color: var(--atc-surface-3);
+  border: 1px solid var(--atc-border);
+  border-radius: var(--atc-radius-pill);
+  padding: 0 8px;
+  font-size: 13px;
+  display: inline-block;
+  text-decoration: none;
+}
+
+.custom-tag-collection {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.custom-tag-box a {
+  text-decoration: none;
+}
+
+.custom-tag-box a:hover {
+  color: var(--atc-accent-text);
+}
+
+.small-input-form-box {
+  width: 100px;
+}
+
+.issues-container {
+  text-align: left;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.user-form-box {
+  max-width: 420px !important;
+}
+
+@keyframes atcShimmer {
+  0% { opacity: 0.45; }
+  100% { opacity: 0.9; }
+}
+
+.placeholder {
+  background: var(--atc-surface-3);
+  border-radius: var(--atc-radius-sm);
+  animation: atcShimmer 1.2s ease-in-out infinite alternate;
+  height: 20px;
+}
+
+// Login and Register share one centred card.
+.auth-page {
+  display: flex;
+  justify-content: center;
+  padding-top: 8vh;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 32px;
+  text-align: left;
+  background: var(--atc-surface);
+  border: 1px solid var(--atc-border);
+  border-radius: var(--atc-radius-lg);
+  box-shadow: var(--atc-shadow-lg);
+}
+
+.auth-card .form-label {
+  margin: 14px 0 6px;
+  font-size: 13px;
+}
+
+.auth-title {
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+
+.auth-subtitle {
+  color: var(--atc-text-muted);
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.auth-error {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: var(--atc-radius-sm);
+  background: var(--atc-danger-soft);
+  color: var(--atc-danger-text);
+  font-size: 13px;
+}
+
+.auth-submit {
+  margin-top: 22px;
+  padding: 0.6rem 1rem;
+}
+
+.auth-switch {
+  margin: 18px 0 0;
+  text-align: center;
+  color: var(--atc-text-muted);
+  font-size: 13px;
+}
+
+// Footer, rendered from public/index.html.
+.footer {
+  margin-top: auto;
+  width: 100%;
+  padding: 18px 0;
+  border-top: 1px solid var(--atc-border);
+  font-size: 13px;
+  color: var(--atc-text-subtle);
+}
+
+.footer a {
+  color: var(--atc-text-muted);
+}
+
+.footer a:hover {
+  color: var(--atc-text);
+}
+
+.footer-box-right {
+  text-align: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

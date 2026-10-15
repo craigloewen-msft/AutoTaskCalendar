@@ -1,41 +1,45 @@
 <template>
-  <div class="pageContent">
-    <BContainer class="user-form-box">
-      <h1>Please sign in</h1>
-      <p v-if="failuretext">{{ failuretext }}</p>
+  <div class="pageContent auth-page">
+    <div class="auth-card">
+      <h1 class="auth-title">Welcome back</h1>
+      <p class="auth-subtitle">Sign in to see your scheduled week.</p>
+      <p v-if="failuretext" class="auth-error" role="alert">{{ failuretext }}</p>
+      <label class="form-label" for="login-username">Username</label>
       <input
+        id="login-username"
         class="form-control"
         type="text"
         name="username"
+        autocomplete="username"
         v-model="input.username"
         placeholder="Username"
       />
+      <label class="form-label" for="login-password">Password</label>
       <input
+        id="login-password"
         class="form-control"
         type="password"
         name="password"
+        autocomplete="current-password"
         v-model="input.password"
         placeholder="Password"
         @keyup.enter="login"
       />
-      <br />
-      <button class="btn btn-lg btn-primary btn-block" v-on:click="login">
+      <button class="btn btn-primary btn-block auth-submit" v-on:click="login">
         Sign in
       </button>
-    </BContainer>
+      <p class="auth-switch">
+        New here? <router-link to="/register">Create an account</router-link>
+      </p>
+    </div>
   </div>
 </template>
 
 <script>
-import { BContainer } from 'bootstrap-vue-next';
-
 let devEndPoint = "/api/";
 
 export default {
   name: "Login",
-  components: {
-    BContainer
-  },
   data() {
     return {
       failuretext: null,

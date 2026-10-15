@@ -215,7 +215,7 @@ export default {
 
 .ib-error {
   margin: 0 0 8px;
-  color: #c53030;
+  color: var(--atc-danger);
   font-size: 0.85rem;
 }
 

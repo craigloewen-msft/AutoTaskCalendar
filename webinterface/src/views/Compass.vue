@@ -470,9 +470,9 @@ export default {
   margin-bottom: 20px;
   padding: 10px 14px;
   border-radius: 8px;
-  background: rgba(40, 167, 69, 0.14);
-  border: 1px solid rgba(40, 167, 69, 0.35);
-  color: #a3d9b1;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: var(--atc-success-text);
   font-size: 0.9rem;
 }
 
@@ -512,7 +512,7 @@ export default {
 .role-block {
   margin-bottom: 26px;
   padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--atc-border);
 }
 
 .role-row,
@@ -535,7 +535,7 @@ export default {
 .role-title {
   font-size: 1.15rem;
   font-weight: 700;
-  color: #e8e8e8;
+  color: var(--atc-text);
 }
 
 .goal-block {
@@ -544,7 +544,7 @@ export default {
 
 .goal-title {
   font-weight: 600;
-  color: #d5d5d5;
+  color: var(--atc-text);
 }
 
 .project-row {
@@ -552,16 +552,16 @@ export default {
 }
 
 .project-title {
-  color: #bdbdbd;
+  color: var(--atc-text-muted);
 }
 
 .item-dates {
-  color: #8b9096;
+  color: var(--atc-text-muted);
   font-size: 0.82rem;
 }
 
 .project-count {
-  color: #8b9096;
+  color: var(--atc-text-muted);
   font-size: 0.82rem;
   margin-left: auto;
 }
@@ -569,13 +569,13 @@ export default {
 .link-btn {
   background: none;
   border: none;
-  color: #8b9096;
+  color: var(--atc-text-muted);
   cursor: pointer;
   padding: 0 4px;
 }
 
 .link-btn:hover {
-  color: #58a6ff;
+  color: var(--atc-accent-text);
 }
 
 .context-badge {
@@ -583,13 +583,13 @@ export default {
   padding: 1px 8px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.08);
-  color: #9aa0a6;
+  color: var(--atc-text-muted);
   white-space: nowrap;
 }
 
 .empty-note {
   margin: 0 0 6px 22px;
-  color: #7a7f85;
+  color: var(--atc-text-subtle);
   font-size: 0.85rem;
   font-style: italic;
 }
@@ -597,12 +597,12 @@ export default {
 .compass-drawer-section {
   margin-top: 18px;
   padding: 10px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--atc-border);
 }
 
 .compass-drawer-section summary {
   cursor: pointer;
-  color: #b0b0b0;
+  color: var(--atc-text-muted);
 }
 
 .archive-levels {
@@ -613,9 +613,9 @@ export default {
 
 .archive-tab {
   background: none;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--atc-border-strong);
   border-radius: 6px;
-  color: #9aa0a6;
+  color: var(--atc-text-muted);
   padding: 4px 10px;
   font-size: 0.82rem;
   cursor: pointer;
@@ -623,13 +623,13 @@ export default {
 }
 
 .archive-tab.active {
-  border-color: #667eea;
-  color: #c9d1d9;
+  border-color: var(--atc-accent);
+  color: var(--atc-text);
 }
 
 .unaligned-line {
   margin-top: 18px;
-  color: #8b9096;
+  color: var(--atc-text-muted);
   font-size: 0.9rem;
 }
 </style>

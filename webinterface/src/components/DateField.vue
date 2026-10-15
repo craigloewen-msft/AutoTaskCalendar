@@ -44,13 +44,24 @@ export default {
 </script>
 
 <style>
-/* Match the app's dark form controls. */
-.dp__theme_dark {
-  --dp-background-color: #1f2937;
-  --dp-text-color: #e5e7eb;
-  --dp-hover-color: #374151;
-  --dp-primary-color: #3b82f6;
-  --dp-border-color: #374151;
-  --dp-menu-border-color: #374151;
+/* Match the app's dark form controls; :root raises specificity over the library's sheet. */
+:root .dp--theme-dark {
+  --dp-background-color: var(--atc-surface);
+  --dp-text-color: var(--atc-text);
+  --dp-hover-color: var(--atc-surface-3);
+  --dp-hover-text-color: var(--atc-text);
+  --dp-primary-color: var(--atc-accent);
+  --dp-primary-text-color: #fff;
+  --dp-border-color: rgba(255, 255, 255, 0.1);
+  --dp-border-color-hover: rgba(255, 255, 255, 0.18);
+  --dp-border-color-focus: var(--atc-accent);
+  --dp-highlight-color: var(--atc-accent-soft);
+  --dp-scroll-bar-background: var(--atc-surface);
+  --dp-scroll-bar-color: var(--atc-surface-3);
+  --dp-menu-border-color: var(--atc-border-strong);
+  --dp-secondary-color: var(--atc-text-subtle);
+  --dp-icon-color: var(--atc-text-muted);
+  --dp-border-radius: var(--atc-radius-sm);
+  --dp-font-family: var(--atc-font);
 }
 </style>

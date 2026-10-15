@@ -325,7 +325,7 @@ function todayIso() {
 .repeat-details {
   margin-top: 8px;
   padding-left: 12px;
-  border-left: 2px solid rgba(255, 255, 255, 0.1);
+  border-left: 2px solid var(--atc-border);
 }
 
 .interval-row {
@@ -339,7 +339,7 @@ function todayIso() {
 }
 
 .interval-unit {
-  color: #b0b0c0;
+  color: var(--atc-text-muted);
 }
 
 .weekday-pills {
@@ -354,7 +354,7 @@ function todayIso() {
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.25);
   background: rgba(255, 255, 255, 0.06);
-  color: #d0d0d8;
+  color: var(--atc-text);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -365,7 +365,7 @@ function todayIso() {
 }
 
 .weekday-pill.selected {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--atc-accent);
   border-color: transparent;
   color: #fff;
 }
@@ -400,7 +400,7 @@ function todayIso() {
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: #d0d0d8;
+  color: var(--atc-text);
 }
 
 .ends-input {
@@ -410,12 +410,12 @@ function todayIso() {
 .repeat-summary {
   margin: 10px 0 0;
   font-size: 13px;
-  color: #9fb4e8;
+  color: var(--atc-accent-text);
 }
 
 .repeat-warning {
   margin: 6px 0 0;
   font-size: 13px;
-  color: #fcd34d;
+  color: var(--atc-warning-text);
 }
 </style>

@@ -172,7 +172,7 @@ export default {
 .about-hero {
   text-align: center;
   padding: 60px 20px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  background: var(--atc-accent-soft);
   border-radius: 20px;
   margin-bottom: 48px;
 }
@@ -180,31 +180,19 @@ export default {
 .hero-icon {
   font-size: 5rem;
   margin-bottom: 20px;
-  animation: float 3s ease-in-out infinite;
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
 }
 
 .hero-title {
   font-size: 3rem;
   font-weight: 700;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  letter-spacing: -0.03em;
+  color: var(--atc-text);
   margin-bottom: 16px;
 }
 
 .hero-subtitle {
   font-size: 1.3rem;
-  color: #a0a0a0;
+  color: var(--atc-text-muted);
   margin: 0;
 }
 
@@ -214,17 +202,16 @@ export default {
 
 .feature-card {
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--atc-border);
   border-radius: 16px;
   padding: 40px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
+  box-shadow: var(--atc-shadow);
+  transition: all var(--atc-transition);
 }
 
 .feature-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  border-color: rgba(102, 126, 234, 0.3);
+  box-shadow: var(--atc-shadow-lg);
+  border-color: rgba(99, 102, 241, 0.3);
 }
 
 .card-icon {
@@ -236,14 +223,14 @@ export default {
 .card-title {
   font-size: 1.8rem;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--atc-text);
   text-align: center;
   margin-bottom: 20px;
 }
 
 .card-text {
   font-size: 1.1rem;
-  color: #b0b0b0;
+  color: var(--atc-text-muted);
   line-height: 1.6;
   text-align: center;
   max-width: 800px;
@@ -259,17 +246,16 @@ export default {
 
 .feature-item {
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--atc-border);
   border-radius: 12px;
   padding: 24px;
   text-align: center;
-  transition: all 0.3s ease;
+  transition: all var(--atc-transition);
 }
 
 .feature-item:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(102, 126, 234, 0.4);
-  transform: translateY(-4px);
+  border-color: rgba(99, 102, 241, 0.4);
 }
 
 .feature-icon {
@@ -280,13 +266,13 @@ export default {
 .feature-item h4 {
   font-size: 1.2rem;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--atc-text);
   margin-bottom: 12px;
 }
 
 .feature-item p {
   font-size: 0.95rem;
-  color: #a0a0a0;
+  color: var(--atc-text-muted);
   line-height: 1.5;
   margin: 0;
 }
@@ -303,15 +289,15 @@ export default {
   align-items: center;
   gap: 24px;
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--atc-border);
   border-radius: 12px;
   padding: 24px;
-  transition: all 0.3s ease;
+  transition: all var(--atc-transition);
 }
 
 .step-item:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(102, 126, 234, 0.4);
+  border-color: rgba(99, 102, 241, 0.4);
   transform: translateX(8px);
 }
 
@@ -320,14 +306,14 @@ export default {
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--atc-accent);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
   font-weight: 700;
   color: white;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
 .step-content {
@@ -338,35 +324,35 @@ export default {
 .step-content h4 {
   font-size: 1.3rem;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--atc-text);
   margin-bottom: 8px;
 }
 
 .step-content p {
   font-size: 1rem;
-  color: #a0a0a0;
+  color: var(--atc-text-muted);
   margin: 0;
 }
 
 .cta-section {
   text-align: center;
   padding: 60px 32px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+  background: var(--atc-accent-soft);
   border-radius: 20px;
-  border: 2px solid rgba(102, 126, 234, 0.2);
+  border: 2px solid rgba(99, 102, 241, 0.2);
   margin-top: 40px;
 }
 
 .cta-title {
   font-size: 2.2rem;
   font-weight: 700;
-  color: #e0e0e0;
+  color: var(--atc-text);
   margin-bottom: 16px;
 }
 
 .cta-text {
   font-size: 1.2rem;
-  color: #b0b0b0;
+  color: var(--atc-text-muted);
   margin-bottom: 32px;
 }
 
@@ -382,12 +368,11 @@ export default {
   font-size: 1.1rem;
   border-radius: 12px;
   font-weight: 600;
-  transition: all 0.3s ease;
+  transition: all var(--atc-transition);
 }
 
 .cta-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
 }
 
 .button-icon {

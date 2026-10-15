@@ -8,9 +8,9 @@ import { createGtag } from "vue-gtag"
 import { createHead } from '@vueuse/head'
 import { createBootstrap } from 'bootstrap-vue-next'
 
-import 'bootstrap/dist/css/bootstrap.css'
 import 'bootstrap-vue-next/dist/bootstrap-vue-next.css'
 
+// The single Bootstrap build, themed by style/darkVariables.scss and style/theme.scss.
 import './style/darkStyle.scss'
 
 const app = createApp(App)

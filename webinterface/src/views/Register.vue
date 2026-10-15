@@ -1,57 +1,68 @@
 <template>
-  <div class="pageContent">
-    <BContainer class="user-form-box">
-      <h1>Register page</h1>
-      <p v-if="failuretext">{{ failuretext }}</p>
+  <div class="pageContent auth-page">
+    <div class="auth-card">
+      <h1 class="auth-title">Create your account</h1>
+      <p class="auth-subtitle">Free, and your tasks schedule themselves.</p>
+      <p v-if="failuretext" class="auth-error" role="alert">{{ failuretext }}</p>
+      <label class="form-label" for="register-email">Email</label>
       <input
+        id="register-email"
         class="form-control"
         type="text"
         name="email"
+        autocomplete="email"
         v-model="input.email"
-        placeholder="Email (to receive notifications)"
+        placeholder="For notifications"
       />
+      <label class="form-label" for="register-username">Username</label>
       <input
+        id="register-username"
         class="form-control"
         type="text"
         name="username"
+        autocomplete="username"
         v-model="input.username"
         placeholder="Username"
       />
+      <label class="form-label" for="register-password">Password</label>
       <input
+        id="register-password"
         class="form-control"
         type="password"
         name="password"
+        autocomplete="new-password"
         v-model="input.password"
         placeholder="Password"
         @keyup.enter="register"
       />
+      <label class="form-label" for="register-passwordconfirm">Confirm password</label>
       <input
+        id="register-passwordconfirm"
         class="form-control"
         type="password"
         name="passwordconfirm"
+        autocomplete="new-password"
         v-model="input.passwordconfirm"
         placeholder="Confirm password"
         @keyup.enter="register"
       />
-      <br />
-      <button class="btn btn-primary btn-lg btn-block" v-on:click="register">
+      <button class="btn btn-primary btn-block auth-submit" v-on:click="register">
         Register
       </button>
-    </BContainer>
+      <p class="auth-switch">
+        Already have an account? <router-link to="/login">Sign in</router-link>
+      </p>
+    </div>
   </div>
 </template>
 
 <script>
 import axios from "axios";
-import { BContainer } from 'bootstrap-vue-next';
 
 let devEndPoint = "/api/";
 
 export default {
   name: "Register",
-  components: {
-    BContainer
-  },
   data() {
     return {
       failuretext: null,

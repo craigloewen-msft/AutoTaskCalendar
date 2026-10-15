@@ -1,30 +1,38 @@
 <template>
-  <div>
-    <div class="jumbotron header-container">
-      <div class="header-text-container">
-        <h2>AutoTaskCalendar</h2>
-        <h4>Automatically schedule tasks into your calendar</h4>
-        <div v-if="!this.$store.getters.isLoggedIn" class="loginSelect">
-          <router-link class="btn btn-primary" to="/login">Login</router-link>
-          <router-link class="btn btn-primary" to="/register"
-            >Register</router-link
-          >
-        </div>
-        <div v-if="this.$store.getters.isLoggedIn" class="loginSelect">
-          <router-link class="btn btn-primary" :to="'/user/' + user.username"
-            >My Profile
-          </router-link>
-        </div>
+  <div class="home">
+    <section class="home-hero">
+      <span class="home-eyebrow">Free task manager &middot; auto-scheduling</span>
+      <h1 class="home-title">Your tasks, scheduled<br />into your calendar.</h1>
+      <p class="home-lede">
+        Add what you need to do and when it's due. AutoTaskCalendar fits it around your
+        meetings and working hours, so your week plans itself.
+      </p>
+      <div v-if="!this.$store.getters.isLoggedIn" class="loginSelect">
+        <router-link class="btn btn-primary btn-lg" to="/register">Get started free</router-link>
+        <router-link class="btn btn-outline-secondary btn-lg" to="/login">Login</router-link>
       </div>
-    </div>
+      <div v-if="this.$store.getters.isLoggedIn" class="loginSelect">
+        <router-link class="btn btn-primary btn-lg" to="/calendar">Open calendar</router-link>
+        <router-link class="btn btn-outline-secondary btn-lg" :to="'/user/' + user.username"
+          >My Profile
+        </router-link>
+      </div>
+    </section>
 
     <BContainer class="section-slides">
-      <header class="section-header">
-        <p>Make it easy to manage what you need to do</p>
-      </header>
-
-      <div class="row">
-        <div class="col">It's free to register and use!</div>
+      <div class="home-features">
+        <div class="home-feature">
+          <h3>Auto-scheduling</h3>
+          <p>Tasks are placed into free time before their due dates, and move when plans change.</p>
+        </div>
+        <div class="home-feature">
+          <h3>Weekly planning</h3>
+          <p>Commit to projects each week and review how last week actually went.</p>
+        </div>
+        <div class="home-feature">
+          <h3>Google Calendar sync</h3>
+          <p>Meetings come in from your calendar so scheduled work never collides with them.</p>
+        </div>
       </div>
     </BContainer>
   </div>
@@ -72,92 +80,97 @@ export default {
 </script>
 
 <style>
+.home-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14vh 20px 10vh;
+  overflow: hidden;
+}
+
+/* A soft accent glow behind the headline instead of a photo. */
+.home-hero::before {
+  content: "";
+  position: absolute;
+  inset: -40% 10% auto;
+  height: 520px;
+  background: radial-gradient(closest-side, rgba(99, 102, 241, 0.22), transparent);
+  pointer-events: none;
+}
+
+.home-hero > * {
+  position: relative;
+}
+
+.home-eyebrow {
+  display: inline-block;
+  padding: 4px 12px;
+  margin-bottom: 20px;
+  border: 1px solid var(--atc-border-strong);
+  border-radius: var(--atc-radius-pill);
+  background: var(--atc-surface);
+  color: var(--atc-text-muted);
+  font-size: 13px;
+}
+
+.home-title {
+  font-size: clamp(2.2rem, 5vw, 3.6rem);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  margin: 0 0 18px;
+}
+
+.home-lede {
+  max-width: 560px;
+  margin: 0 auto;
+  color: var(--atc-text-muted);
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
 .loginSelect {
   display: flex;
   justify-content: center;
-  margin-top: 30px;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
 }
 
-.loginSelect a {
-  margin-left: 15px;
-  margin-right: 15px;
-}
-
-.header-container {
-  background: url(../../public/bg.jpg);
-  background-position-x: center;
-  background-position-y: center;
-  background-attachment: fixed;
-  background-repeat: no-repeat;
-  background-size: cover;
-  box-shadow: inset 0 0 0 2000px rgba(0, 0, 0, 0.925);
-  height: 80vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow-x: hidden;
-  overflow-y: hidden;
-  margin-bottom: 50px;
-}
-
-.header-text-container {
-  color: #eee;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  justify-items: center;
-}
-
-.section-header {
-  margin-bottom: 10px;
-}
-
-.section-header h2 {
-  font-size: 13px;
-  letter-spacing: 1px;
-  font-weight: 700;
-  margin: 0;
-  text-transform: uppercase;
-}
-
-.section-header p {
-  margin: 10px 0 0 0;
-  padding: 0;
-  font-size: 38px;
-  line-height: 42px;
-  font-weight: 700;
-}
-
-.box {
-  border: 1px solid #e2eefd;
-  padding: 30px 20px;
-  transition: all ease-in-out 0.3s;
-  height: 100%;
-}
-
-.box h3 {
-  transition: all ease-in-out 0.3s;
-}
-
-.box:hover {
-  border-color: #fff;
-  box-shadow: 0px 0 25px 0 rgb(16 110 234 / 10%);
-}
-
-.box:hover h3 {
-  color: #adadad;
-}
-
-.card-img {
-  padding: 15px 30px;
+.loginSelect .btn-lg {
+  font-size: 1rem;
+  padding: 0.65rem 1.3rem;
 }
 
 .section-slides {
-  margin-bottom: 30px;
+  margin-bottom: 64px;
 }
 
-.cover-gif {
-  max-height: 60%;
+.home-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  text-align: left;
+}
+
+.home-feature {
+  padding: 22px;
+  background: var(--atc-surface);
+  border: 1px solid var(--atc-border);
+  border-radius: var(--atc-radius-lg);
+}
+
+.home-feature h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.home-feature p {
+  margin: 0;
+  color: var(--atc-text-muted);
+  font-size: 14px;
+  line-height: 1.55;
 }
 </style>

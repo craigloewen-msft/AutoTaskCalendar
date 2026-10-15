@@ -4,7 +4,7 @@
       <div class="user-profile-header">
         <div class="user-avatar">
           <div class="avatar-circle">
-            <i class="user-icon">👤</i>
+            <span class="user-icon">{{ (user.username || "?").charAt(0) }}</span>
           </div>
         </div>
         <h1 class="user-title">{{ user.username }}</h1>
@@ -362,19 +362,20 @@ export default {
 <style scoped>
 .export-message {
   margin-bottom: 1rem;
-  color: #8bd49c;
+  color: var(--atc-success-text);
 }
 
 .export-message.error {
-  color: #ff8f8f;
+  color: var(--atc-danger-text);
 }
 
 .user-profile-header {
   text-align: center;
-  padding: 40px 20px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-  border-radius: 16px;
-  margin-bottom: 40px;
+  padding: 36px 20px;
+  background: var(--atc-surface);
+  border: 1px solid var(--atc-border);
+  border-radius: var(--atc-radius-lg);
+  margin-bottom: 32px;
 }
 
 .user-avatar {
@@ -382,15 +383,18 @@ export default {
 }
 
 .avatar-circle {
-  width: 100px;
-  height: 100px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--atc-accent-soft);
+  border: 1px solid var(--atc-accent-border);
+  color: var(--atc-accent-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 48px;
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+  font-size: 30px;
+  font-weight: 650;
+  text-transform: uppercase;
 }
 
 .user-icon {
@@ -398,36 +402,36 @@ export default {
 }
 
 .user-title {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #e0e0e0;
+  font-size: 2rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  color: var(--atc-text);
   margin-bottom: 8px;
 }
 
 .user-subtitle {
   font-size: 1.1rem;
-  color: #a0a0a0;
+  color: var(--atc-text-muted);
   margin: 0;
 }
 
 .modern-card {
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--atc-border);
   border-radius: 16px;
   padding: 32px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: var(--atc-shadow);
+  transition: transform var(--atc-transition), box-shadow var(--atc-transition);
 }
 
 .modern-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--atc-shadow);
 }
 
 .section-title {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--atc-text);
   margin-bottom: 8px;
   display: flex;
   align-items: center;
@@ -440,26 +444,26 @@ export default {
 }
 
 .section-description {
-  color: #a0a0a0;
+  color: var(--atc-text-muted);
   margin-bottom: 24px;
   font-size: 0.95rem;
 }
 
 .modern-input {
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--atc-border-strong);
   border-radius: 8px;
-  color: #e0e0e0;
+  color: var(--atc-text);
   padding: 12px 16px;
   font-size: 1rem;
-  transition: all 0.3s ease;
+  transition: all var(--atc-transition);
 }
 
 .modern-input:focus {
   background: rgba(255, 255, 255, 0.08);
-  border-color: #667eea;
-  box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
-  color: #e0e0e0;
+  border-color: var(--atc-accent);
+  box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+  color: var(--atc-text);
 }
 
 .weekday-selector {
@@ -476,7 +480,7 @@ export default {
   min-width: 70px;
   border-radius: 8px;
   font-weight: 500;
-  transition: all 0.3s ease;
+  transition: all var(--atc-transition);
 }
 
 .empty-state {
@@ -491,7 +495,7 @@ export default {
 }
 
 .empty-text {
-  color: #a0a0a0;
+  color: var(--atc-text-muted);
   font-size: 1.1rem;
   margin-bottom: 24px;
 }
@@ -516,15 +520,15 @@ export default {
 
 .calendar-item {
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--atc-border);
   border-radius: 8px;
   padding: 16px;
-  transition: all 0.3s ease;
+  transition: all var(--atc-transition);
 }
 
 .calendar-item:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(102, 126, 234, 0.5);
+  border-color: rgba(99, 102, 241, 0.5);
 }
 
 .calendar-info {
@@ -535,7 +539,7 @@ export default {
 
 .calendar-name {
   font-size: 1rem;
-  color: #e0e0e0;
+  color: var(--atc-text);
   font-weight: 500;
 }
 
@@ -544,52 +548,51 @@ export default {
   font-size: 1.2rem;
   border-radius: 12px;
   font-weight: 600;
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
-  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+  transition: all var(--atc-transition);
 }
 
 .save-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
 }
 
 /* Override Bootstrap Vue form group labels */
 :deep(.form-group label) {
-  color: #d0d0d0;
+  color: var(--atc-text);
   font-weight: 600;
   font-size: 0.95rem;
   margin-bottom: 8px;
 }
 
 :deep(.form-group .form-text) {
-  color: #909090;
+  color: var(--atc-text-muted);
   font-size: 0.85rem;
 }
 
 :deep(.custom-control-label) {
-  color: #e0e0e0;
+  color: var(--atc-text);
   cursor: pointer;
 }
 
 :deep(.custom-checkbox .custom-control-input:checked ~ .custom-control-label::before) {
-  background-color: #667eea;
-  border-color: #667eea;
+  background-color: var(--atc-accent);
+  border-color: var(--atc-accent);
 }
 
 :deep(.btn-outline-primary) {
-  border-color: rgba(102, 126, 234, 0.5);
-  color: #667eea;
+  border-color: rgba(99, 102, 241, 0.5);
+  color: var(--atc-accent);
 }
 
 :deep(.btn-outline-primary:hover) {
-  background-color: #667eea;
-  border-color: #667eea;
+  background-color: var(--atc-accent);
+  border-color: var(--atc-accent);
   color: white;
 }
 
 :deep(.btn-outline-primary.active) {
-  background-color: #667eea;
-  border-color: #667eea;
+  background-color: var(--atc-accent);
+  border-color: var(--atc-accent);
   color: white;
 }
 </style>

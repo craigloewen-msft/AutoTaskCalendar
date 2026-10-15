@@ -395,7 +395,7 @@ export default {
 
 .metric-card {
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--atc-border);
   border-radius: 12px;
   padding: 16px 18px;
 }
@@ -405,28 +405,27 @@ export default {
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #9aa4b2;
+  color: var(--atc-text-muted);
 }
 
 .metric-value {
   margin: 4px 0 2px;
   font-size: 2rem;
   font-weight: 700;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.02em;
+  color: var(--atc-text);
+  font-variant-numeric: tabular-nums;
 }
 
 .metric-note {
   margin: 0;
   font-size: 0.82rem;
-  color: #9aa4b2;
+  color: var(--atc-text-muted);
 }
 
 .panel {
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--atc-border);
   border-radius: 12px;
   padding: 18px;
   margin-bottom: 18px;
@@ -457,7 +456,7 @@ export default {
   display: flex;
   gap: 14px;
   font-size: 0.8rem;
-  color: #9aa4b2;
+  color: var(--atc-text-muted);
 }
 
 .legend-item {
@@ -475,17 +474,17 @@ export default {
 
 .legend-swatch.signups,
 .trend-bar.signups {
-  background: #667eea;
+  background: var(--atc-accent);
 }
 
 .legend-swatch.tasksCreated,
 .trend-bar.tasksCreated {
-  background: #3b82f6;
+  background: var(--atc-accent);
 }
 
 .legend-swatch.tasksCompleted,
 .trend-bar.tasksCompleted {
-  background: #10b981;
+  background: var(--atc-success);
 }
 
 .trend-chart {
@@ -520,7 +519,7 @@ export default {
 
 .trend-label {
   font-size: 0.65rem;
-  color: #6b7280;
+  color: var(--atc-text-subtle);
   margin-top: 4px;
 }
 
@@ -532,7 +531,7 @@ export default {
   display: flex;
   justify-content: space-between;
   padding: 7px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--atc-border);
 }
 
 .stat-row:last-child {
@@ -541,7 +540,7 @@ export default {
 
 .stat-row dt {
   font-weight: 400;
-  color: #9aa4b2;
+  color: var(--atc-text-muted);
 }
 
 .stat-row dd {
@@ -573,14 +572,14 @@ export default {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #9aa4b2;
+  color: var(--atc-text-muted);
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--atc-border);
 }
 
 .user-table td {
   padding: 9px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--atc-border);
 }
 
 .user-table .numeric {
@@ -588,7 +587,7 @@ export default {
 }
 
 .user-table .muted {
-  color: #9aa4b2;
+  color: var(--atc-text-muted);
 }
 
 .admin-chip {
@@ -596,12 +595,12 @@ export default {
   padding: 1px 7px;
   border-radius: 2em;
   font-size: 0.7rem;
-  background: rgba(102, 126, 234, 0.2);
-  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.2);
+  color: var(--atc-accent-text);
 }
 
 .empty-note {
-  color: #9aa4b2;
+  color: var(--atc-text-muted);
   font-size: 0.9rem;
   padding: 12px 0;
   margin: 0;
@@ -617,6 +616,6 @@ export default {
 
 .page-indicator {
   font-size: 0.85rem;
-  color: #9aa4b2;
+  color: var(--atc-text-muted);
 }
 </style>
