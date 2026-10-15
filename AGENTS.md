@@ -72,6 +72,7 @@ dataset.
   `docs/INTENTIONS.md` covers personal work that is tracked weekly but never scheduled;
   `docs/ADMIN.md` covers the admin dashboard and how a user is made an admin;
   `docs/DATE_PICKER.md` covers the one date picker shared by every date field;
+  `docs/PROXIED_ACCESS.md` covers reaching the dev stack through a forwarded port;
   `docs/SEO.md` covers the public pages, page metadata, and build-time prerendering;
   `docs/REFACTOR_OVERVIEW.md` is the small risk-driven refactor roadmap;
   `docs/SHARED_DATABASE.md` covers the one shared database and seed namespaces.

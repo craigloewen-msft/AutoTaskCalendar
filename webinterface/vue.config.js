@@ -34,12 +34,21 @@ module.exports = {
         host: '0.0.0.0',
         // The router uses real paths, so a deep link must serve index.html rather than 404.
         historyApiFallback: true,
+        // Reached through a forwarded port, so the outer host is never one we can predict.
+        allowedHosts: 'all',
         // Webpack's progress reporter prints hundreds of lines when stdout is not a TTY.
-        client: { progress: false },
+        client: {
+            progress: false,
+            // Placeholders: the client swaps 0.0.0.0/0 for window.location, so hot reload
+            // dials the port the browser actually used. See docs/PROXIED_ACCESS.md.
+            webSocketURL: 'auto://0.0.0.0:0/ws'
+        },
         proxy: {
             '^/api': {
                 target: `http://127.0.0.1:${apiPort}/`,
                 changeOrigin: true,
+                // Passes the browser's host on, so the API can tell what origin to expect.
+                xfwd: true,
                 secure: false,
                 pathRewrite: { '^/api/': '/api/' }
             }

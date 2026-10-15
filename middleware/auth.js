@@ -1,3 +1,18 @@
+const { resolveRequestOrigin } = require('../utils/requestOrigin');
+
+/**
+ * The origin a request must match to count as same-origin.
+ *
+ * Production has one known public URL and sits behind a proxy that can set forwarding
+ * headers at will, so it stays pinned to `appUrl`. Development derives it from the
+ * request, so a stack reached through a forwarded port still matches itself.
+ */
+function expectedOrigin(req, config) {
+    if (process.env.NODE_ENV === 'production') return config.appUrl;
+
+    return resolveRequestOrigin(req) || config.appUrl;
+}
+
 function requestIsSameOrigin(req, config) {
     const fetchSite = req.get('Sec-Fetch-Site');
     if (fetchSite === 'cross-site') return false;
@@ -5,8 +20,11 @@ function requestIsSameOrigin(req, config) {
     const origin = req.get('Origin');
     if (!origin) return true;
 
+    const expected = expectedOrigin(req, config);
+    if (!expected) return false;
+
     try {
-        return new URL(origin).origin === new URL(config.appUrl).origin;
+        return new URL(origin).origin === new URL(expected).origin;
     } catch (error) {
         return false;
     }
@@ -39,4 +57,5 @@ module.exports = {
     authenticateSession,
     requireSameOrigin,
     requireAdmin,
+    expectedOrigin,
 };
