@@ -57,7 +57,8 @@ dataset.
 - `middleware/auth.js` — JWT `authenticateToken`. `utils/helpers.js` — `returnFailure()`;
   `utils/temporal.js` owns date/time parsing and timezone boundaries.
 - `webinterface/src/` — Vue app (`views/`, `components/`, `store.js`). All date entry goes
-  through `components/DateField.vue`; see `docs/DATE_PICKER.md`. Page metadata goes through
+  through `components/DateField.vue`; see `docs/DATE_PICKER.md`. Styling comes from the tokens
+  in `webinterface/src/style/`; see `docs/DESIGN_SYSTEM.md`. Page metadata goes through
   `composables/useSeo.js` — never `metaInfo`; see `docs/SEO.md`.
 - `seed/` — the fake-data factories and dataset; `scripts/seed.js` is the CLI.
 - `tests/` — Playwright specs (`api/`, `ui/`) and shared `fixtures/`. The `ui` project drives
@@ -72,6 +73,7 @@ dataset.
   `docs/INTENTIONS.md` covers personal work that is tracked weekly but never scheduled;
   `docs/ADMIN.md` covers the admin dashboard and how a user is made an admin;
   `docs/DATE_PICKER.md` covers the one date picker shared by every date field;
+  `docs/DESIGN_SYSTEM.md` covers the style tokens every page and component is built from;
   `docs/PROXIED_ACCESS.md` covers reaching the dev stack through a forwarded port;
   `docs/SEO.md` covers the public pages, page metadata, and build-time prerendering;
   `docs/REFACTOR_OVERVIEW.md` is the small risk-driven refactor roadmap;

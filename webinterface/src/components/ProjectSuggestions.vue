@@ -136,7 +136,7 @@ export default {
   border: 1px solid rgba(102, 126, 234, 0.42);
   border-radius: 8px;
   background: rgba(102, 126, 234, 0.1);
-  color: #d7dde4;
+  color: var(--text-secondary);
   font-size: 0.86rem;
 }
 .project-suggestions span {

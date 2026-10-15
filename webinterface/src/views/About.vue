@@ -216,7 +216,7 @@ export default {
     radial-gradient(70% 90% at 20% 10%, rgba(102, 126, 234, 0.22) 0%, transparent 62%),
     radial-gradient(60% 80% at 85% 15%, rgba(118, 75, 162, 0.2) 0%, transparent 64%),
     linear-gradient(160deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border-subtle);
   border-radius: 18px;
 }
 
@@ -226,7 +226,7 @@ export default {
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #9aa6d4;
+  color: var(--accent-300);
 }
 
 .about-title {
@@ -235,7 +235,7 @@ export default {
   font-weight: 700;
   line-height: 1.18;
   letter-spacing: -0.02em;
-  color: #f1f2f7;
+  color: var(--text-primary);
 }
 
 .about-lede {
@@ -243,7 +243,7 @@ export default {
   margin: 0 auto;
   font-size: 1.06rem;
   line-height: 1.65;
-  color: #aeb4c8;
+  color: var(--text-secondary);
 }
 
 .about-section {
@@ -256,18 +256,18 @@ export default {
   font-size: clamp(1.3rem, 2.6vw, 1.7rem);
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: #e8e9ee;
+  color: var(--text-primary);
 }
 
 .about-text {
   margin: 0 0 14px;
   font-size: 1.02rem;
   line-height: 1.72;
-  color: #a8aec2;
+  color: var(--text-secondary);
 }
 
 .about-text a {
-  color: #8c9bf0;
+  color: var(--accent-300);
 }
 
 .capability-grid {
@@ -281,33 +281,33 @@ export default {
   gap: 16px;
   padding: 22px;
   background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 14px;
   transition: border-color 0.25s ease, background 0.25s ease;
 }
 
 .capability:hover {
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--surface-2);
   border-color: rgba(102, 126, 234, 0.4);
 }
 
 .capability-icon {
   margin-top: 2px;
-  color: #8c9bf0;
+  color: var(--accent-300);
 }
 
 .capability-title {
   margin: 0 0 8px;
   font-size: 1.05rem;
   font-weight: 600;
-  color: #e8e9ee;
+  color: var(--text-primary);
 }
 
 .capability-text {
   margin: 0;
   font-size: 0.95rem;
   line-height: 1.6;
-  color: #a0a6ba;
+  color: var(--text-muted);
 }
 
 .about-steps {
@@ -325,7 +325,7 @@ export default {
   gap: 18px;
   padding: 20px 22px;
   background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 14px;
 }
 
@@ -337,7 +337,7 @@ export default {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--violet-500) 100%);
   font-size: 1rem;
   font-weight: 700;
   color: #fff;
@@ -347,20 +347,20 @@ export default {
   margin: 0 0 6px;
   font-size: 1.04rem;
   font-weight: 600;
-  color: #e8e9ee;
+  color: var(--text-primary);
 }
 
 .about-step-text {
   margin: 0;
   font-size: 0.95rem;
   line-height: 1.6;
-  color: #a0a6ba;
+  color: var(--text-muted);
 }
 
 .about-footnote {
   margin: 18px 0 0;
   font-size: 0.93rem;
-  color: #868da3;
+  color: var(--text-muted);
 }
 
 .principle-list {
@@ -378,7 +378,7 @@ export default {
   gap: 12px;
   font-size: 0.98rem;
   line-height: 1.55;
-  color: #a8aec2;
+  color: var(--text-secondary);
 }
 
 .principle-icon {
@@ -398,7 +398,7 @@ export default {
   margin: 0 0 12px;
   font-size: clamp(1.35rem, 3vw, 1.8rem);
   font-weight: 700;
-  color: #eceef4;
+  color: var(--text-primary);
 }
 
 .about-cta-text {
@@ -406,7 +406,7 @@ export default {
   margin: 0 auto 26px;
   font-size: 1.02rem;
   line-height: 1.6;
-  color: #aeb4c8;
+  color: var(--text-secondary);
 }
 
 .about-cta-actions {

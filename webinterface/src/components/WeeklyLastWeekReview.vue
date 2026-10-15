@@ -158,7 +158,7 @@ export default {
 
 .eyebrow {
   margin: 0 0 3px;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -167,14 +167,14 @@ export default {
 
 .lw-headline {
   margin: 0;
-  color: #e6edf3;
+  color: var(--text-primary);
   font-size: 1.02rem;
   font-weight: 600;
 }
 
 .lw-subline {
   margin: 3px 0 0;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
 }
@@ -185,7 +185,7 @@ export default {
   border: 1px solid rgba(141, 162, 251, 0.35);
   border-radius: 999px;
   background: transparent;
-  color: #8da2fb;
+  color: var(--accent-300);
   font-size: 0.74rem;
   cursor: pointer;
   transition: background 0.15s ease;
@@ -209,7 +209,7 @@ export default {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #6ee7b7, #34d399);
+  background: linear-gradient(90deg, var(--success-text), var(--success-text));
   transition: width 0.35s ease;
 }
 
@@ -224,13 +224,13 @@ export default {
   padding: 8px 12px;
   border: 1px solid rgba(248, 113, 113, 0.35);
   border-radius: 8px;
-  color: #fca5a5;
+  color: var(--danger-text);
   font-size: 0.8rem;
 }
 
 .lw-pointer {
   margin: 0;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.82rem;
 }
 </style>

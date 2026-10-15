@@ -409,14 +409,14 @@ export default {
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #9aa4b2;
+  color: var(--text-muted);
 }
 
 .metric-value {
   margin: 4px 0 2px;
   font-size: 2rem;
   font-weight: 700;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -425,7 +425,7 @@ export default {
 .metric-note {
   margin: 0;
   font-size: 0.82rem;
-  color: #9aa4b2;
+  color: var(--text-muted);
 }
 
 .panel {
@@ -461,7 +461,7 @@ export default {
   display: flex;
   gap: 14px;
   font-size: 0.8rem;
-  color: #9aa4b2;
+  color: var(--text-muted);
 }
 
 .legend-item {
@@ -479,17 +479,17 @@ export default {
 
 .legend-swatch.signups,
 .trend-bar.signups {
-  background: #667eea;
+  background: var(--accent);
 }
 
 .legend-swatch.tasksCreated,
 .trend-bar.tasksCreated {
-  background: #3b82f6;
+  background: var(--info);
 }
 
 .legend-swatch.tasksCompleted,
 .trend-bar.tasksCompleted {
-  background: #10b981;
+  background: var(--success);
 }
 
 .trend-chart {
@@ -524,7 +524,7 @@ export default {
 
 .trend-label {
   font-size: 0.65rem;
-  color: #6b7280;
+  color: var(--text-faint);
   margin-top: 4px;
 }
 
@@ -545,7 +545,7 @@ export default {
 
 .stat-row dt {
   font-weight: 400;
-  color: #9aa4b2;
+  color: var(--text-muted);
 }
 
 .stat-row dd {
@@ -577,7 +577,7 @@ export default {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #9aa4b2;
+  color: var(--text-muted);
   padding: 8px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -592,7 +592,7 @@ export default {
 }
 
 .user-table .muted {
-  color: #9aa4b2;
+  color: var(--text-muted);
 }
 
 .admin-chip {
@@ -601,11 +601,11 @@ export default {
   border-radius: 2em;
   font-size: 0.7rem;
   background: rgba(102, 126, 234, 0.2);
-  color: #a5b4fc;
+  color: var(--accent-300);
 }
 
 .empty-note {
-  color: #9aa4b2;
+  color: var(--text-muted);
   font-size: 0.9rem;
   padding: 12px 0;
   margin: 0;
@@ -621,6 +621,6 @@ export default {
 
 .page-indicator {
   font-size: 0.85rem;
-  color: #9aa4b2;
+  color: var(--text-muted);
 }
 </style>

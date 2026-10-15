@@ -197,7 +197,7 @@ export default {
   padding: 0;
   border: 0;
   background: transparent;
-  color: #a8b4c0;
+  color: var(--text-secondary);
   font-size: 0.76rem;
   text-align: left;
   cursor: pointer;
@@ -211,7 +211,7 @@ export default {
 .lw-caret {
   flex: 0 0 auto;
   width: 10px;
-  color: #8b949e;
+  color: var(--text-muted);
 }
 
 .lw-label {
@@ -223,7 +223,7 @@ export default {
 }
 
 .lw-name {
-  color: #c3ccd6;
+  color: var(--text-secondary);
   font-weight: 600;
   letter-spacing: 0.04em;
 }
@@ -232,13 +232,13 @@ export default {
   padding: 1px 7px;
   border-radius: 999px;
   background: rgba(251, 191, 36, 0.14);
-  color: #fbbf24;
+  color: var(--warning-text);
   font-size: 0.68rem;
 }
 
 .lw-counts {
   flex: 0 0 auto;
-  color: #8b949e;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -258,7 +258,7 @@ export default {
   border: 1px solid rgba(141, 162, 251, 0.45);
   border-radius: 999px;
   background: rgba(102, 126, 234, 0.12);
-  color: #aab8fc;
+  color: var(--accent-300);
   font-size: 0.72rem;
   cursor: pointer;
 }
@@ -289,7 +289,7 @@ export default {
   padding: 5px 8px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.025);
-  color: #c3ccd6;
+  color: var(--text-secondary);
   font-size: 0.82rem;
 }
 
@@ -308,13 +308,13 @@ export default {
 .status-glyph {
   flex: 0 0 auto;
   width: 12px;
-  color: #8b949e;
+  color: var(--text-muted);
   text-align: center;
 }
 
 .lw-meta {
   flex: 0 0 auto;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.74rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -332,7 +332,7 @@ export default {
   border: 1px solid rgba(141, 162, 251, 0.4);
   border-radius: 999px;
   background: transparent;
-  color: #8da2fb;
+  color: var(--accent-300);
   font-size: 0.71rem;
   white-space: nowrap;
   cursor: pointer;
@@ -355,7 +355,7 @@ export default {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #8da2fb;
+  color: var(--accent-300);
   font-size: 0.76rem;
   cursor: pointer;
 }
@@ -367,28 +367,28 @@ export default {
 }
 
 .is-done .status-glyph {
-  color: #6ee7b7;
+  color: var(--success-text);
 }
 
 .is-done .title-text {
-  color: #93a49c;
+  color: var(--text-muted);
 }
 
 .is-moved .status-glyph {
-  color: #fbbf24;
+  color: var(--warning-text);
 }
 
 .is-removed .status-glyph {
-  color: #f87171;
+  color: var(--danger-text);
 }
 
 .is-removed .title-text {
-  color: #8b949e;
+  color: var(--text-muted);
   text-decoration: line-through;
 }
 
 .is-unplanned .status-glyph {
-  color: #8da2fb;
+  color: var(--accent-300);
 }
 
 @media (max-width: 620px) {

@@ -357,7 +357,7 @@ export default {
   width: 420px;
   max-width: 100vw;
   height: 100%;
-  background: rgba(30, 30, 35, 0.98);
+  background: var(--surface-1);
   border-left: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
@@ -377,13 +377,13 @@ export default {
   font-size: 1.15rem;
   margin: 0;
   text-transform: capitalize;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 .drawer-close {
   background: none;
   border: none;
-  color: #9aa0a6;
+  color: var(--text-muted);
   font-size: 1.1rem;
   cursor: pointer;
 }
@@ -394,7 +394,7 @@ export default {
   border-radius: 8px;
   background: rgba(220, 53, 69, 0.15);
   border: 1px solid rgba(220, 53, 69, 0.4);
-  color: #f1aeb5;
+  color: var(--danger-text);
   font-size: 0.9rem;
 }
 
@@ -407,7 +407,7 @@ export default {
   display: block;
   margin-bottom: 6px;
   font-size: 0.85rem;
-  color: #9aa0a6;
+  color: var(--text-muted);
 }
 
 .context-toggle {
@@ -428,7 +428,7 @@ export default {
 
 .context-choice.active {
   background: rgba(102, 126, 234, 0.35);
-  border-color: #667eea;
+  border-color: var(--accent);
   opacity: 1;
 }
 
@@ -442,7 +442,7 @@ export default {
   gap: 8px;
   margin-top: 8px;
   font-size: 0.9rem;
-  color: #b0b0b0;
+  color: var(--text-secondary);
   font-weight: 400;
 }
 
@@ -455,12 +455,12 @@ export default {
 
 .end-confirm-title {
   font-size: 1rem;
-  color: #e0e0e0;
+  color: var(--text-primary);
   margin: 0 0 10px;
 }
 
 .end-confirm-copy {
-  color: #b0b0b0;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   margin-bottom: 12px;
 }
@@ -468,12 +468,12 @@ export default {
 .end-task-list {
   margin: 0 0 16px;
   padding-left: 18px;
-  color: #d0d0d0;
+  color: var(--text-secondary);
   font-size: 0.88rem;
 }
 
 .end-task-more {
-  color: #9aa0a6;
+  color: var(--text-muted);
   list-style: none;
   margin-left: -18px;
 }
@@ -502,13 +502,13 @@ export default {
 
 .end-choice strong {
   display: block;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-size: 0.92rem;
 }
 
 .end-choice small {
   display: block;
-  color: #9aa0a6;
+  color: var(--text-muted);
   font-size: 0.8rem;
 }
 
