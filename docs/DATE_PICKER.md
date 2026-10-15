@@ -77,8 +77,13 @@ field would do nothing, so it stays as it is.
 
 The wrapper passes `form-control date-input` through to the real input, so the field sits
 with ordinary Bootstrap controls. The calendar is dark-themed by overriding the library's
-CSS variables (`--dp-background-color` and friends) in `DateField.vue`. Change them there
-and every picker in the app follows; there are no per-screen date styles left.
+CSS variables (`--dp-background-color` and friends) in `DateField.vue`, which drives them
+from the app's design tokens — see `docs/DESIGN_SYSTEM.md`. Change them there and every
+picker in the app follows; there are no per-screen date styles left.
+
+That `<style>` block must stay **global, not scoped**, and must key on `.dp--theme-dark` —
+the class this version of the library emits. A scoped block cannot reach the menu, because
+the menu is teleported out of the component.
 
 The menu is rendered with `teleport="body"`, so it is never clipped by a drawer or modal
 with `overflow: hidden`.

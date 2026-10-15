@@ -1,113 +1,171 @@
+// Bootstrap variable overrides, all derived from the design tokens so Bootstrap
+// components and hand-written CSS cannot drift apart.
+// Loaded before Bootstrap's Sass. See docs/DESIGN_SYSTEM.md.
 
-// Variable overrides for Bootstrap
-// When compiling Sass, this should be loaded before Bootstrap's Sass
+@import "tokens";
 
+// Theme colours. $success/$info/$warning/$danger already carry Bootstrap's names
+// in tokens.scss, so they need no restatement here.
+$primary: $accent-500;
+$secondary: $surface-3;
+$light: $text-secondary;
+$dark: $surface-1;
 
-// Colors
-$primary: #007acc !default;
+// Body
+$body-bg: $surface-0;
+$body-color: $text-primary;
+$border-color: $border;
 
-$gray-900: darken(#212529, 2) !default;
+// Typography
+$font-family-sans-serif: $font-sans;
+$font-family-monospace: $font-mono;
+$line-height-base: $lh-normal;
+$headings-font-weight: $fw-semibold;
+$headings-line-height: $lh-tight;
 
-/*// Body*/
-$body-bg: #0d1117 !default;
-$body-color: #c9d1d9 !default;
-$border-color: lighten($body-bg, 15) !default;
+$link-color: $accent-300;
+$link-hover-color: $accent-100;
+$link-decoration: none;
+$link-hover-decoration: underline;
 
+// Shape and elevation
+$border-radius-sm: $radius-xs;
+$border-radius: $radius-sm;
+$border-radius-lg: $radius-md;
+$border-radius-xl: $radius-lg;
+$box-shadow-sm: $elev-1;
+$box-shadow: $elev-2;
+$box-shadow-lg: $elev-3;
 
-$link-color: #c9d1d9 !default;
+// Focus: one visible ring everywhere.
+$focus-ring-width: 3px;
+$focus-ring-opacity: 0.45;
+$focus-ring-color: rgba($accent-500, $focus-ring-opacity);
 
-/*// Tables
+// Buttons
+$btn-font-weight: $fw-medium;
+$btn-focus-box-shadow: $focus-ring;
+$btn-disabled-opacity: 0.5;
 
-// Forms*/
-$input-bg: darken($body-bg, 2) !default;
-$input-disabled-bg: $body-bg !default;
+// Forms
+$input-bg: $surface-2;
+$input-disabled-bg: $surface-1;
+$input-color: $text-primary;
+$input-border-color: $border;
+$input-focus-bg: $surface-2;
+$input-focus-border-color: $accent-500;
+$input-focus-box-shadow: $focus-ring;
+$input-placeholder-color: $text-faint;
 
-$input-color: $body-color !default;
-$input-border-color: lighten($body-bg, 5) !default;
+$form-label-color: $text-secondary;
+$form-label-font-weight: $fw-medium;
+$form-text-color: $text-muted;
 
-$form-check-input-bg: darken($body-bg, 5) !default;
-$form-check-input-border: 1px solid $input-border-color !default;
+$form-check-input-bg: $surface-2;
+$form-check-input-border: 1px solid $border-strong;
+$form-check-input-checked-bg-color: $accent-500;
+$form-check-input-focus-box-shadow: $focus-ring;
 
-$form-switch-color: $body-color !default;
+$form-switch-color: $text-secondary;
+$form-select-indicator-color: $text-secondary;
+$input-group-addon-bg: $surface-3;
+$form-range-track-bg: $surface-2;
 
-
-$form-select-indicator-color: $body-color !default;
-
-$input-group-addon-bg: darken($body-bg, 2) !default;
-
-$form-range-track-bg: darken($body-bg, 5) !default;
-
-
-// Navs
-$nav-tabs-link-active-bg: $body-bg !default;
-$nav-tabs-border-color: lighten($input-border-color, 10) !default;
-$nav-tabs-link-hover-border-color: $nav-tabs-border-color $nav-tabs-border-color $nav-tabs-border-color !default;
-$nav-tabs-link-active-color: $body-color !default;
-$nav-tabs-link-active-border-color: $nav-tabs-border-color $nav-tabs-border-color $nav-tabs-link-active-bg !default;
+// Navs and tabs
+$nav-link-color: $text-secondary;
+$nav-link-hover-color: $text-primary;
+$nav-tabs-border-color: $border;
+$nav-tabs-link-active-bg: $surface-1;
+$nav-tabs-link-active-color: $text-primary;
+$nav-tabs-link-hover-border-color: $border $border $border;
+$nav-tabs-link-active-border-color: $border $border $surface-1;
 
 // Navbar
+$navbar-dark-color: $text-secondary;
+$navbar-dark-hover-color: $text-primary;
+$navbar-dark-active-color: $accent-300;
 
-// Pagination*/
-$pagination-bg: darken($body-bg, 2) !default;
-$pagination-border-color: $input-border-color !default;
+// Pagination
+$pagination-bg: $surface-1;
+$pagination-color: $text-secondary;
+$pagination-border-color: $border;
+$pagination-hover-bg: $surface-2;
+$pagination-hover-border-color: $border;
+$pagination-focus-bg: $surface-2;
+$pagination-focus-box-shadow: $focus-ring;
+$pagination-active-bg: $accent-500;
+$pagination-active-border-color: $accent-500;
+$pagination-disabled-bg: $surface-1;
+$pagination-disabled-border-color: $border-subtle;
 
-$pagination-hover-bg: darken($pagination-bg, 2) !default;
-$pagination-hover-border-color: $pagination-border-color !default;
+// Cards
+$card-bg: $surface-1;
+$card-border-color: $border-subtle;
+$card-border-radius: $radius-lg;
+$card-cap-bg: $surface-2;
 
-$pagination-focus-bg: darken($pagination-hover-bg, 2) !default;
-
-$pagination-active-bg: darken($pagination-hover-bg, 2) !default;
-
-$pagination-disabled-bg: $input-disabled-bg !default;
-$pagination-disabled-border-color: $pagination-hover-border-color !default;
-
-
-// Cards*/
-$card-bg: darken($body-bg, 2) !default;
-$card-border-color: rgba(#fff, .15) !default;
-
-// Popovers
-$popover-bg: darken($body-bg, 2) !default;
-$popover-border-color: $input-border-color !default;
-$popover-header-bg: lighten($body-bg,3) !default;
+// Popovers and tooltips
+$popover-bg: $surface-3;
+$popover-border-color: $border;
+$popover-header-bg: $surface-2;
+$tooltip-bg: $surface-3;
+$tooltip-opacity: 1;
 
 // Modals
-$modal-content-bg: $body-bg !default;
+$modal-content-bg: $surface-1;
+$modal-content-border-color: $border;
+$modal-content-border-radius: $radius-lg;
+$modal-header-border-color: $border-subtle;
+$modal-footer-border-color: $border-subtle;
+$modal-backdrop-bg: #000;
+$modal-backdrop-opacity: 0.6;
 
-// Progress bars*/
-$progress-bg: darken($body-bg, 5) !default;
+// Progress
+$progress-bg: $surface-2;
+$progress-border-radius: $radius-pill;
 
-/*// List group*/
-$list-group-color: $body-color !default;
-$list-group-bg: darken($body-bg, 1) !default;
-$list-group-border-color: lighten($body-bg, 5) !default;
-
-$list-group-hover-bg: lighten($list-group-bg, 2) !default;
-
-$list-group-action-hover-color: darken($list-group-color, 4) !default;
-$list-group-action-active-color: $list-group-color !default;
-
-$list-group-action-active-bg: $list-group-bg !default;
+// List group
+$list-group-color: $text-primary;
+$list-group-bg: $surface-1;
+$list-group-border-color: $border-subtle;
+$list-group-hover-bg: $surface-2;
+$list-group-action-color: $text-secondary;
+$list-group-action-hover-color: $text-primary;
+$list-group-action-active-color: $text-primary;
+$list-group-action-active-bg: $surface-3;
 
 // Dropdowns
-$dropdown-color: $body-color !default;
-$dropdown-bg: $body-bg !default;
+$dropdown-color: $text-primary;
+$dropdown-bg: $surface-3;
+$dropdown-border-color: $border;
+$dropdown-border-radius: $radius-md;
+$dropdown-link-color: $text-secondary;
+$dropdown-link-hover-color: $text-primary;
+$dropdown-link-hover-bg: $surface-2;
+$dropdown-link-active-bg: $accent-500;
 
-$dropdown-link-color: $body-color !default;
-$dropdown-link-hover-color: #fff !default;
-$dropdown-link-hover-bg: lighten($body-bg,3) !default;
+// Tables
+$table-color: $text-primary;
+$table-bg: transparent;
+$table-border-color: $border-subtle;
+$table-striped-bg: rgba(255, 255, 255, 0.025);
+$table-hover-bg: rgba(255, 255, 255, 0.045);
 
 // Code
-$kbd-bg: darken($body-bg, 5) !default;
+$kbd-bg: $surface-3;
+$code-color: $accent-300;
 
 // Toasts
-$toast-background-color: darken($body-bg, 3) !default;
-$toast-header-background-color: lighten($body-bg, 3) !default;
-
-
+$toast-background-color: $surface-2;
+$toast-border-color: $border;
+$toast-header-background-color: $surface-3;
 
 // Accordion
-$accordion-bg: darken($body-bg, 3) !default;
-$accordion-button-active-bg: $primary !default;
-$accordion-button-active-color: #fff !default;
-$accordion-border-color: $input-border-color !default;
+$accordion-bg: $surface-1;
+$accordion-border-color: $border-subtle;
+$accordion-button-active-bg: $accent-soft;
+$accordion-button-active-color: $text-primary;
+$accordion-button-focus-box-shadow: $focus-ring;
+
+// Alerts: tinted, not washed out.
+$alert-border-radius: $radius-md;

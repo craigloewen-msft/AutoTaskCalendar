@@ -576,7 +576,7 @@ function clone(value) {
   outline: none;
   background: #161b22;
   box-shadow: 0 26px 70px rgba(0, 0, 0, 0.55);
-  color: #d7dde4;
+  color: var(--text-secondary);
 }
 
 .editor-header,
@@ -601,7 +601,7 @@ function clone(value) {
   border: 1px solid rgba(102, 126, 234, 0.42);
   border-radius: 8px;
   background: rgba(102, 126, 234, 0.1);
-  color: #d7dde4;
+  color: var(--text-secondary);
   font-size: 0.86rem;
 }
 
@@ -625,7 +625,7 @@ function clone(value) {
 }
 
 .editor-eyebrow {
-  color: #8da2fb;
+  color: var(--accent-300);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -635,7 +635,7 @@ function clone(value) {
 .close-button {
   border: 0;
   background: transparent;
-  color: #a8b4c0;
+  color: var(--text-secondary);
   font-size: 1.8rem;
   line-height: 1;
 }
@@ -668,7 +668,7 @@ function clone(value) {
 .form-group small {
   display: block;
   margin-top: 4px;
-  color: #7d8792;
+  color: var(--text-faint);
 }
 
 /* States the derived outcome; there is no control here because there is no choice. */
@@ -702,16 +702,16 @@ function clone(value) {
 .editor-error {
   margin: 0 0 14px;
   padding: 10px 12px;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid var(--accent);
   border-radius: 6px;
   background: rgba(102, 126, 234, 0.13);
-  color: #c7d2fe;
+  color: var(--accent-100);
 }
 
 .editor-error {
-  border-left-color: #ef4444;
+  border-left-color: var(--danger);
   background: rgba(239, 68, 68, 0.12);
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 
 .editor-footer {
@@ -737,7 +737,7 @@ function clone(value) {
 
 .confirm-delete .confirm-message {
   margin: 0;
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 
 @media (max-width: 760px) {

@@ -1,0 +1,362 @@
+// Global base layer: element defaults, the token custom properties that component
+// <style> blocks consume, and the few genuinely shared utility classes.
+// Loaded after Bootstrap. See docs/DESIGN_SYSTEM.md.
+
+@import "tokens";
+
+// Tokens as CSS custom properties. Scoped <style> blocks cannot see Sass variables,
+// so every component reads the palette through these.
+:root {
+  --surface-0: #{$surface-0};
+  --surface-1: #{$surface-1};
+  --surface-2: #{$surface-2};
+  --surface-3: #{$surface-3};
+
+  --border-subtle: #{$border-subtle};
+  --border: #{$border};
+  --border-strong: #{$border-strong};
+
+  --text-primary: #{$text-primary};
+  --text-secondary: #{$text-secondary};
+  --text-muted: #{$text-muted};
+  --text-faint: #{$text-faint};
+
+  --accent-100: #{$accent-100};
+  --accent-300: #{$accent-300};
+  --accent-400: #{$accent-400};
+  --accent: #{$accent-500};
+  --accent-600: #{$accent-600};
+  --accent-700: #{$accent-700};
+  --accent-soft: #{$accent-soft};
+  --accent-softer: #{$accent-softer};
+  --violet-500: #{$violet-500};
+  --brand-gradient: #{$brand-gradient};
+
+  --success: #{$success};
+  --success-text: #{$success-text};
+  --success-soft: #{$success-soft};
+  --warning: #{$warning};
+  --warning-text: #{$warning-text};
+  --warning-soft: #{$warning-soft};
+  --danger: #{$danger};
+  --danger-text: #{$danger-text};
+  --danger-soft: #{$danger-soft};
+  --info: #{$info};
+  --info-text: #{$info-text};
+  --info-soft: #{$info-soft};
+
+  --fs-xs: #{$fs-xs};
+  --fs-sm: #{$fs-sm};
+  --fs-md: #{$fs-md};
+  --fs-base: #{$fs-base};
+  --fs-lg: #{$fs-lg};
+  --fs-xl: #{$fs-xl};
+  --fs-2xl: #{$fs-2xl};
+  --fs-3xl: #{$fs-3xl};
+
+  --lh-tight: #{$lh-tight};
+  --lh-normal: #{$lh-normal};
+  --lh-relaxed: #{$lh-relaxed};
+
+  --space-1: #{$space-1};
+  --space-2: #{$space-2};
+  --space-3: #{$space-3};
+  --space-4: #{$space-4};
+  --space-5: #{$space-5};
+  --space-6: #{$space-6};
+  --space-7: #{$space-7};
+  --space-8: #{$space-8};
+
+  --radius-xs: #{$radius-xs};
+  --radius-sm: #{$radius-sm};
+  --radius-md: #{$radius-md};
+  --radius-lg: #{$radius-lg};
+  --radius-xl: #{$radius-xl};
+  --radius-pill: #{$radius-pill};
+
+  --elev-1: #{$elev-1};
+  --elev-2: #{$elev-2};
+  --elev-3: #{$elev-3};
+  --elev-4: #{$elev-4};
+
+  --motion-fast: #{$motion-fast};
+  --motion: #{$motion};
+  --motion-slow: #{$motion-slow};
+  --ease: #{$ease};
+  --focus-ring: #{$focus-ring};
+}
+
+// --- Elements -------------------------------------------------------------
+
+html {
+  box-sizing: border-box;
+  // Tells the browser this is a dark page, so native widgets (time pickers,
+  // scrollbars, autofill) render dark instead of light-on-dark.
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: $surface-0;
+  color: $text-primary;
+  font-family: $font-sans;
+  font-size: $fs-base;
+  line-height: $lh-normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: $text-primary;
+  font-weight: $fw-semibold;
+  line-height: $lh-tight;
+}
+
+h1 { font-size: $fs-3xl; }
+h2 { font-size: $fs-2xl; }
+h3 { font-size: $fs-xl; }
+h4 { font-size: $fs-lg; }
+h5 { font-size: $fs-base; }
+h6 { font-size: $fs-md; }
+
+p {
+  line-height: $lh-relaxed;
+}
+
+a {
+  color: $accent-300;
+  text-decoration: none;
+  transition: color $motion-fast $ease;
+
+  &:hover {
+    color: $accent-100;
+  }
+}
+
+// One visible focus ring for everything, keyboard-only.
+:focus-visible {
+  outline: 2px solid $accent-400;
+  outline-offset: 2px;
+}
+
+// --- Controls -------------------------------------------------------------
+// Restrained: colour and elevation move, geometry does not. Nothing here shifts
+// position on hover, which is what made the old dense toolbars jump.
+
+.btn {
+  --bs-btn-font-weight: #{$fw-medium};
+  border-radius: $radius-sm;
+  transition: background-color $motion $ease, border-color $motion $ease,
+    color $motion $ease, box-shadow $motion $ease;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: $focus-ring;
+}
+
+.btn-primary {
+  --bs-btn-bg: #{$accent-500};
+  --bs-btn-border-color: #{$accent-500};
+  --bs-btn-hover-bg: #{$accent-600};
+  --bs-btn-hover-border-color: #{$accent-600};
+  --bs-btn-active-bg: #{$accent-700};
+  --bs-btn-active-border-color: #{$accent-700};
+  --bs-btn-disabled-bg: #{$accent-700};
+  --bs-btn-disabled-border-color: #{$accent-700};
+  --bs-btn-color: #fff;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-color: #fff;
+  --bs-btn-disabled-color: #{rgba(#fff, 0.65)};
+}
+
+// Secondary reads as a quiet surface button, not a grey slab.
+.btn-secondary {
+  --bs-btn-bg: #{$surface-2};
+  --bs-btn-border-color: #{$border};
+  --bs-btn-color: #{$text-secondary};
+  --bs-btn-hover-bg: #{$surface-3};
+  --bs-btn-hover-border-color: #{$border-strong};
+  --bs-btn-hover-color: #{$text-primary};
+  --bs-btn-active-bg: #{$surface-3};
+  --bs-btn-active-border-color: #{$border-strong};
+  --bs-btn-active-color: #{$text-primary};
+}
+
+.btn-outline-primary {
+  --bs-btn-color: #{$accent-300};
+  --bs-btn-border-color: #{rgba($accent-500, 0.5)};
+  --bs-btn-hover-bg: #{$accent-500};
+  --bs-btn-hover-border-color: #{$accent-500};
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-bg: #{$accent-600};
+  --bs-btn-active-border-color: #{$accent-600};
+  --bs-btn-active-color: #fff;
+}
+
+.btn-outline-secondary {
+  --bs-btn-color: #{$text-secondary};
+  --bs-btn-border-color: #{$border};
+  --bs-btn-hover-bg: #{$surface-2};
+  --bs-btn-hover-border-color: #{$border-strong};
+  --bs-btn-hover-color: #{$text-primary};
+  --bs-btn-active-bg: #{$surface-3};
+  --bs-btn-active-border-color: #{$border-strong};
+  --bs-btn-active-color: #{$text-primary};
+}
+
+// Bootstrap's outline variants default to black text when filled, which is
+// unreadable on the darker fills. Set the active/hover foreground explicitly.
+.btn-outline-danger {
+  --bs-btn-color: #{$danger-text};
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-color: #fff;
+}
+
+.btn-outline-info {
+  --bs-btn-color: #{$info-text};
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-color: #fff;
+}
+
+.btn-outline-success {
+  --bs-btn-color: #{$success-text};
+  --bs-btn-hover-color: #04231a;
+  --bs-btn-active-color: #04231a;
+}
+
+// `light` on a dark page should read as a quiet bordered button, not a bright grey
+// slab that flashes white on hover. Used by the Home hero's secondary action.
+.btn-outline-light {
+  --bs-btn-color: #{$text-primary};
+  --bs-btn-border-color: #{$border-strong};
+  --bs-btn-hover-bg: #{$surface-2};
+  --bs-btn-hover-border-color: #{$text-muted};
+  --bs-btn-hover-color: #{$text-primary};
+  --bs-btn-active-bg: #{$surface-3};
+  --bs-btn-active-border-color: #{$text-muted};
+  --bs-btn-active-color: #{$text-primary};
+}
+
+.btn-success {
+  --bs-btn-bg: #{$success};
+  --bs-btn-border-color: #{$success};
+  --bs-btn-hover-bg: #{darken($success, 6%)};
+  --bs-btn-hover-border-color: #{darken($success, 6%)};
+  --bs-btn-active-bg: #{darken($success, 10%)};
+  --bs-btn-color: #04231a;
+  --bs-btn-hover-color: #04231a;
+  --bs-btn-active-color: #04231a;
+}
+
+.btn-info {
+  --bs-btn-bg: #{$info};
+  --bs-btn-border-color: #{$info};
+  --bs-btn-hover-bg: #{darken($info, 6%)};
+  --bs-btn-hover-border-color: #{darken($info, 6%)};
+  --bs-btn-active-bg: #{darken($info, 10%)};
+  --bs-btn-color: #fff;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-color: #fff;
+}
+
+// A text-weight button for tertiary actions.
+.btn-link {
+  --bs-btn-color: #{$accent-300};
+  --bs-btn-hover-color: #{$accent-100};
+  text-decoration: none;
+}
+
+.form-control,
+.form-select {
+  border-radius: $radius-sm;
+  transition: border-color $motion $ease, box-shadow $motion $ease;
+}
+
+.form-control::placeholder {
+  color: $text-faint;
+}
+
+// Several components use bare <input type=checkbox/radio> without Bootstrap's
+// .form-check-input. accent-color themes the native widget so they still match.
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: $accent-500;
+}
+
+// Bootstrap's close button is a dark SVG; invert it for a dark surface.
+.btn-close {
+  filter: invert(1) grayscale(100%) brightness(190%);
+}
+
+.btn-close-white {
+  filter: none;
+}
+
+// --- Surfaces -------------------------------------------------------------
+
+.card {
+  box-shadow: $elev-1;
+}
+
+.dropdown-menu {
+  box-shadow: $elev-3;
+}
+
+.modal-content {
+  box-shadow: $elev-4;
+}
+
+// Alerts: a tinted surface with a readable foreground, rather than a solid fill.
+@each $name, $fill, $fg in
+  (primary, $accent-500, $accent-100),
+  (secondary, $surface-3, $text-secondary),
+  (success, $success, $success-text),
+  (danger, $danger, $danger-text),
+  (warning, $warning, $warning-text),
+  (info, $info, $info-text)
+{
+  .alert-#{$name} {
+    --bs-alert-bg: #{rgba($fill, 0.13)};
+    --bs-alert-border-color: #{rgba($fill, 0.35)};
+    --bs-alert-color: #{$fg};
+  }
+}
+
+// --- Shared layout --------------------------------------------------------
+
+.pageContent {
+  padding: $space-5 0 $space-7;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+// Full-width form button, used by the auth pages.
+.btn-block {
+  width: 100%;
+}
+
+// --- Motion -------------------------------------------------------------
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

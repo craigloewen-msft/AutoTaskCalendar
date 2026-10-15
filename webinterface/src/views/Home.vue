@@ -197,8 +197,8 @@ export default {
   background:
     radial-gradient(60% 80% at 15% 15%, rgba(102, 126, 234, 0.35) 0%, transparent 60%),
     radial-gradient(55% 75% at 85% 20%, rgba(118, 75, 162, 0.32) 0%, transparent 62%),
-    linear-gradient(160deg, #15151d 0%, #1b1a2b 55%, #121219 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    linear-gradient(160deg, var(--surface-1) 0%, var(--surface-2) 55%, var(--surface-0) 100%);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 /* A faint grid, suggesting a calendar without the weight of an image. */
@@ -207,8 +207,8 @@ export default {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    linear-gradient(var(--surface-2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--surface-2) 1px, transparent 1px);
   background-size: 64px 64px;
   mask-image: radial-gradient(70% 60% at 50% 40%, #000 0%, transparent 100%);
   -webkit-mask-image: radial-gradient(70% 60% at 50% 40%, #000 0%, transparent 100%);
@@ -228,7 +228,7 @@ export default {
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #9aa6d4;
+  color: var(--accent-300);
 }
 
 .hero-title {
@@ -237,7 +237,7 @@ export default {
   font-weight: 700;
   line-height: 1.12;
   letter-spacing: -0.02em;
-  color: #f2f3f7;
+  color: var(--text-primary);
 }
 
 .hero-subtitle {
@@ -245,7 +245,7 @@ export default {
   margin: 0 auto 36px;
   font-size: clamp(1rem, 2vw, 1.18rem);
   line-height: 1.65;
-  color: #b4bace;
+  color: var(--text-secondary);
 }
 
 .hero-actions {
@@ -258,7 +258,7 @@ export default {
 .hero-note {
   margin: 22px 0 0;
   font-size: 0.92rem;
-  color: #868da3;
+  color: var(--text-muted);
 }
 
 .home-section {
@@ -271,7 +271,7 @@ export default {
   font-size: clamp(1.5rem, 3vw, 2.05rem);
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: #e8e9ee;
+  color: var(--text-primary);
   text-align: center;
 }
 
@@ -280,7 +280,7 @@ export default {
   margin: 0 auto;
   font-size: 1.06rem;
   line-height: 1.7;
-  color: #a8aec2;
+  color: var(--text-secondary);
   text-align: center;
 }
 
@@ -294,34 +294,34 @@ export default {
 .feature-card {
   padding: 26px 24px;
   background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 14px;
   transition: border-color 0.25s ease, transform 0.25s ease, background 0.25s ease;
 }
 
 .feature-card:hover {
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--surface-2);
   border-color: rgba(102, 126, 234, 0.45);
   transform: translateY(-3px);
 }
 
 .feature-card-icon {
   margin-bottom: 16px;
-  color: #8c9bf0;
+  color: var(--accent-300);
 }
 
 .feature-card-title {
   margin: 0 0 10px;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #e8e9ee;
+  color: var(--text-primary);
 }
 
 .feature-card-text {
   margin: 0;
   font-size: 0.96rem;
   line-height: 1.6;
-  color: #a0a6ba;
+  color: var(--text-muted);
 }
 
 .step-list {
@@ -340,7 +340,7 @@ export default {
   gap: 20px;
   padding: 22px 24px;
   background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 14px;
 }
 
@@ -352,7 +352,7 @@ export default {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--violet-500) 100%);
   font-size: 1.05rem;
   font-weight: 700;
   color: #fff;
@@ -362,14 +362,14 @@ export default {
   margin: 0 0 6px;
   font-size: 1.08rem;
   font-weight: 600;
-  color: #e8e9ee;
+  color: var(--text-primary);
 }
 
 .step-text {
   margin: 0;
   font-size: 0.97rem;
   line-height: 1.6;
-  color: #a0a6ba;
+  color: var(--text-muted);
 }
 
 .cta-panel {
@@ -384,7 +384,7 @@ export default {
   margin: 0 0 14px;
   font-size: clamp(1.4rem, 3vw, 1.9rem);
   font-weight: 700;
-  color: #eceef4;
+  color: var(--text-primary);
 }
 
 .cta-text {
@@ -392,7 +392,7 @@ export default {
   margin: 0 auto 28px;
   font-size: 1.04rem;
   line-height: 1.6;
-  color: #aeb4c8;
+  color: var(--text-secondary);
 }
 
 .cta-actions {

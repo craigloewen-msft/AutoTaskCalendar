@@ -44,13 +44,28 @@ export default {
 </script>
 
 <style>
-/* Match the app's dark form controls. */
-.dp__theme_dark {
-  --dp-background-color: #1f2937;
-  --dp-text-color: #e5e7eb;
-  --dp-hover-color: #374151;
-  --dp-primary-color: #3b82f6;
-  --dp-border-color: #374151;
-  --dp-menu-border-color: #374151;
+/* The one date picker, themed from the app's tokens. The menu is teleported to
+   <body>, so these must be global and keyed on .dp--theme-dark (the class this
+   version of vue-datepicker actually emits). See docs/DESIGN_SYSTEM.md. */
+.dp--theme-dark {
+  --dp-background-color: var(--surface-2);
+  --dp-text-color: var(--text-primary);
+  --dp-hover-color: var(--surface-3);
+  --dp-hover-text-color: var(--text-primary);
+  --dp-primary-color: var(--accent);
+  --dp-primary-text-color: #fff;
+  --dp-secondary-color: var(--text-muted);
+  --dp-border-color: var(--border);
+  --dp-menu-border-color: var(--border);
+  --dp-border-color-hover: var(--border-strong);
+  --dp-icon-color: var(--text-muted);
+  --dp-disabled-color: var(--surface-1);
+  --dp-scroll-bar-background: var(--surface-1);
+  --dp-scroll-bar-color: var(--border-strong);
+  --dp-border-radius: var(--radius-sm);
+}
+
+.dp--menu {
+  box-shadow: var(--elev-3);
 }
 </style>

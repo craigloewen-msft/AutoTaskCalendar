@@ -183,7 +183,7 @@ export default {
 }
 
 .commitment-label {
-  color: #8da2fb;
+  color: var(--accent-300);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -191,7 +191,7 @@ export default {
 }
 
 .commitment-score {
-  color: #c8d1da;
+  color: var(--text-secondary);
   font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
 }
@@ -208,7 +208,7 @@ export default {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #6ee7b7, #34d399);
+  background: linear-gradient(90deg, var(--success-text), var(--success-text));
   transition: width 0.35s ease;
 }
 
@@ -230,7 +230,7 @@ export default {
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: #d7dde4;
+  color: var(--text-secondary);
   font: inherit;
   font-size: 0.84rem;
   text-align: left;
@@ -262,47 +262,47 @@ button.commitment-cell:focus-visible {
 .status-glyph {
   flex: 0 0 auto;
   width: 12px;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.8rem;
   text-align: center;
 }
 
 .commitment-meta {
   flex: 0 0 auto;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .task-marker {
-  color: #9aa9ed;
+  color: var(--accent-300);
 }
 
 .is-done .status-glyph {
-  color: #6ee7b7;
+  color: var(--success-text);
 }
 
 .is-done .title-text {
-  color: #93a49c;
+  color: var(--text-muted);
   text-decoration: line-through;
 }
 
 .is-moved .status-glyph {
-  color: #fbbf24;
+  color: var(--warning-text);
 }
 
 .is-removed .status-glyph {
-  color: #f87171;
+  color: var(--danger-text);
 }
 
 .is-removed .title-text {
-  color: #8b949e;
+  color: var(--text-muted);
   text-decoration: line-through;
 }
 
 .is-added .status-glyph {
-  color: #8da2fb;
+  color: var(--accent-300);
 }
 
 .added-head {
@@ -313,7 +313,7 @@ button.commitment-cell:focus-visible {
   margin: 12px 0 6px;
   padding-top: 10px;
   border-top: 1px dashed rgba(255, 255, 255, 0.1);
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.72rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -331,7 +331,7 @@ button.commitment-cell:focus-visible {
   border: 1px solid rgba(141, 162, 251, 0.4);
   border-radius: 999px;
   background: transparent;
-  color: #8da2fb;
+  color: var(--accent-300);
   font-size: 0.7rem;
   letter-spacing: 0.04em;
   text-transform: none;

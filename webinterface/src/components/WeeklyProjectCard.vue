@@ -364,20 +364,20 @@ export default {
 
 .project-head h4 {
   margin: 0;
-  color: #f0f3f6;
+  color: var(--text-primary);
   font-size: 1rem;
   font-weight: 600;
 }
 
 .description {
   margin: 3px 0 0;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.84rem;
 }
 
 .project-total {
   flex: 0 0 auto;
-  color: #a8b4c0;
+  color: var(--text-secondary);
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -412,7 +412,7 @@ export default {
 .task-check input {
   width: 15px;
   height: 15px;
-  accent-color: #667eea;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -427,7 +427,7 @@ export default {
   border: 1px solid transparent;
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.035);
-  color: #d7dde4;
+  color: var(--text-secondary);
   font: inherit;
   font-size: 0.85rem;
   text-align: left;
@@ -461,18 +461,18 @@ button.task-row:focus-visible {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #667eea;
+  background: var(--accent);
 }
 
 .task-marker {
-  color: #9aa9ed;
+  color: var(--accent-300);
 }
 
 .task-badge {
   padding: 1px 6px;
   border-radius: 999px;
   background: rgba(139, 148, 158, 0.18);
-  color: #9ca7b2;
+  color: var(--text-muted);
   font-size: 0.62rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -483,7 +483,7 @@ button.task-row:focus-visible {
   flex: 0 0 auto;
   align-items: baseline;
   gap: 10px;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -497,7 +497,7 @@ button.task-row:focus-visible {
 
 .nothing-planned {
   margin: 12px 0 0;
-  color: #6f7883;
+  color: var(--text-faint);
   font-size: 0.84rem;
   font-style: italic;
 }
@@ -511,7 +511,7 @@ button.task-row:focus-visible {
 .drawer summary {
   padding: 5px 8px;
   border-radius: 6px;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.78rem;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
@@ -521,7 +521,7 @@ button.task-row:focus-visible {
 .drawer summary:focus-visible {
   outline: none;
   background: rgba(255, 255, 255, 0.04);
-  color: #c8d1da;
+  color: var(--text-secondary);
 }
 
 .quick-add {
@@ -535,7 +535,7 @@ button.task-row:focus-visible {
   border: 1px dashed rgba(141, 162, 251, 0.36);
   border-radius: 999px;
   background: transparent;
-  color: #8da2fb;
+  color: var(--accent-300);
   font-size: 0.8rem;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
@@ -562,7 +562,7 @@ button.task-row:focus-visible {
 .field label {
   display: block;
   margin-bottom: 3px;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.7rem;
 }
 
@@ -592,7 +592,7 @@ button.task-row:focus-visible {
   width: auto;
   margin: 0 6px 0 0;
   padding: 0;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.7rem;
   float: none;
 }
@@ -614,24 +614,24 @@ button.task-row:focus-visible {
   padding: 4px 9px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 7px;
-  color: #9ca7b2;
+  color: var(--text-muted);
   font-size: 0.75rem;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .day-chip:hover span {
   border-color: rgba(141, 162, 251, 0.5);
-  color: #c8d1da;
+  color: var(--text-secondary);
 }
 
 .day-chip.selected span {
   border-color: transparent;
-  background: #667eea;
+  background: var(--accent);
   color: #fff;
 }
 
 .day-chip input:focus-visible + span {
-  outline: 2px solid #8da2fb;
+  outline: 2px solid var(--accent-300);
   outline-offset: 2px;
 }
 
@@ -643,12 +643,12 @@ button.task-row:focus-visible {
 
 .form-message {
   margin: 8px 0 0;
-  color: #6ee7b7;
+  color: var(--success-text);
   font-size: 0.79rem;
 }
 
 .form-message.error {
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 
 .visually-hidden {

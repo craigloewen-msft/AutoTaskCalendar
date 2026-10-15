@@ -350,11 +350,11 @@ export default {
 <style scoped>
 .export-message {
   margin-bottom: 1rem;
-  color: #8bd49c;
+  color: var(--success-text);
 }
 
 .export-message.error {
-  color: #ff8f8f;
+  color: var(--danger-text);
 }
 
 .user-profile-header {
@@ -373,7 +373,7 @@ export default {
   width: 100px;
   height: 100px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--violet-500) 100%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -388,13 +388,13 @@ export default {
 .user-title {
   font-size: 2.5rem;
   font-weight: 700;
-  color: #e0e0e0;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
 .user-subtitle {
   font-size: 1.1rem;
-  color: #a0a0a0;
+  color: var(--text-muted);
   margin: 0;
 }
 
@@ -415,7 +415,7 @@ export default {
 .section-title {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text-primary);
   margin-bottom: 8px;
   display: flex;
   align-items: center;
@@ -428,7 +428,7 @@ export default {
 }
 
 .section-description {
-  color: #a0a0a0;
+  color: var(--text-muted);
   margin-bottom: 24px;
   font-size: 0.95rem;
 }
@@ -437,7 +437,7 @@ export default {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
-  color: #e0e0e0;
+  color: var(--text-primary);
   padding: 12px 16px;
   font-size: 1rem;
   transition: all 0.3s ease;
@@ -445,9 +445,9 @@ export default {
 
 .modern-input:focus {
   background: rgba(255, 255, 255, 0.08);
-  border-color: #667eea;
+  border-color: var(--accent);
   box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 .weekday-selector {
@@ -479,7 +479,7 @@ export default {
 }
 
 .empty-text {
-  color: #a0a0a0;
+  color: var(--text-muted);
   font-size: 1.1rem;
   margin-bottom: 24px;
 }
@@ -523,7 +523,7 @@ export default {
 
 .calendar-name {
   font-size: 1rem;
-  color: #e0e0e0;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -543,41 +543,41 @@ export default {
 
 /* Override Bootstrap Vue form group labels */
 :deep(.form-group label) {
-  color: #d0d0d0;
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 0.95rem;
   margin-bottom: 8px;
 }
 
 :deep(.form-group .form-text) {
-  color: #909090;
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 
 :deep(.custom-control-label) {
-  color: #e0e0e0;
+  color: var(--text-primary);
   cursor: pointer;
 }
 
 :deep(.custom-checkbox .custom-control-input:checked ~ .custom-control-label::before) {
-  background-color: #667eea;
-  border-color: #667eea;
+  background-color: var(--accent);
+  border-color: var(--accent);
 }
 
 :deep(.btn-outline-primary) {
   border-color: rgba(102, 126, 234, 0.5);
-  color: #667eea;
+  color: var(--accent);
 }
 
 :deep(.btn-outline-primary:hover) {
-  background-color: #667eea;
-  border-color: #667eea;
+  background-color: var(--accent);
+  border-color: var(--accent);
   color: white;
 }
 
 :deep(.btn-outline-primary.active) {
-  background-color: #667eea;
-  border-color: #667eea;
+  background-color: var(--accent);
+  border-color: var(--accent);
   color: white;
 }
 </style>

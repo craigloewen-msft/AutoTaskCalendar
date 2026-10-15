@@ -1,3 +1,4 @@
+// The app's one stylesheet: tokens -> Bootstrap (built with those tokens) -> base layer.
 @import "darkVariables";
 @import "../../node_modules/bootstrap/scss/bootstrap.scss";
-@import "darkFixes";
+@import "base";

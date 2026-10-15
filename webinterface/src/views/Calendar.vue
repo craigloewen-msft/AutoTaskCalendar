@@ -863,10 +863,12 @@ export default {
         const inputStartDate = instantToDayPilotWall(event.startDate);
         const inputEndDate = instantToDayPilotWall(event.endDate);
 
-        let eventColor = "#A27CF9";
+        // Calendar events are violet, scheduled tasks indigo. Mirrors the palette
+        // in style/_tokens.scss; see docs/DESIGN_SYSTEM.md.
+        let eventColor = "#6d4a9c";
         let eventTags = null;
         if (event.type.includes("task")) {
-          eventColor = "#3D217C";
+          eventColor = "#4453b0";
           eventTags = {};
           eventTags.taskId = event.taskRef;
           if (event.type.includes("task-chunk")) {
@@ -1234,14 +1236,11 @@ export default {
 }
 
 .page-title {
-  font-size: 32px;
-  font-weight: 600;
   margin: 0;
-  color: #764ba2;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--text-primary);
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .header-actions {
@@ -1252,17 +1251,8 @@ export default {
 .action-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 8px;
+  gap: var(--space-2);
   font-weight: 500;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.action-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .btn-icon {
@@ -1273,10 +1263,11 @@ export default {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: rgba(30, 30, 35, 0.6);
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--elev-1);
 }
 
 .calendar_default_rowheader_inner,
@@ -1284,32 +1275,32 @@ export default {
 .calendar_default_corner_inner,
 .calendar_default_colheader_inner,
 .calendar_default_alldayheader_inner {
-  background: rgba(45, 45, 55, 0.9) !important;
+  background: var(--surface-2) !important;
   color: rgb(220, 220, 225) !important;
   font-weight: 600;
-  border-right: 1px solid rgba(255, 255, 255, 0.3) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-right: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 .calendar_default_cell_inner {
-  background: rgba(55, 55, 65, 0.5) !important;
+  background: var(--surface-0) !important;
 }
 
 .calendar_default_cell_business .calendar_default_cell_inner {
-  background: rgba(75, 75, 85, 0.6) !important;
+  background: var(--surface-1) !important;
 }
 
 /* Comprehensive dark mode overrides for DayPilot calendar */
 #dp {
   color: rgb(220, 220, 225) !important;
   /* Override DayPilot CSS variables for dark theme */
-  --dp-calendar-cell-bg-color: rgba(55, 55, 65, 0.5);
-  --dp-calendar-cell-business-bg-color: rgba(75, 75, 85, 0.6);
-  --dp-calendar-header-bg-color: rgba(45, 45, 55, 0.9);
-  --dp-calendar-border-color: rgba(255, 255, 255, 0.3);
-  --dp-calendar-bg-color: rgba(40, 40, 50, 0.9);
-  --dp-calendar-event-bar-bg-color: rgb(68, 0, 85);
-  --dp-calendar-event-bar-color: rgb(120, 0, 163);
+  --dp-calendar-cell-bg-color: var(--surface-0);
+  --dp-calendar-cell-business-bg-color: var(--surface-1);
+  --dp-calendar-header-bg-color: var(--surface-2);
+  --dp-calendar-border-color: var(--border);
+  --dp-calendar-bg-color: var(--surface-0);
+  --dp-calendar-event-bar-bg-color: var(--border);
+  --dp-calendar-event-bar-color: var(--accent-400);
 }
 
 :deep(.calendar_default_event_inner),
@@ -1317,7 +1308,7 @@ export default {
   color: white !important;
   border-radius: 6px 6px 0 0 !important;
   opacity: 1 !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
   padding: 6px 8px !important;
   font-weight: 500 !important;
   font-size: 13px !important;
@@ -1331,32 +1322,32 @@ export default {
 :deep(.calendar_default_corner_inner),
 :deep(.calendar_default_colheader_inner),
 :deep(.calendar_default_alldayheader_inner) {
-  background: rgba(45, 45, 55, 0.9) !important;
+  background: var(--surface-2) !important;
   color: rgb(220, 220, 225) !important;
   font-weight: 600;
-  border-right: 1px solid rgba(255, 255, 255, 0.3) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-right: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 /* Force grid lines with deep selectors */
 :deep(.calendar_default_cell_inner) {
-  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-right: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 :deep(.calendar_transparent_cell_inner) {
-  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-right: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 :deep(.calendar_default_rowheader),
 :deep(.calendar_transparent_rowheader) {
-  border-right: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-right: 1px solid var(--border) !important;
 }
 
 :deep(.calendar_default_colheader),
 :deep(.calendar_transparent_colheader) {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 .calendar-box {
@@ -1375,23 +1366,23 @@ export default {
 .task-controls {
   min-width: 320px;
   max-width: 320px;
-  background: rgba(30, 30, 35, 0.6);
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(10px);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--elev-1);
 }
 
 .sidebar-title {
   font-size: 20px;
   font-weight: 600;
   margin: 0 0 20px 0;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 .sidebar-title:focus-visible {
   border-radius: 4px;
-  outline: 2px solid #fbbf24;
+  outline: 2px solid var(--warning-text);
   outline-offset: 3px;
 }
 
@@ -1425,7 +1416,7 @@ export default {
 .task-date-header {
   font-size: 14px;
   font-weight: 600;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 12px;
@@ -1445,17 +1436,15 @@ export default {
   flex-direction: column;
   padding: 12px 16px;
   margin-bottom: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background var(--motion) var(--ease), border-color var(--motion) var(--ease);
   border-left: 3px solid transparent;
 }
 
 .task-item:hover {
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  border-left-width: 4px;
+  background: var(--surface-3);
 }
 
 .task-primary-row {
@@ -1470,7 +1459,7 @@ export default {
   flex: 1;
   min-width: 0;
   font-weight: 500;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 .task-row-meta {
@@ -1488,7 +1477,7 @@ export default {
   margin-top: 3px;
   font-size: 0.72rem;
   letter-spacing: 0.03em;
-  color: rgba(224, 224, 224, 0.55);
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1504,7 +1493,7 @@ export default {
   border: 1px solid rgba(110, 231, 183, 0.45);
   border-radius: 50%;
   background: transparent;
-  color: #6ee7b7;
+  color: var(--success-text);
   cursor: pointer;
   /* Stays out of the way until the row is hovered, so it is hard to hit by accident. */
   opacity: 0;
@@ -1518,22 +1507,22 @@ export default {
 
 .quick-complete-button:hover,
 .quick-complete-button:focus-visible {
-  border-color: #6ee7b7;
+  border-color: var(--success-text);
   background: rgba(16, 185, 129, 0.14);
   opacity: 1;
 }
 
 /* Armed: same box, filled solid green with a ring. Nothing here affects layout. */
 .task-item .quick-complete-button.armed {
-  border-color: #10b981;
-  background: #10b981;
+  border-color: var(--success);
+  background: var(--success);
   color: #06281d;
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
   opacity: 1;
 }
 
 .quick-complete-button:focus-visible {
-  outline: 2px solid #a7f3d0;
+  outline: 2px solid var(--success-text);
   outline-offset: 2px;
 }
 
@@ -1586,7 +1575,7 @@ export default {
 
 .quick-complete-error {
   margin: -8px 0 14px;
-  color: #fca5a5;
+  color: var(--danger-text);
   font-size: 13px;
 }
 
@@ -1599,13 +1588,13 @@ export default {
   margin: 0 0 13px;
   padding-top: 11px;
   border-top: 1px solid rgba(251, 191, 36, 0.2);
-  color: #e5e7eb;
+  color: var(--text-primary);
   font-size: 11px;
   font-weight: 700;
 }
 
 .forecast-selection-hint {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 11px;
   font-weight: 400;
 }
@@ -1615,14 +1604,14 @@ export default {
   border: 1px solid rgba(251, 191, 36, 0.55);
   border-radius: 999px;
   background: rgba(251, 191, 36, 0.18);
-  color: #fde68a;
+  color: var(--warning-text);
   font-size: 11px;
   font-weight: 700;
 }
 
 .forecast-analyze:hover:not(:disabled),
 .forecast-analyze:focus-visible {
-  border-color: #fbbf24;
+  border-color: var(--warning-text);
   outline: none;
   background: rgba(251, 191, 36, 0.28);
   color: #fef3c7;
@@ -1639,7 +1628,7 @@ export default {
   border: 1px dashed rgba(156, 163, 175, 0.5);
   border-radius: 999px;
   background: transparent;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 10px;
   font-weight: 700;
   line-height: 1.2;
@@ -1648,17 +1637,17 @@ export default {
 
 .slot-select-chip:hover:not(:disabled),
 .slot-select-chip:focus-visible {
-  border-color: #fbbf24;
+  border-color: var(--warning-text);
   outline: none;
   background: rgba(251, 191, 36, 0.12);
-  color: #fde68a;
+  color: var(--warning-text);
 }
 
 .slot-select-chip.selected {
   border-style: solid;
   border-color: rgba(251, 191, 36, 0.75);
   background: rgba(251, 191, 36, 0.2);
-  color: #fde68a;
+  color: var(--warning-text);
 }
 
 .slot-select-chip:disabled {
@@ -1672,7 +1661,7 @@ export default {
   gap: 4px;
   align-items: baseline;
   margin: 5px 0 0;
-  color: #fcd34d;
+  color: var(--warning-text);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -1710,7 +1699,7 @@ export default {
 }
 
 .what-if-label {
-  color: #fbbf24;
+  color: var(--warning-text);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -1719,7 +1708,7 @@ export default {
 
 .slip-forecast-heading h4 {
   margin: 3px 0 0;
-  color: #f9fafb;
+  color: var(--text-primary);
   font-size: 16px;
   line-height: 1.3;
 }
@@ -1731,14 +1720,14 @@ export default {
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.12);
-  color: #d1d5db;
+  color: var(--text-secondary);
   font-size: 19px;
   line-height: 1;
 }
 
 .forecast-close:hover,
 .forecast-close:focus-visible {
-  border-color: #fbbf24;
+  border-color: var(--warning-text);
   outline: none;
   color: #fef3c7;
 }
@@ -1752,17 +1741,17 @@ export default {
   flex-wrap: wrap;
   gap: 5px;
   margin: 12px 0 8px;
-  color: #d1d5db;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .forecast-summary .danger {
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 
 .forecast-assumption {
   margin: 0 0 13px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 11px;
   line-height: 1.45;
 }
@@ -1777,7 +1766,7 @@ export default {
 
 .forecast-section-title {
   margin: 0 0 8px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -1791,7 +1780,7 @@ export default {
 /* Premise rows are the question, not the collateral, so they read as outlines. */
 .premise-cascade .cascade-marker {
   border-style: dashed;
-  background: #1f2937;
+  background: var(--surface-2);
 }
 
 .premise-cascade li:not(:last-child)::after {
@@ -1813,7 +1802,7 @@ export default {
   gap: 7px;
   align-items: center;
   min-height: 31px;
-  color: #d1d5db;
+  color: var(--text-secondary);
   font-size: 11px;
 }
 
@@ -1831,7 +1820,7 @@ export default {
   z-index: 1;
   width: 10px;
   height: 10px;
-  border: 2px solid #fbbf24;
+  border: 2px solid var(--warning-text);
   border-radius: 50%;
   background: #262026;
 }
@@ -1848,7 +1837,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #fcd34d;
+  color: var(--warning-text);
   white-space: nowrap;
 }
 
@@ -1856,13 +1845,13 @@ export default {
   padding: 2px 5px;
   border-radius: 999px;
   background: rgba(239, 68, 68, 0.22);
-  color: #fca5a5;
+  color: var(--danger-text);
   font-size: 9px;
   text-transform: uppercase;
 }
 
 .forecast-cascade .newly-late .cascade-marker {
-  border-color: #ef4444;
+  border-color: var(--danger);
   background: #7f1d1d;
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.13);
 }
@@ -1879,7 +1868,7 @@ export default {
   border: 1px solid rgba(156, 163, 175, 0.35);
   border-radius: 999px;
   background: rgba(107, 114, 128, 0.13);
-  color: #d1d5db;
+  color: var(--text-secondary);
   font-size: 10px;
   font-weight: 700;
   line-height: 1.2;
@@ -1889,13 +1878,13 @@ export default {
 .slip-impact-chip.risk {
   border-color: rgba(248, 113, 113, 0.55);
   background: rgba(239, 68, 68, 0.17);
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 
 .slip-impact-chip.safe {
   border-color: transparent;
   background: transparent;
-  color: #7d8590;
+  color: var(--text-faint);
   font-weight: 500;
   opacity: 0;
   transition: opacity 0.15s ease;
@@ -1910,7 +1899,7 @@ export default {
 .slip-impact-chip:hover,
 .slip-impact-chip:focus-visible,
 .slip-impact-chip[aria-expanded="true"] {
-  border-color: #fbbf24;
+  border-color: var(--warning-text);
   outline: none;
   box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.18);
 }
@@ -1927,7 +1916,7 @@ export default {
 
 .task-item.forecast-newly-late-task {
   background: rgba(239, 68, 68, 0.14);
-  border-left-color: #ef4444;
+  border-left-color: var(--danger);
   box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.26);
 }
 
@@ -1949,57 +1938,57 @@ export default {
 
 .unscheduled-badge {
   background: rgba(245, 158, 11, 0.2);
-  color: #fcd34d;
+  color: var(--warning-text);
 }
 
 .late-task {
-  border-left-color: #ef4444;
+  border-left-color: var(--danger);
 }
 
 .late-task .task-title {
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 
 .late-task .task-days {
   background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+  color: var(--danger-text);
 }
 
 .due-that-day-task {
-  border-left-color: #f59e0b;
+  border-left-color: var(--warning);
 }
 
 .due-that-day-task .task-title {
-  color: #fcd34d;
+  color: var(--warning-text);
 }
 
 .due-that-day-task .task-days {
   background: rgba(245, 158, 11, 0.2);
-  color: #fcd34d;
+  color: var(--warning-text);
 }
 
 .on-track-task {
-  border-left-color: #10b981;
+  border-left-color: var(--success);
 }
 
 .on-track-task .task-days {
   background: rgba(16, 185, 129, 0.2);
-  color: #6ee7b7;
+  color: var(--success-text);
 }
 
 .backlog-task {
-  border-left-color: #6b7280;
+  border-left-color: var(--text-faint);
   opacity: 0.7;
 }
 
 .backlog-task .task-title {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-style: italic;
 }
 
 .backlog-task .task-badge {
   background: rgba(107, 114, 128, 0.2);
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .calendar-controls {
@@ -2011,28 +2000,25 @@ export default {
 
 .nav-btn {
   flex: 1;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: background var(--motion) var(--ease), color var(--motion) var(--ease),
+    border-color var(--motion) var(--ease);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  gap: var(--space-2);
 }
 
 .nav-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
-}
-
-.nav-btn:active {
-  transform: translateY(0);
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
 }
 
 .nav-icon {
