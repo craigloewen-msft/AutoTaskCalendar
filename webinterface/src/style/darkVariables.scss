@@ -1,161 +1,171 @@
-// Bootstrap Sass variables, loaded before Bootstrap. Values mirror the tokens in theme.scss.
+// Bootstrap variable overrides, all derived from the design tokens so Bootstrap
+// components and hand-written CSS cannot drift apart.
+// Loaded before Bootstrap's Sass. See docs/DESIGN_SYSTEM.md.
 
-// Palette
-$primary: #6366f1 !default;
-$secondary: #2a3040 !default;
-$success: #10b981 !default;
-$info: #38bdf8 !default;
-$warning: #f59e0b !default;
-$danger: #ef4444 !default;
-$light: #e6e8ee !default;
-$dark: #12151c !default;
+@import "tokens";
 
-$gray-900: #12151c !default;
-$min-contrast-ratio: 3 !default;
+// Theme colours. $success/$info/$warning/$danger already carry Bootstrap's names
+// in tokens.scss, so they need no restatement here.
+$primary: $accent-500;
+$secondary: $surface-3;
+$light: $text-secondary;
+$dark: $surface-1;
 
-// Body and type
-$body-bg: #0b0d12 !default;
-$body-color: #e6e8ee !default;
-$body-secondary-color: #9aa3b2 !default;
-$border-color: rgba(255, 255, 255, 0.08) !default;
-$font-family-sans-serif: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !default;
-$font-size-base: 0.9375rem !default;
-$headings-font-weight: 600 !default;
-$headings-color: #e6e8ee !default;
-$text-muted: #9aa3b2 !default;
+// Body
+$body-bg: $surface-0;
+$body-color: $text-primary;
+$border-color: $border;
 
-$link-color: #a5b4fc !default;
-$link-decoration: none !default;
-$link-hover-color: #c7d2fe !default;
+// Typography
+$font-family-sans-serif: $font-sans;
+$font-family-monospace: $font-mono;
+$line-height-base: $lh-normal;
+$headings-font-weight: $fw-semibold;
+$headings-line-height: $lh-tight;
 
-// Shape
-$border-radius: 10px !default;
-$border-radius-sm: 6px !default;
-$border-radius-lg: 14px !default;
-$border-radius-xl: 18px !default;
-$box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28) !default;
-$box-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3) !default;
-$box-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.45) !default;
-$enable-shadows: false !default;
+$link-color: $accent-300;
+$link-hover-color: $accent-100;
+$link-decoration: none;
+$link-hover-decoration: underline;
 
-// Focus
-$focus-ring-width: 3px !default;
-$focus-ring-opacity: 0.35 !default;
-$focus-ring-color: rgba(99, 102, 241, 0.35) !default;
+// Shape and elevation
+$border-radius-sm: $radius-xs;
+$border-radius: $radius-sm;
+$border-radius-lg: $radius-md;
+$border-radius-xl: $radius-lg;
+$box-shadow-sm: $elev-1;
+$box-shadow: $elev-2;
+$box-shadow-lg: $elev-3;
+
+// Focus: one visible ring everywhere.
+$focus-ring-width: 3px;
+$focus-ring-opacity: 0.45;
+$focus-ring-color: rgba($accent-500, $focus-ring-opacity);
 
 // Buttons
-$btn-font-weight: 500 !default;
-$btn-padding-y: 0.45rem !default;
-$btn-padding-x: 0.9rem !default;
-$btn-focus-width: 3px !default;
-$btn-transition: color .12s ease, background-color .12s ease, border-color .12s ease, box-shadow .12s ease !default;
+$btn-font-weight: $fw-medium;
+$btn-focus-box-shadow: $focus-ring;
+$btn-disabled-opacity: 0.5;
 
 // Forms
-$input-bg: #12151c !default;
-$input-disabled-bg: #0f1218 !default;
-$input-color: $body-color !default;
-$input-border-color: rgba(255, 255, 255, 0.1) !default;
-$input-focus-bg: #12151c !default;
-$input-focus-border-color: #6366f1 !default;
-$input-focus-color: $body-color !default;
-$input-placeholder-color: #6b7385 !default;
-$input-padding-y: 0.45rem !default;
-$input-padding-x: 0.75rem !default;
-$input-btn-focus-color: rgba(99, 102, 241, 0.35) !default;
+$input-bg: $surface-2;
+$input-disabled-bg: $surface-1;
+$input-color: $text-primary;
+$input-border-color: $border;
+$input-focus-bg: $surface-2;
+$input-focus-border-color: $accent-500;
+$input-focus-box-shadow: $focus-ring;
+$input-placeholder-color: $text-faint;
 
-$form-check-input-bg: #12151c !default;
-$form-check-input-border: 1px solid rgba(255, 255, 255, 0.18) !default;
-$form-switch-color: rgba(255, 255, 255, 0.5) !default;
-$form-select-indicator-color: #9aa3b2 !default;
-$form-label-font-weight: 500 !default;
-$form-label-color: #c3c8d3 !default;
-$form-text-color: #9aa3b2 !default;
-$input-group-addon-bg: #181c25 !default;
-$input-group-addon-color: #9aa3b2 !default;
-$form-range-track-bg: #202533 !default;
+$form-label-color: $text-secondary;
+$form-label-font-weight: $fw-medium;
+$form-text-color: $text-muted;
 
-// Navs
-$nav-tabs-border-color: rgba(255, 255, 255, 0.08) !default;
-$nav-tabs-link-hover-border-color: transparent transparent rgba(255, 255, 255, 0.14) !default;
-$nav-tabs-link-active-bg: transparent !default;
-$nav-tabs-link-active-color: $body-color !default;
-$nav-tabs-link-active-border-color: transparent transparent #6366f1 !default;
-$nav-link-color: #9aa3b2 !default;
-$nav-link-hover-color: $body-color !default;
+$form-check-input-bg: $surface-2;
+$form-check-input-border: 1px solid $border-strong;
+$form-check-input-checked-bg-color: $accent-500;
+$form-check-input-focus-box-shadow: $focus-ring;
+
+$form-switch-color: $text-secondary;
+$form-select-indicator-color: $text-secondary;
+$input-group-addon-bg: $surface-3;
+$form-range-track-bg: $surface-2;
+
+// Navs and tabs
+$nav-link-color: $text-secondary;
+$nav-link-hover-color: $text-primary;
+$nav-tabs-border-color: $border;
+$nav-tabs-link-active-bg: $surface-1;
+$nav-tabs-link-active-color: $text-primary;
+$nav-tabs-link-hover-border-color: $border $border $border;
+$nav-tabs-link-active-border-color: $border $border $surface-1;
+
+// Navbar
+$navbar-dark-color: $text-secondary;
+$navbar-dark-hover-color: $text-primary;
+$navbar-dark-active-color: $accent-300;
 
 // Pagination
-$pagination-bg: #12151c !default;
-$pagination-color: #9aa3b2 !default;
-$pagination-border-color: rgba(255, 255, 255, 0.08) !default;
-$pagination-hover-bg: #181c25 !default;
-$pagination-hover-border-color: rgba(255, 255, 255, 0.08) !default;
-$pagination-focus-bg: #181c25 !default;
-$pagination-active-bg: #6366f1 !default;
-$pagination-disabled-bg: #0f1218 !default;
-$pagination-disabled-border-color: rgba(255, 255, 255, 0.08) !default;
+$pagination-bg: $surface-1;
+$pagination-color: $text-secondary;
+$pagination-border-color: $border;
+$pagination-hover-bg: $surface-2;
+$pagination-hover-border-color: $border;
+$pagination-focus-bg: $surface-2;
+$pagination-focus-box-shadow: $focus-ring;
+$pagination-active-bg: $accent-500;
+$pagination-active-border-color: $accent-500;
+$pagination-disabled-bg: $surface-1;
+$pagination-disabled-border-color: $border-subtle;
 
 // Cards
-$card-bg: #12151c !default;
-$card-border-color: rgba(255, 255, 255, 0.08) !default;
-$card-cap-bg: #181c25 !default;
-$card-border-radius: 14px !default;
+$card-bg: $surface-1;
+$card-border-color: $border-subtle;
+$card-border-radius: $radius-lg;
+$card-cap-bg: $surface-2;
 
 // Popovers and tooltips
-$popover-bg: #181c25 !default;
-$popover-border-color: rgba(255, 255, 255, 0.1) !default;
-$popover-header-bg: #202533 !default;
-$tooltip-bg: #202533 !default;
+$popover-bg: $surface-3;
+$popover-border-color: $border;
+$popover-header-bg: $surface-2;
+$tooltip-bg: $surface-3;
+$tooltip-opacity: 1;
 
 // Modals
-$modal-content-bg: #12151c !default;
-$modal-content-border-color: rgba(255, 255, 255, 0.08) !default;
-$modal-content-border-radius: 14px !default;
-$modal-header-border-color: rgba(255, 255, 255, 0.08) !default;
-$modal-footer-border-color: rgba(255, 255, 255, 0.08) !default;
-$modal-backdrop-opacity: 0.6 !default;
+$modal-content-bg: $surface-1;
+$modal-content-border-color: $border;
+$modal-content-border-radius: $radius-lg;
+$modal-header-border-color: $border-subtle;
+$modal-footer-border-color: $border-subtle;
+$modal-backdrop-bg: #000;
+$modal-backdrop-opacity: 0.6;
 
 // Progress
-$progress-bg: #202533 !default;
-$progress-border-radius: 999px !default;
+$progress-bg: $surface-2;
+$progress-border-radius: $radius-pill;
 
 // List group
-$list-group-color: $body-color !default;
-$list-group-bg: #12151c !default;
-$list-group-border-color: rgba(255, 255, 255, 0.08) !default;
-$list-group-hover-bg: #181c25 !default;
-$list-group-action-hover-color: $body-color !default;
-$list-group-action-active-color: $body-color !default;
-$list-group-action-active-bg: #202533 !default;
+$list-group-color: $text-primary;
+$list-group-bg: $surface-1;
+$list-group-border-color: $border-subtle;
+$list-group-hover-bg: $surface-2;
+$list-group-action-color: $text-secondary;
+$list-group-action-hover-color: $text-primary;
+$list-group-action-active-color: $text-primary;
+$list-group-action-active-bg: $surface-3;
 
 // Dropdowns
-$dropdown-color: $body-color !default;
-$dropdown-bg: #181c25 !default;
-$dropdown-border-color: rgba(255, 255, 255, 0.1) !default;
-$dropdown-link-color: $body-color !default;
-$dropdown-link-hover-color: #fff !default;
-$dropdown-link-hover-bg: rgba(255, 255, 255, 0.06) !default;
-$dropdown-link-active-bg: #6366f1 !default;
+$dropdown-color: $text-primary;
+$dropdown-bg: $surface-3;
+$dropdown-border-color: $border;
+$dropdown-border-radius: $radius-md;
+$dropdown-link-color: $text-secondary;
+$dropdown-link-hover-color: $text-primary;
+$dropdown-link-hover-bg: $surface-2;
+$dropdown-link-active-bg: $accent-500;
 
 // Tables
-$table-color: $body-color !default;
-$table-border-color: rgba(255, 255, 255, 0.08) !default;
-$table-striped-bg: rgba(255, 255, 255, 0.025) !default;
-$table-hover-bg: rgba(255, 255, 255, 0.04) !default;
+$table-color: $text-primary;
+$table-bg: transparent;
+$table-border-color: $border-subtle;
+$table-striped-bg: rgba(255, 255, 255, 0.025);
+$table-hover-bg: rgba(255, 255, 255, 0.045);
 
 // Code
-$kbd-bg: #202533 !default;
-$code-color: #f0abfc !default;
+$kbd-bg: $surface-3;
+$code-color: $accent-300;
 
 // Toasts
-$toast-background-color: #181c25 !default;
-$toast-header-background-color: #202533 !default;
-
-// Badges
-$badge-font-weight: 600 !default;
-$badge-border-radius: 999px !default;
+$toast-background-color: $surface-2;
+$toast-border-color: $border;
+$toast-header-background-color: $surface-3;
 
 // Accordion
-$accordion-bg: #12151c !default;
-$accordion-button-active-bg: #181c25 !default;
-$accordion-button-active-color: $body-color !default;
-$accordion-border-color: rgba(255, 255, 255, 0.08) !default;
+$accordion-bg: $surface-1;
+$accordion-border-color: $border-subtle;
+$accordion-button-active-bg: $accent-soft;
+$accordion-button-active-color: $text-primary;
+$accordion-button-focus-box-shadow: $focus-ring;
+
+// Alerts: tinted, not washed out.
+$alert-border-radius: $radius-md;

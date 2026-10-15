@@ -460,6 +460,7 @@ import {
   formatCivilDate,
   mondayWeekBounds,
 } from "../utils/temporal";
+import { useSeo } from '@/composables/useSeo';
 
 /**
  * Weekly Plan. See docs/WEEKLY_PLAN.md.
@@ -470,6 +471,9 @@ import {
  */
 export default {
   name: "WeeklyPlan",
+  setup() {
+    useSeo({ title: 'Weekly plan', noindex: true });
+  },
   components: { ContextFilter, IntentionBand, TaskEditor, WeeklyCommitmentProgress, WeeklyLastWeekReview, WeeklyProjectCard },
   data() {
     const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
@@ -1482,8 +1486,8 @@ export default {
   padding: 0 20px 60px;
   text-align: left;
   background:
-    radial-gradient(circle at 12% 0%, rgba(99, 102, 241, 0.13), transparent 34rem),
-    var(--atc-bg);
+    radial-gradient(circle at 12% 0%, rgba(102, 126, 234, 0.13), transparent 34rem),
+    #0d1117;
 }
 
 /* One column, capped so lines stay readable on wide screens. */
@@ -1503,11 +1507,11 @@ export default {
   align-items: center;
   margin-bottom: 20px;
   padding: 16px 20px;
-  border: 1px solid var(--atc-border);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 14px;
-  background: var(--atc-surface);
+  background: rgba(13, 17, 23, 0.93);
   backdrop-filter: blur(10px);
-  box-shadow: var(--atc-shadow-lg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
 .week-bar.committed {
@@ -1516,7 +1520,7 @@ export default {
 
 .eyebrow {
   margin: 0 0 2px;
-  color: var(--atc-accent-text);
+  color: var(--accent-300);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.13em;
@@ -1524,12 +1528,12 @@ export default {
 }
 
 .week-bar.committed .eyebrow {
-  color: var(--atc-success-text);
+  color: var(--success-text);
 }
 
 .week-range {
   margin: 0;
-  color: var(--atc-text);
+  color: var(--text-primary);
   font-size: clamp(1.15rem, 2.4vw, 1.6rem);
   font-weight: 600;
   line-height: 1.15;
@@ -1544,11 +1548,11 @@ export default {
 }
 
 .week-totals strong {
-  color: var(--atc-text);
+  color: var(--text-secondary);
 }
 
 .week-totals span {
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
 }
 
 .week-strip {
@@ -1576,18 +1580,18 @@ export default {
   width: 100%;
   min-height: 2px;
   border-radius: 4px;
-  background: var(--atc-accent);
-  transition: height var(--atc-transition);
+  background: linear-gradient(180deg, var(--accent-300), var(--accent));
+  transition: height 0.3s ease;
 }
 
 .strip-label {
-  color: var(--atc-text-subtle);
+  color: var(--text-faint);
   font-size: 0.6rem;
   letter-spacing: 0.02em;
 }
 
 .strip-day.today .strip-label {
-  color: var(--atc-text);
+  color: var(--text-secondary);
   font-weight: 700;
 }
 
@@ -1604,9 +1608,9 @@ export default {
   justify-items: center;
   margin-top: 24px;
   padding: 18px 20px;
-  border: 1px solid var(--atc-border);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 14px;
-  background: var(--atc-surface);
+  background: rgba(13, 17, 23, 0.6);
 }
 
 .commit-bar .bar-message {
@@ -1620,20 +1624,20 @@ export default {
 
 .commit-note {
   margin: 0;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 0.72rem;
   text-align: center;
 }
 
 .calendar-link {
   padding: 0;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 0.78rem;
   text-decoration: none;
 }
 
 .calendar-link:hover {
-  color: var(--atc-accent-text);
+  color: var(--accent-300);
 }
 
 .bar-message {
@@ -1645,14 +1649,14 @@ export default {
   padding: 10px 14px;
   border: 1px solid rgba(139, 148, 158, 0.22);
   border-radius: 10px;
-  background: var(--atc-surface);
-  color: var(--atc-text-muted);
+  background: rgba(22, 27, 34, 0.75);
+  color: var(--text-muted);
   font-size: 0.84rem;
 }
 
 .bar-message.error {
   border-color: rgba(248, 113, 113, 0.35);
-  color: var(--atc-danger-text);
+  color: var(--danger-text);
 }
 
 .panel-state {
@@ -1663,9 +1667,9 @@ export default {
   justify-content: center;
   gap: 14px;
   padding: 32px;
-  border: 1px solid var(--atc-border);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 14px;
-  background: var(--atc-surface);
+  background: rgba(22, 27, 34, 0.82);
   text-align: center;
 }
 
@@ -1690,7 +1694,7 @@ export default {
   gap: 14px;
   align-items: start;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--atc-border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .role-bar {
@@ -1711,13 +1715,13 @@ export default {
   padding: 1px 8px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.08);
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 .role-identity h2 {
   margin: 0;
-  color: var(--atc-text);
+  color: var(--text-primary);
   font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: 0.07em;
@@ -1732,7 +1736,7 @@ export default {
 }
 
 .role-total {
-  color: var(--atc-text);
+  color: var(--text-secondary);
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -1740,12 +1744,12 @@ export default {
 
 .description {
   margin: 4px 0 0;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 0.86rem;
 }
 
 .date-range {
-  color: var(--atc-text-subtle);
+  color: var(--text-faint);
   font-size: 0.74rem;
   white-space: nowrap;
 }
@@ -1765,7 +1769,7 @@ export default {
 
 .goal-rule h3 {
   margin: 0;
-  color: var(--atc-text);
+  color: var(--text-secondary);
   font-size: 0.94rem;
   font-weight: 600;
   white-space: nowrap;
@@ -1788,7 +1792,7 @@ export default {
 
 .hierarchy-empty {
   margin: 0;
-  color: var(--atc-text-subtle);
+  color: var(--text-faint);
   font-size: 0.85rem;
   font-style: italic;
 }
@@ -1815,7 +1819,7 @@ export default {
 .ended-head h3 {
   margin: 0;
   font-size: 0.95rem;
-  color: var(--atc-text);
+  color: var(--text-secondary);
 }
 
 .ended-badge {
@@ -1835,19 +1839,19 @@ export default {
 .ended-group-title {
   margin: 0 0 6px;
   font-size: 0.85rem;
-  color: var(--atc-text);
+  color: var(--text-secondary);
 }
 
 .drawer {
   padding: 14px 18px;
-  border: 1px solid var(--atc-border);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  background: var(--atc-surface);
-  color: var(--atc-text-muted);
+  background: rgba(22, 27, 34, 0.62);
+  color: var(--text-secondary);
 }
 
 .drawer > summary {
-  color: var(--atc-text);
+  color: var(--text-secondary);
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
@@ -1855,7 +1859,7 @@ export default {
 
 .drawer-copy {
   margin: 10px 0;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 0.83rem;
 }
 
@@ -1897,7 +1901,7 @@ export default {
   border: 1px solid transparent;
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.035);
-  color: var(--atc-text);
+  color: var(--text-secondary);
   font: inherit;
   font-size: 0.85rem;
   text-align: left;
@@ -1907,14 +1911,14 @@ export default {
 
 .loose-task:hover,
 .loose-task:focus-visible {
-  border-color: rgba(165, 180, 252, 0.5);
+  border-color: rgba(141, 162, 251, 0.5);
   outline: none;
-  background: rgba(99, 102, 241, 0.12);
+  background: rgba(102, 126, 234, 0.12);
 }
 
 .loose-meta {
   flex: 0 0 auto;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 0.77rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -1947,7 +1951,7 @@ export default {
 }
 
 .form-message.error {
-  color: var(--atc-danger-text);
+  color: var(--danger-text);
 }
 
 .visually-hidden {

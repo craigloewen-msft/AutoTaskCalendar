@@ -11,16 +11,16 @@ const { test, expect } = require('../fixtures');
 
 /** Log in through the real form, which is the only way to get a session cookie in the page. */
 async function login(page, username, password) {
-    await page.goto('/#/login');
+    await page.goto('/login');
     await page.locator('input[type=text]').fill(username);
     await page.locator('input[type=password]').fill(password);
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page).toHaveURL(/#\/user\//);
+    await expect(page).toHaveURL(/\/user\//);
 }
 
 /** Open the "add role" drawer on Compass. */
 async function openRoleDrawer(page) {
-    await page.goto('/#/compass');
+    await page.goto('/compass');
     await page.getByRole('button', { name: '+ Role' }).first().click();
     await expect(page.locator('#compass-start')).toBeVisible();
 }

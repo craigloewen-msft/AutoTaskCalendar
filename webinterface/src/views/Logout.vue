@@ -3,8 +3,13 @@
 </template>
 
 <script>
+import { useSeo } from '@/composables/useSeo';
+
 export default {
   name: "Logout",
+  setup() {
+    useSeo({ title: 'Signing out', noindex: true });
+  },
   mounted: function () {
     if (this.$gtag) {
       this.$gtag.event("logout", {
@@ -16,12 +21,6 @@ export default {
     this.$store.dispatch("logout").then(() => {
       this.$router.push("/");
     });
-  },
-  metaInfo: {
-    title: "Logging Out",
-    meta: [
-      { name: "robots", content: "noindex, nofollow" },
-    ],
   },
 };
 </script>

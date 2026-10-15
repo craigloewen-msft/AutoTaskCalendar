@@ -39,68 +39,85 @@
         <section
           v-for="role in activeRoles"
           :key="role._id"
-          class="role-block"
+          class="role-card"
+          :style="{ '--role-color': roleColors[role._id] }"
         >
-          <div class="role-row">
-            <span class="role-swatch" :style="{ backgroundColor: roleColors[role._id] }"></span>
-            <span class="role-title">{{ role.title }}</span>
-            <span class="context-badge" data-test="role-context">
-              {{ contextMeta(roleContextOf(role)).icon }} {{ contextMeta(roleContextOf(role)).label }}
-            </span>
-            <span class="item-dates">{{ dateRange(role) }}</span>
-            <button class="link-btn" :aria-label="'Edit ' + role.title" @click="openEdit('role', role)">✎</button>
-            <button class="btn btn-sm btn-outline-primary" @click="openCreate('goal', role._id)">+ Goal</button>
-          </div>
+          <header class="role-head">
+            <div class="role-identity">
+              <span class="role-title">{{ role.title }}</span>
+              <span class="context-badge" data-test="role-context">
+                {{ contextMeta(roleContextOf(role)).icon }} {{ contextMeta(roleContextOf(role)).label }}
+              </span>
+            </div>
+            <div class="row-actions">
+              <span class="item-dates">{{ dateRange(role) }}</span>
+              <button class="link-btn" :aria-label="'Edit ' + role.title" @click="openEdit('role', role)">✎</button>
+              <button class="btn btn-sm btn-outline-primary" @click="openCreate('goal', role._id)">+ Goal</button>
+            </div>
+          </header>
 
-          <div v-for="goal in activeGoals(role)" :key="goal._id" class="goal-block">
-            <div class="goal-row">
-              <span class="goal-title">{{ goal.title }}</span>
-              <span class="item-dates">{{ dateRange(goal) }}</span>
-              <button class="link-btn" :aria-label="'Edit ' + goal.title" @click="openEdit('goal', goal)">✎</button>
-              <button class="btn btn-sm btn-outline-primary" @click="openCreate('project', goal._id)">
-                + Project
-              </button>
+          <div class="role-body">
+            <div v-for="goal in activeGoals(role)" :key="goal._id" class="goal-block">
+              <div class="goal-row">
+                <span class="goal-title">{{ goal.title }}</span>
+                <div class="row-actions">
+                  <span class="item-dates">{{ dateRange(goal) }}</span>
+                  <button class="link-btn" :aria-label="'Edit ' + goal.title" @click="openEdit('goal', goal)">✎</button>
+                  <button class="btn btn-sm btn-outline-primary" @click="openCreate('project', goal._id)">
+                    + Project
+                  </button>
+                </div>
+              </div>
+
+              <ul v-if="activeProjects(goal).length" class="project-list">
+                <li
+                  v-for="project in activeProjects(goal)"
+                  :key="project._id"
+                  class="project-row"
+                >
+                  <span class="project-title">{{ project.title }}</span>
+                  <div class="row-actions">
+                    <span class="item-dates">{{ dateRange(project) }}</span>
+                    <span class="project-count">{{ activeTaskCount(project._id) }} active</span>
+                    <button class="link-btn" :aria-label="'Edit ' + project.title" @click="openEdit('project', project)">✎</button>
+                  </div>
+                </li>
+              </ul>
+
+              <p v-else class="empty-note">No active projects yet.</p>
             </div>
 
-            <div
-              v-for="project in activeProjects(goal)"
-              :key="project._id"
-              class="project-row"
-            >
-              <span class="project-title">{{ project.title }}</span>
-              <span class="item-dates">{{ dateRange(project) }}</span>
-              <button class="link-btn" :aria-label="'Edit ' + project.title" @click="openEdit('project', project)">✎</button>
-              <span class="project-count">{{ activeTaskCount(project._id) }} active</span>
-            </div>
-
-            <p v-if="!activeProjects(goal).length" class="empty-note">No active projects yet.</p>
+            <p v-if="!activeGoals(role).length" class="empty-note">No active goals yet.</p>
           </div>
-
-          <p v-if="!activeGoals(role).length" class="empty-note">No active goals yet.</p>
         </section>
 
         <details v-if="somedayProjects.length" class="compass-drawer-section">
           <summary>Someday · {{ somedayProjects.length }} parked projects</summary>
-          <div
-            v-for="project in somedayProjects"
-            :key="project._id"
-            class="project-row"
-          >
-            <span class="project-title">{{ project.title }}</span>
-            <span class="item-dates">{{ project.parentLabel }}</span>
-            <button class="link-btn" :aria-label="'Edit ' + project.title" @click="openEdit('project', project)">✎</button>
-          </div>
+          <ul class="project-list">
+            <li
+              v-for="project in somedayProjects"
+              :key="project._id"
+              class="project-row"
+            >
+              <span class="project-title">{{ project.title }}</span>
+              <div class="row-actions">
+                <span class="item-dates">{{ project.parentLabel }}</span>
+                <button class="link-btn" :aria-label="'Edit ' + project.title" @click="openEdit('project', project)">✎</button>
+              </div>
+            </li>
+          </ul>
         </details>
 
         <details v-if="hasArchive" class="compass-drawer-section" @toggle="onArchiveToggle">
           <summary>Archive · {{ archiveSummary }}</summary>
 
-          <div class="archive-levels">
+          <div class="archive-levels" role="group" aria-label="Archive level">
             <button
               v-for="level in archiveLevels"
               :key="level"
               class="archive-tab"
               :class="{ active: archive.level === level }"
+              :aria-pressed="archive.level === level ? 'true' : 'false'"
               @click="loadArchive(level)"
             >
               {{ level }}s ({{ completedCounts[level + 's'] }})
@@ -109,15 +126,19 @@
 
           <p v-if="archive.loading" class="empty-note">Loading…</p>
 
-          <div v-for="item in archive.items" :key="item._id" class="project-row">
-            <span class="project-title">{{ item.title }}</span>
-            <span class="item-dates">{{ archive.level }} · {{ dateRange(item) }}</span>
-            <button
-              class="link-btn"
-              :aria-label="'Edit ' + item.title"
-              @click="openEdit(archive.level, item)"
-            >✎</button>
-          </div>
+          <ul v-if="archive.items.length" class="project-list">
+            <li v-for="item in archive.items" :key="item._id" class="project-row">
+              <span class="project-title">{{ item.title }}</span>
+              <div class="row-actions">
+                <span class="item-dates">{{ archive.level }} · {{ dateRange(item) }}</span>
+                <button
+                  class="link-btn"
+                  :aria-label="'Edit ' + item.title"
+                  @click="openEdit(archive.level, item)"
+                >✎</button>
+              </div>
+            </li>
+          </ul>
 
           <p v-if="!archive.loading && !archive.items.length" class="empty-note">
             Nothing finished at this level yet.
@@ -161,6 +182,7 @@ import CompassEditorDrawer from "../components/CompassEditorDrawer.vue";
 import { buildRoleColorMap } from "../utils/roleColors";
 import ContextFilter from "../components/ContextFilter";
 import { contextMeta, filterRolesByContext, readContextFilter, roleContextOf } from "../utils/roleContext";
+import { useSeo } from '@/composables/useSeo';
 
 /**
  * Compass: roles > goals > projects.
@@ -170,6 +192,9 @@ import { contextMeta, filterRolesByContext, readContextFilter, roleContextOf } f
  */
 export default {
   name: "Compass",
+  setup() {
+    useSeo({ title: 'Compass', noindex: true });
+  },
   components: { BContainer, CompassEditorDrawer, ContextFilter },
   data() {
     return {
@@ -459,21 +484,21 @@ export default {
 <style scoped>
 .compass-page {
   text-align: left;
-  padding-bottom: 40px;
+  padding-bottom: var(--space-7);
 }
 
 .compass-notice {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: rgba(16, 185, 129, 0.14);
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid rgba(16, 185, 129, 0.35);
-  color: var(--atc-success-text);
-  font-size: 0.9rem;
+  border-radius: var(--radius-md);
+  background: var(--success-soft);
+  color: var(--success-text);
+  font-size: var(--fs-md);
 }
 
 .notice-dismiss {
@@ -481,7 +506,7 @@ export default {
   border: none;
   color: inherit;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
 }
 
 .compass-header {
@@ -489,147 +514,231 @@ export default {
   justify-content: space-between;
   align-items: flex-start;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 24px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
 }
 
 .page-title {
-  margin-bottom: 2px;
+  margin-bottom: var(--space-1);
+  font-size: var(--fs-2xl);
 }
 
 .compass-subtitle {
   margin: 0;
-  font-size: 0.95rem;
+  color: var(--text-muted);
+  font-size: var(--fs-md);
 }
 
 .compass-header-right {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
-.role-block {
-  margin-bottom: 26px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--atc-border);
+/* A role is a card, with its colour carried on the left edge rather than in a
+   loose swatch. Hierarchy comes from the surfaces, not from indentation alone. */
+.role-card {
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--role-color, var(--accent));
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  box-shadow: var(--elev-1);
+  overflow: hidden;
 }
 
-.role-row,
-.goal-row,
-.project-row {
+.role-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 0;
+  justify-content: space-between;
   flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+  background: linear-gradient(90deg, var(--accent-softer), transparent 60%);
 }
 
-.role-swatch {
-  width: 6px;
-  height: 20px;
-  border-radius: 3px;
-  display: inline-block;
+.role-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .role-title {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--atc-text);
+  color: var(--text-primary);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.role-body {
+  padding: var(--space-3) var(--space-5) var(--space-4);
 }
 
 .goal-block {
-  margin-left: 22px;
+  padding: var(--space-3) 0;
+}
+
+.goal-block + .goal-block {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.goal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .goal-title {
+  color: var(--text-primary);
   font-weight: 600;
-  color: var(--atc-text);
+}
+
+/* Projects sit on a raised surface, so a goal's children read as a group. */
+.project-list {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 .project-row {
-  margin-left: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  transition: background var(--motion) var(--ease);
+}
+
+.project-row + .project-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.project-row:hover {
+  background: var(--surface-3);
 }
 
 .project-title {
-  color: var(--atc-text-muted);
+  color: var(--text-secondary);
+  font-size: var(--fs-md);
+  min-width: 0;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
 }
 
 .item-dates {
-  color: var(--atc-text-muted);
-  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
 }
 
 .project-count {
-  color: var(--atc-text-muted);
-  font-size: 0.82rem;
-  margin-left: auto;
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
 }
 
 .link-btn {
   background: none;
   border: none;
-  color: var(--atc-text-muted);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
   cursor: pointer;
-  padding: 0 4px;
+  padding: 2px var(--space-1);
+  transition: color var(--motion) var(--ease), background var(--motion) var(--ease);
 }
 
 .link-btn:hover {
-  color: var(--atc-accent-text);
+  color: var(--accent-300);
+  background: var(--accent-soft);
 }
 
 .context-badge {
-  font-size: 0.72rem;
-  padding: 1px 8px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--atc-text-muted);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
   white-space: nowrap;
 }
 
 .empty-note {
-  margin: 0 0 6px 22px;
-  color: var(--atc-text-subtle);
-  font-size: 0.85rem;
+  margin: var(--space-2) 0 0;
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
   font-style: italic;
 }
 
 .compass-drawer-section {
-  margin-top: 18px;
-  padding: 10px 0;
-  border-top: 1px solid var(--atc-border);
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
 }
 
 .compass-drawer-section summary {
   cursor: pointer;
-  color: var(--atc-text-muted);
+  color: var(--text-secondary);
+  font-size: var(--fs-md);
+  font-weight: 500;
 }
 
+.compass-drawer-section summary:hover {
+  color: var(--text-primary);
+}
+
+/* Segmented control, rather than three loose outlined buttons. */
 .archive-levels {
-  display: flex;
-  gap: 8px;
-  margin: 12px 0;
+  display: inline-flex;
+  gap: 2px;
+  margin: var(--space-3) 0;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
 }
 
 .archive-tab {
   background: none;
-  border: 1px solid var(--atc-border-strong);
-  border-radius: 6px;
-  color: var(--atc-text-muted);
-  padding: 4px 10px;
-  font-size: 0.82rem;
-  cursor: pointer;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--fs-sm);
   text-transform: capitalize;
+  cursor: pointer;
+  transition: background var(--motion) var(--ease), color var(--motion) var(--ease);
+}
+
+.archive-tab:hover {
+  color: var(--text-primary);
 }
 
 .archive-tab.active {
-  border-color: var(--atc-accent);
-  color: var(--atc-text);
+  background: var(--accent);
+  color: #fff;
+}
+
+.empty-state h3 {
+  margin-bottom: var(--space-3);
 }
 
 .unaligned-line {
-  margin-top: 18px;
-  color: var(--atc-text-muted);
-  font-size: 0.9rem;
+  margin-top: var(--space-5);
+  color: var(--text-muted);
+  font-size: var(--fs-md);
 }
 </style>

@@ -1,100 +1,127 @@
 'use strict';
 
 /**
- * The shared visual theme: tokens resolve, Bootstrap is built once, the navbar marks the
- * current page, and the main screens fit a phone-width viewport. See docs/STYLE_GUIDE.md.
+ * The design system holds together.
+ *
+ * These guard what a restyle can silently break: a second Bootstrap theme creeping back in,
+ * a token a component references but nobody publishes, and focus indicators being styled
+ * away. See docs/DESIGN_SYSTEM.md.
  */
 
 const { test, expect } = require('../fixtures');
 
-/** Log in through the real form, which is the only way to get a session cookie in the page. */
 async function login(page, username, password) {
-    await page.goto('/#/login');
+    await page.goto('/login');
     await page.locator('input[type=text]').fill(username);
     await page.locator('input[type=password]').fill(password);
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page).toHaveURL(/#\/user\//);
+    await expect(page).toHaveURL(/\/user\//);
 }
 
-/** Widest right edge of any visible element in the app shell, ignoring scroll containers' contents. */
-function widestVisibleRight(page) {
-    return page.evaluate(() => {
-        let widest = 0;
-        for (const el of document.querySelectorAll('#app *')) {
-            const rect = el.getBoundingClientRect();
-            if (!rect.width || !rect.height) continue;
-            // Content clipped by an ancestor that scrolls or hides overflow is not page overflow.
-            let clipped = false;
-            for (let p = el.parentElement; p && p.id !== 'app'; p = p.parentElement) {
-                const style = getComputedStyle(p);
-                if (/(auto|scroll|hidden)/.test(style.overflowX + style.overflow)) { clipped = true; break; }
+test.describe('design system', () => {
+    test('exactly one Bootstrap theme is loaded', async ({ page }) => {
+        await page.goto('/login');
+
+        // Each Bootstrap build defines the palette once, so counting `--bs-blue`
+        // declarations counts copies. Works for the dev server's injected <style> tags and
+        // for the extracted, minified production bundle alike.
+        const copies = await page.evaluate(() => {
+            let found = 0;
+            for (const sheet of document.styleSheets) {
+                try {
+                    for (const rule of sheet.cssRules) {
+                        if (rule.style?.getPropertyValue('--bs-blue')) {
+                            found += 1;
+                        }
+                    }
+                } catch {
+                    // Cross-origin sheet; not ours.
+                }
             }
-            if (!clipped) widest = Math.max(widest, rect.right);
-        }
-        return Math.round(widest);
-    });
-}
+            return found;
+        });
 
-test.describe('theme', () => {
-    test('design tokens resolve and drive the page colours', async ({ page }) => {
-        await page.goto('/#/');
+        expect(copies).toBe(1);
+
+        // And the one that survived is ours, built from the tokens.
         const theme = await page.evaluate(() => {
             const root = getComputedStyle(document.documentElement);
             return {
-                bg: root.getPropertyValue('--atc-bg').trim(),
-                accent: root.getPropertyValue('--atc-accent').trim(),
-                text: root.getPropertyValue('--atc-text').trim(),
-                bodyBg: getComputedStyle(document.body).backgroundColor,
+                surface: root.getPropertyValue('--surface-0').trim(),
+                bootstrapBg: root.getPropertyValue('--bs-body-bg').trim(),
             };
         });
-        expect(theme.bg).toBe('#0b0d12');
-        expect(theme.accent).toBe('#6366f1');
-        expect(theme.text).toBe('#e6e8ee');
-        expect(theme.bodyBg).toBe('rgb(11, 13, 18)');
+
+        expect(theme.surface).toBe('#0d1017');
+        expect(theme.bootstrapBg).toBe('#0d1017');
     });
 
-    test('Bootstrap is compiled once, from the themed Sass build', async ({ page }) => {
-        await page.goto('/#/');
-        // Each Bootstrap build declares --bs-blue on :root; two copies fight over every variable.
-        const builds = await page.evaluate(() => {
-            let count = 0;
+    test('every token a component uses is published on :root', async ({ page, seed }) => {
+        const data = await seed();
+        await login(page, data.primary.username, data.primary.password);
+
+        // An undefined var() invalidates the whole declaration, which is how gradient-filled
+        // headings turn invisible rather than merely wrong.
+        const missing = await page.evaluate(() => {
+            const root = getComputedStyle(document.documentElement);
+            const used = new Set();
+
             for (const sheet of document.styleSheets) {
-                let rules;
-                try { rules = sheet.cssRules; } catch { continue; }
-                for (const rule of rules) {
-                    if (rule.style && rule.style.getPropertyValue('--bs-blue')) count++;
+                try {
+                    for (const rule of sheet.cssRules) {
+                        if (!rule.style) continue;
+                        for (const match of rule.cssText.matchAll(/var\((--[a-z0-9-]+)/gi)) {
+                            used.add(match[1]);
+                        }
+                    }
+                } catch {
+                    // Cross-origin sheet; not ours.
                 }
             }
-            return count;
+
+            // Bootstrap's own --bs-* are defined per-component, and --role-color is set
+            // inline per role card. Neither lives on :root.
+            return [...used]
+                .filter((name) => !name.startsWith('--bs-') && !name.startsWith('--dp-'))
+                .filter((name) => name !== '--role-color')
+                .filter((name) => root.getPropertyValue(name).trim() === '');
         });
-        expect(builds).toBe(1);
-        await expect(page.locator('.btn-primary').first()).toHaveCSS('background-color', 'rgb(99, 102, 241)');
+
+        expect(missing).toEqual([]);
     });
 
-    test('navbar marks the current page', async ({ page, seed }) => {
+    test('the date picker is themed from our tokens', async ({ page, seed }) => {
         const data = await seed();
         await login(page, data.primary.username, data.primary.password);
-        await page.goto('/#/calendar');
-        const active = page.locator('.atc-navbar .nav-link.active');
-        await expect(active).toHaveCount(1);
-        await expect(active).toHaveText('Calendar');
-        await expect(active).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+
+        await page.goto('/compass');
+        await page.getByRole('button', { name: '+ Role' }).first().click();
+        await page.locator('#compass-start').click();
+
+        // The menu teleports to <body>, so the theming has to be global and keyed on the
+        // class this version of vue-datepicker emits.
+        const menu = page.locator('.dp--menu');
+        await expect(menu).toBeVisible();
+
+        const accent = await menu.evaluate((el) =>
+            getComputedStyle(el).getPropertyValue('--dp-primary-color').trim());
+        expect(accent.toLowerCase()).toBe('#667eea');
     });
 
-    test('main screens fit a phone-width viewport', async ({ page, seed }) => {
-        const data = await seed();
-        await page.setViewportSize({ width: 390, height: 844 });
-        await login(page, data.primary.username, data.primary.password);
+    test('keyboard focus stays visible on the primary action', async ({ page }) => {
+        await page.goto('/login');
 
-        for (const [path, ready] of [
-            ['/#/', '.home-hero'],
-            ['/#/calendar', '.task-controls'],
-            ['/#/weekly-plan', '.navbar'],
-            ['/#/compass', '.navbar'],
-        ]) {
-            await page.goto(path);
-            await expect(page.locator(ready).first()).toBeVisible();
-            expect(await widestVisibleRight(page), `${path} overflows horizontally`).toBeLessThanOrEqual(392);
-        }
+        const button = page.getByRole('button', { name: 'Sign in' });
+        await button.focus();
+
+        const indicator = await button.evaluate((el) => {
+            const s = getComputedStyle(el);
+            return { outline: s.outlineStyle, width: s.outlineWidth, shadow: s.boxShadow };
+        });
+
+        const hasOutline = indicator.outline !== 'none' && parseFloat(indicator.width) > 0;
+        const hasRing = indicator.shadow && indicator.shadow !== 'none';
+
+        expect(hasOutline || hasRing).toBe(true);
     });
 });

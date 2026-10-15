@@ -1,12 +1,7 @@
 <template>
   <div id="app">
-    <BNavbar toggleable="lg" variant="dark" class="atc-navbar">
-      <router-link class="navbar-brand" to="/">
-        <span class="brand-mark" aria-hidden="true">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3M6 10l1.5 1.5L10.5 8.5"/></svg>
-        </span>
-        AutoTaskCalendar
-      </router-link>
+    <BNavbar toggleable="lg" variant="dark" class="app-navbar" data-bs-theme="dark">
+      <router-link class="navbar-brand" to="/">AutoTaskCalendar</router-link>
 
       <BNavbarToggle target="nav-collapse"></BNavbarToggle>
 
@@ -22,9 +17,9 @@
         <BNavbarNav class="ms-auto">
           <!--- Right-aligned navigation items --->
           <template v-if="isLoggedIn">
-            <Bootstrapnavlinkcustom class="nav-user-link" :to="'/user/' + user.username">
-              <span class="nav-avatar" aria-hidden="true">{{ user.username.charAt(0) }}</span>{{ user.username }}
-            </Bootstrapnavlinkcustom>
+            <Bootstrapnavlinkcustom :to="'/user/' + user.username">{{
+              user.username
+            }}</Bootstrapnavlinkcustom>
             <Bootstrapnavlinkcustom to="/logout">Logout</Bootstrapnavlinkcustom>
           </template>
           <template v-else>
@@ -35,7 +30,9 @@
       </BCollapse>
     </BNavbar>
 
-    <router-view />
+    <main class="app-main">
+      <router-view />
+    </main>
   </div>
 </template>
 
@@ -43,6 +40,12 @@
 import Bootstrapnavlinkcustom from "./components/BootstrapNavlinkCustom.vue";
 import { BNavbar, BNavbarToggle, BCollapse, BNavbarNav } from 'bootstrap-vue-next';
 import { useHead } from '@vueuse/head';
+import {
+  SITE_NAME,
+  SITE_TAGLINE,
+  DEFAULT_DESCRIPTION,
+  DEFAULT_OG_IMAGE,
+} from './seo/siteConfig';
 
 export default {
   name: "App",
@@ -54,15 +57,28 @@ export default {
     BNavbarNav
   },
   setup() {
+    // Site-wide defaults. Each view sets its own title/description via useSeo();
+    // @vueuse/head dedupes by name/property so the page's value wins.
     useHead({
+      // A template rather than a literal title: a literal here would compete with the
+      // page's own title and whichever resolved last would win.
+      titleTemplate: (pageTitle) => (
+        pageTitle ? `${pageTitle} | ${SITE_NAME}` : `${SITE_NAME} - ${SITE_TAGLINE}`
+      ),
       meta: [
-        {
-          name: "description",
-          content:
-            "Easily manage your Github issues using this tool. This is a great way to never lose track of a Github issue again.",
-        },
-        { name: "keywords", content: "manage, github, issues" },
+        { name: "description", content: DEFAULT_DESCRIPTION },
+        { name: "author", content: SITE_NAME },
+        { property: "og:type", content: "website" },
+        { property: "og:site_name", content: SITE_NAME },
+        { property: "og:image", content: DEFAULT_OG_IMAGE },
+        { property: "og:image:width", content: "1200" },
+        { property: "og:image:height", content: "630" },
+        { property: "og:image:alt", content: `${SITE_NAME} - ${SITE_TAGLINE}` },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:image", content: DEFAULT_OG_IMAGE },
+        { name: "theme-color", content: "#667eea" },
       ],
+      htmlAttrs: { lang: 'en' },
     });
   },
   computed: {
@@ -90,149 +106,103 @@ export default {
       return Promise.reject(error);
     });
   },
-  metaInfo: {
-    title: "AutoTaskCalendar - Intelligent Task Scheduling & Management",
-    titleTemplate: "%s | AutoTaskCalendar",
-    meta: [
-      {
-        name: "description",
-        content:
-          "AutoTaskCalendar automatically schedules your tasks into your calendar. Smart task management with Google Calendar integration, automatic scheduling, and intelligent planning for optimal productivity.",
-      },
-      { 
-        name: "keywords", 
-        content: "task management, calendar, auto schedule, productivity, task scheduler, Google Calendar, time management, task planner, automatic scheduling, work organization" 
-      },
-      { name: "author", content: "AutoTaskCalendar" },
-      { name: "viewport", content: "width=device-width, initial-scale=1.0" },
-      { charset: "utf-8" },
-      // Open Graph / Facebook
-      { property: "og:type", content: "website" },
-      { property: "og:title", content: "AutoTaskCalendar - Intelligent Task Scheduling & Management" },
-      { 
-        property: "og:description", 
-        content: "Automatically schedule your tasks into your calendar with smart planning and Google Calendar integration." 
-      },
-      { property: "og:site_name", content: "AutoTaskCalendar" },
-      // Twitter Card
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "AutoTaskCalendar - Intelligent Task Scheduling & Management" },
-      { 
-        name: "twitter:description", 
-        content: "Automatically schedule your tasks into your calendar with smart planning and Google Calendar integration." 
-      },
-      // Additional SEO
-      { name: "robots", content: "index, follow" },
-      { name: "googlebot", content: "index, follow" },
-      { name: "theme-color", content: "#667eea" },
-    ],
-    link: [
-      { rel: "canonical", href: "https://autotaskcalendar.com" }
-    ]
-  },
 };
 </script>
 
 
 <style>
-/* App shell: sticky translucent navbar. Global styles live in style/base.scss. */
-.atc-navbar {
+/* App shell only. Everything global lives in style/base.scss. */
+
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-navbar {
   position: sticky;
   top: 0;
   z-index: 1030;
-  padding: 10px 20px;
-  background: rgba(11, 13, 18, 0.78) !important;
-  backdrop-filter: saturate(180%) blur(12px);
-  -webkit-backdrop-filter: saturate(180%) blur(12px);
-  border-bottom: 1px solid var(--atc-border);
-  --bs-navbar-color: var(--atc-text-muted);
-  --bs-navbar-hover-color: var(--atc-text);
-  --bs-navbar-active-color: var(--atc-text);
-  --bs-navbar-brand-color: var(--atc-text);
-  --bs-navbar-brand-hover-color: #fff;
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(13, 16, 23, 0.85);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--elev-1);
 }
 
-.atc-navbar .navbar-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 650;
-  font-size: 1.05rem;
-  letter-spacing: -0.01em;
-  color: var(--atc-text);
-  margin-right: 24px;
-}
-
-.atc-navbar .navbar-brand:hover {
-  color: #fff;
-}
-
-.brand-mark {
-  display: inline-grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: var(--atc-accent);
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 0 1px rgba(99, 102, 241, 0.5);
-}
-
-.atc-navbar .navbar-nav {
-  gap: 2px;
-}
-
-.atc-navbar .nav-link {
-  color: var(--atc-text-muted);
-  font-size: 0.9rem;
-  font-weight: 500;
-  padding: 6px 12px !important;
-  border-radius: var(--atc-radius-sm);
-  transition: color var(--atc-transition), background-color var(--atc-transition);
-}
-
-.atc-navbar .nav-link:hover {
-  color: var(--atc-text);
-  background: var(--atc-hover);
-}
-
-.atc-navbar .nav-link.active,
-.atc-navbar .nav-link.router-link-active {
-  color: var(--atc-text) !important;
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.atc-navbar .navbar-toggler {
-  border-color: var(--atc-border-strong);
-  padding: 4px 8px;
-}
-
-.atc-navbar .navbar-toggler:focus {
-  box-shadow: var(--atc-focus-ring);
-}
-
-.nav-user-link .nav-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.nav-avatar {
-  display: inline-grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--atc-accent-soft);
-  color: var(--atc-accent-text);
-  font-size: 11px;
+.navbar-brand {
+  margin-right: var(--space-6);
+  font-size: var(--fs-lg);
   font-weight: 700;
-  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-@media (max-width: 991.98px) {
-  .atc-navbar .navbar-collapse {
-    padding-top: 10px;
-  }
+.navbar-brand:focus-visible {
+  outline: 2px solid var(--accent-400);
+  outline-offset: 4px;
+  border-radius: var(--radius-xs);
+}
+
+/* Nav links: a quiet pill that fills in on hover, and an accent underline when active. */
+.app-navbar .nav-link {
+  position: relative;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--fs-md);
+  font-weight: 500;
+  transition: color var(--motion) var(--ease), background-color var(--motion) var(--ease);
+}
+
+.app-navbar .nav-link:hover {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+
+.app-navbar .nav-link.router-link-active,
+.app-navbar .nav-link.active {
+  color: var(--accent-300);
+}
+
+.app-navbar .nav-link.router-link-active::after,
+.app-navbar .nav-link.active::after {
+  content: "";
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: 0;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-400);
+}
+
+.app-main {
+  flex: 1;
+}
+
+/* The footer is static markup in public/index.html, outside #app. */
+.footer {
+  margin-top: auto;
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.footer a {
+  color: var(--text-secondary);
+}
+
+.footer a:hover {
+  color: var(--accent-300);
+}
+
+.footer-box-right {
+  text-align: right;
 }
 </style>

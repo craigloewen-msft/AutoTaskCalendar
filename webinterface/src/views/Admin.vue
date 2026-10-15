@@ -191,6 +191,7 @@
 
 <script>
 import { BContainer } from "bootstrap-vue-next";
+import { useSeo } from '@/composables/useSeo';
 
 const TREND_SERIES = [
   { key: "signups", label: "Signups" },
@@ -202,6 +203,9 @@ const SEARCH_DELAY_MS = 250;
 
 export default {
   name: "Admin",
+  setup() {
+    useSeo({ title: 'Admin', noindex: true });
+  },
   components: { BContainer },
   data() {
     return {
@@ -395,7 +399,7 @@ export default {
 
 .metric-card {
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--atc-border);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   padding: 16px 18px;
 }
@@ -405,27 +409,28 @@ export default {
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
 }
 
 .metric-value {
   margin: 4px 0 2px;
   font-size: 2rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--atc-text);
-  font-variant-numeric: tabular-nums;
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .metric-note {
   margin: 0;
   font-size: 0.82rem;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
 }
 
 .panel {
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--atc-border);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   padding: 18px;
   margin-bottom: 18px;
@@ -456,7 +461,7 @@ export default {
   display: flex;
   gap: 14px;
   font-size: 0.8rem;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
 }
 
 .legend-item {
@@ -474,17 +479,17 @@ export default {
 
 .legend-swatch.signups,
 .trend-bar.signups {
-  background: var(--atc-accent);
+  background: var(--accent);
 }
 
 .legend-swatch.tasksCreated,
 .trend-bar.tasksCreated {
-  background: var(--atc-accent);
+  background: var(--info);
 }
 
 .legend-swatch.tasksCompleted,
 .trend-bar.tasksCompleted {
-  background: var(--atc-success);
+  background: var(--success);
 }
 
 .trend-chart {
@@ -519,7 +524,7 @@ export default {
 
 .trend-label {
   font-size: 0.65rem;
-  color: var(--atc-text-subtle);
+  color: var(--text-faint);
   margin-top: 4px;
 }
 
@@ -531,7 +536,7 @@ export default {
   display: flex;
   justify-content: space-between;
   padding: 7px 0;
-  border-bottom: 1px solid var(--atc-border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .stat-row:last-child {
@@ -540,7 +545,7 @@ export default {
 
 .stat-row dt {
   font-weight: 400;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
 }
 
 .stat-row dd {
@@ -572,14 +577,14 @@ export default {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   padding: 8px 10px;
-  border-bottom: 1px solid var(--atc-border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .user-table td {
   padding: 9px 10px;
-  border-bottom: 1px solid var(--atc-border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .user-table .numeric {
@@ -587,7 +592,7 @@ export default {
 }
 
 .user-table .muted {
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
 }
 
 .admin-chip {
@@ -595,12 +600,12 @@ export default {
   padding: 1px 7px;
   border-radius: 2em;
   font-size: 0.7rem;
-  background: rgba(99, 102, 241, 0.2);
-  color: var(--atc-accent-text);
+  background: rgba(102, 126, 234, 0.2);
+  color: var(--accent-300);
 }
 
 .empty-note {
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 0.9rem;
   padding: 12px 0;
   margin: 0;
@@ -616,6 +621,6 @@ export default {
 
 .page-indicator {
   font-size: 0.85rem;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
 }
 </style>

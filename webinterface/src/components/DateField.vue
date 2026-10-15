@@ -44,24 +44,28 @@ export default {
 </script>
 
 <style>
-/* Match the app's dark form controls; :root raises specificity over the library's sheet. */
-:root .dp--theme-dark {
-  --dp-background-color: var(--atc-surface);
-  --dp-text-color: var(--atc-text);
-  --dp-hover-color: var(--atc-surface-3);
-  --dp-hover-text-color: var(--atc-text);
-  --dp-primary-color: var(--atc-accent);
+/* The one date picker, themed from the app's tokens. The menu is teleported to
+   <body>, so these must be global and keyed on .dp--theme-dark (the class this
+   version of vue-datepicker actually emits). See docs/DESIGN_SYSTEM.md. */
+.dp--theme-dark {
+  --dp-background-color: var(--surface-2);
+  --dp-text-color: var(--text-primary);
+  --dp-hover-color: var(--surface-3);
+  --dp-hover-text-color: var(--text-primary);
+  --dp-primary-color: var(--accent);
   --dp-primary-text-color: #fff;
-  --dp-border-color: rgba(255, 255, 255, 0.1);
-  --dp-border-color-hover: rgba(255, 255, 255, 0.18);
-  --dp-border-color-focus: var(--atc-accent);
-  --dp-highlight-color: var(--atc-accent-soft);
-  --dp-scroll-bar-background: var(--atc-surface);
-  --dp-scroll-bar-color: var(--atc-surface-3);
-  --dp-menu-border-color: var(--atc-border-strong);
-  --dp-secondary-color: var(--atc-text-subtle);
-  --dp-icon-color: var(--atc-text-muted);
-  --dp-border-radius: var(--atc-radius-sm);
-  --dp-font-family: var(--atc-font);
+  --dp-secondary-color: var(--text-muted);
+  --dp-border-color: var(--border);
+  --dp-menu-border-color: var(--border);
+  --dp-border-color-hover: var(--border-strong);
+  --dp-icon-color: var(--text-muted);
+  --dp-disabled-color: var(--surface-1);
+  --dp-scroll-bar-background: var(--surface-1);
+  --dp-scroll-bar-color: var(--border-strong);
+  --dp-border-radius: var(--radius-sm);
+}
+
+.dp--menu {
+  box-shadow: var(--elev-3);
 }
 </style>

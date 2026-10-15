@@ -571,13 +571,12 @@ function clone(value) {
   max-height: min(900px, calc(100vh - 36px));
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--atc-border-strong);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 14px;
   outline: none;
-  background: var(--atc-surface);
-  box-shadow: var(--atc-shadow-lg);
-  color: var(--atc-text);
-  text-align: left;
+  background: #161b22;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.55);
+  color: var(--text-secondary);
 }
 
 .editor-header,
@@ -588,7 +587,7 @@ function clone(value) {
   flex-wrap: wrap;
   gap: 14px;
   padding: 16px 20px;
-  background: var(--atc-surface-2);
+  background: #1b2129;
 }
 
 /* Full-width row so the follow-up panel sits above the footer buttons. */
@@ -599,10 +598,10 @@ function clone(value) {
   gap: 8px;
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid rgba(99, 102, 241, 0.42);
+  border: 1px solid rgba(102, 126, 234, 0.42);
   border-radius: 8px;
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--atc-text);
+  background: rgba(102, 126, 234, 0.1);
+  color: var(--text-secondary);
   font-size: 0.86rem;
 }
 
@@ -617,7 +616,7 @@ function clone(value) {
 }
 
 .editor-header {
-  border-bottom: 1px solid var(--atc-border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .editor-header h2,
@@ -626,7 +625,7 @@ function clone(value) {
 }
 
 .editor-eyebrow {
-  color: var(--atc-accent-text);
+  color: var(--accent-300);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -636,7 +635,7 @@ function clone(value) {
 .close-button {
   border: 0;
   background: transparent;
-  color: var(--atc-text-muted);
+  color: var(--text-secondary);
   font-size: 1.8rem;
   line-height: 1;
 }
@@ -669,7 +668,7 @@ function clone(value) {
 .form-group small {
   display: block;
   margin-top: 4px;
-  color: var(--atc-text-muted);
+  color: var(--text-faint);
 }
 
 /* States the derived outcome; there is no control here because there is no choice. */
@@ -703,20 +702,20 @@ function clone(value) {
 .editor-error {
   margin: 0 0 14px;
   padding: 10px 12px;
-  border-left: 3px solid var(--atc-accent);
+  border-left: 3px solid var(--accent);
   border-radius: 6px;
-  background: rgba(99, 102, 241, 0.13);
-  color: var(--atc-accent-text);
+  background: rgba(102, 126, 234, 0.13);
+  color: var(--accent-100);
 }
 
 .editor-error {
-  border-left-color: var(--atc-danger);
+  border-left-color: var(--danger);
   background: rgba(239, 68, 68, 0.12);
-  color: var(--atc-danger-text);
+  color: var(--danger-text);
 }
 
 .editor-footer {
-  border-top: 1px solid var(--atc-border);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .task-actions,
@@ -738,7 +737,7 @@ function clone(value) {
 
 .confirm-delete .confirm-message {
   margin: 0;
-  color: var(--atc-danger-text);
+  color: var(--danger-text);
 }
 
 @media (max-width: 760px) {

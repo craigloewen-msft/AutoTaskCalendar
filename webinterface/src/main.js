@@ -8,9 +8,10 @@ import { createGtag } from "vue-gtag"
 import { createHead } from '@vueuse/head'
 import { createBootstrap } from 'bootstrap-vue-next'
 
+// Bootstrap is compiled from our own tokens in darkStyle.scss, so the prebuilt
+// (light-theme) bootstrap.css is deliberately not imported here.
 import 'bootstrap-vue-next/dist/bootstrap-vue-next.css'
 
-// The single Bootstrap build, themed by style/darkVariables.scss and style/theme.scss.
 import './style/darkStyle.scss'
 
 const app = createApp(App)

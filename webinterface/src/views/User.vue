@@ -4,7 +4,7 @@
       <div class="user-profile-header">
         <div class="user-avatar">
           <div class="avatar-circle">
-            <span class="user-icon">{{ (user.username || "?").charAt(0) }}</span>
+            <i class="user-icon">👤</i>
           </div>
         </div>
         <h1 class="user-title">{{ user.username }}</h1>
@@ -201,9 +201,13 @@
 import { dateOnlyInTimeZone } from "../utils/temporal";
 import { BContainer, BRow, BCol, BCard, BButton, BFormGroup, BFormCheckbox, BFormInput } from 'bootstrap-vue-next';
 import DateField from "../components/DateField.vue";
+import { useSeo } from '@/composables/useSeo';
 
 export default {
   name: "User",
+  setup() {
+    useSeo({ title: 'Profile and settings', noindex: true });
+  },
   components: {
     BContainer,
     BRow,
@@ -340,42 +344,25 @@ export default {
   mounted() {
     this.refreshCalendarData();
   },
-  metaInfo() {
-    return {
-      title: `${this.input.username || 'User'} Profile - Settings & Configuration`,
-      meta: [
-        {
-          name: "description",
-          content: "Manage your AutoTaskCalendar profile settings, working hours, Google Calendar integration, and task scheduling preferences.",
-        },
-        {
-          name: "keywords",
-          content: "user profile, settings, working hours, calendar preferences, account management"
-        },
-        { name: "robots", content: "noindex, nofollow" },
-      ],
-    };
-  },
 };
 </script>
 
 <style scoped>
 .export-message {
   margin-bottom: 1rem;
-  color: var(--atc-success-text);
+  color: var(--success-text);
 }
 
 .export-message.error {
-  color: var(--atc-danger-text);
+  color: var(--danger-text);
 }
 
 .user-profile-header {
   text-align: center;
-  padding: 36px 20px;
-  background: var(--atc-surface);
-  border: 1px solid var(--atc-border);
-  border-radius: var(--atc-radius-lg);
-  margin-bottom: 32px;
+  padding: 40px 20px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  border-radius: 16px;
+  margin-bottom: 40px;
 }
 
 .user-avatar {
@@ -383,18 +370,15 @@ export default {
 }
 
 .avatar-circle {
-  width: 72px;
-  height: 72px;
+  width: 100px;
+  height: 100px;
   border-radius: 50%;
-  background: var(--atc-accent-soft);
-  border: 1px solid var(--atc-accent-border);
-  color: var(--atc-accent-text);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--violet-500) 100%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 30px;
-  font-weight: 650;
-  text-transform: uppercase;
+  font-size: 48px;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
 }
 
 .user-icon {
@@ -402,36 +386,36 @@ export default {
 }
 
 .user-title {
-  font-size: 2rem;
-  font-weight: 650;
-  letter-spacing: -0.025em;
-  color: var(--atc-text);
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
 .user-subtitle {
   font-size: 1.1rem;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   margin: 0;
 }
 
 .modern-card {
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--atc-border);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   padding: 32px;
-  box-shadow: var(--atc-shadow);
-  transition: transform var(--atc-transition), box-shadow var(--atc-transition);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .modern-card:hover {
-  box-shadow: var(--atc-shadow);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
 .section-title {
   font-size: 1.5rem;
   font-weight: 600;
-  color: var(--atc-text);
+  color: var(--text-primary);
   margin-bottom: 8px;
   display: flex;
   align-items: center;
@@ -444,26 +428,26 @@ export default {
 }
 
 .section-description {
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   margin-bottom: 24px;
   font-size: 0.95rem;
 }
 
 .modern-input {
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--atc-border-strong);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
-  color: var(--atc-text);
+  color: var(--text-primary);
   padding: 12px 16px;
   font-size: 1rem;
-  transition: all var(--atc-transition);
+  transition: all 0.3s ease;
 }
 
 .modern-input:focus {
   background: rgba(255, 255, 255, 0.08);
-  border-color: var(--atc-accent);
-  box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
-  color: var(--atc-text);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+  color: var(--text-primary);
 }
 
 .weekday-selector {
@@ -480,7 +464,7 @@ export default {
   min-width: 70px;
   border-radius: 8px;
   font-weight: 500;
-  transition: all var(--atc-transition);
+  transition: all 0.3s ease;
 }
 
 .empty-state {
@@ -495,7 +479,7 @@ export default {
 }
 
 .empty-text {
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 1.1rem;
   margin-bottom: 24px;
 }
@@ -520,15 +504,15 @@ export default {
 
 .calendar-item {
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--atc-border);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   padding: 16px;
-  transition: all var(--atc-transition);
+  transition: all 0.3s ease;
 }
 
 .calendar-item:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(99, 102, 241, 0.5);
+  border-color: rgba(102, 126, 234, 0.5);
 }
 
 .calendar-info {
@@ -539,7 +523,7 @@ export default {
 
 .calendar-name {
   font-size: 1rem;
-  color: var(--atc-text);
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -548,51 +532,52 @@ export default {
   font-size: 1.2rem;
   border-radius: 12px;
   font-weight: 600;
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
-  transition: all var(--atc-transition);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
 }
 
 .save-button:hover {
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
 }
 
 /* Override Bootstrap Vue form group labels */
 :deep(.form-group label) {
-  color: var(--atc-text);
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 0.95rem;
   margin-bottom: 8px;
 }
 
 :deep(.form-group .form-text) {
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 
 :deep(.custom-control-label) {
-  color: var(--atc-text);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
 :deep(.custom-checkbox .custom-control-input:checked ~ .custom-control-label::before) {
-  background-color: var(--atc-accent);
-  border-color: var(--atc-accent);
+  background-color: var(--accent);
+  border-color: var(--accent);
 }
 
 :deep(.btn-outline-primary) {
-  border-color: rgba(99, 102, 241, 0.5);
-  color: var(--atc-accent);
+  border-color: rgba(102, 126, 234, 0.5);
+  color: var(--accent);
 }
 
 :deep(.btn-outline-primary:hover) {
-  background-color: var(--atc-accent);
-  border-color: var(--atc-accent);
+  background-color: var(--accent);
+  border-color: var(--accent);
   color: white;
 }
 
 :deep(.btn-outline-primary.active) {
-  background-color: var(--atc-accent);
-  border-color: var(--atc-accent);
+  background-color: var(--accent);
+  border-color: var(--accent);
   color: white;
 }
 </style>

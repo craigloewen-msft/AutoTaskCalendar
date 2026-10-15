@@ -1,45 +1,61 @@
 <template>
   <div class="pageContent auth-page">
     <div class="auth-card">
-      <h1 class="auth-title">Welcome back</h1>
-      <p class="auth-subtitle">Sign in to see your scheduled week.</p>
+      <header class="auth-header">
+        <h1 class="auth-title">Welcome back</h1>
+        <p class="auth-subtitle">Sign in to your calendar.</p>
+      </header>
+
       <p v-if="failuretext" class="auth-error" role="alert">{{ failuretext }}</p>
-      <label class="form-label" for="login-username">Username</label>
-      <input
-        id="login-username"
-        class="form-control"
-        type="text"
-        name="username"
-        autocomplete="username"
-        v-model="input.username"
-        placeholder="Username"
-      />
-      <label class="form-label" for="login-password">Password</label>
-      <input
-        id="login-password"
-        class="form-control"
-        type="password"
-        name="password"
-        autocomplete="current-password"
-        v-model="input.password"
-        placeholder="Password"
-        @keyup.enter="login"
-      />
-      <button class="btn btn-primary btn-block auth-submit" v-on:click="login">
+
+      <div class="auth-field">
+        <label class="form-label" for="login-username">Username</label>
+        <input
+          id="login-username"
+          class="form-control"
+          type="text"
+          name="username"
+          autocomplete="username"
+          v-model="input.username"
+          placeholder="Your username"
+        />
+      </div>
+
+      <div class="auth-field">
+        <label class="form-label" for="login-password">Password</label>
+        <input
+          id="login-password"
+          class="form-control"
+          type="password"
+          name="password"
+          autocomplete="current-password"
+          v-model="input.password"
+          placeholder="Your password"
+          @keyup.enter="login"
+        />
+      </div>
+
+      <button class="btn btn-lg btn-primary btn-block auth-submit" v-on:click="login">
         Sign in
       </button>
-      <p class="auth-switch">
-        New here? <router-link to="/register">Create an account</router-link>
+
+      <p class="auth-alt">
+        No account yet? <router-link to="/register">Register</router-link>
       </p>
     </div>
   </div>
 </template>
 
 <script>
+import { useSeo } from '@/composables/useSeo';
+
 let devEndPoint = "/api/";
 
 export default {
   name: "Login",
+  setup() {
+    useSeo({ title: 'Sign in', noindex: true });
+  },
   data() {
     return {
       failuretext: null,
@@ -96,27 +112,65 @@ export default {
       //   axios.get(devEndPoint).then(response => (this.userdata = response.data));
     },
   },
-  metaInfo: {
-    title: "Login - Access Your Task Calendar",
-    meta: [
-      {
-        name: "description",
-        content: "Sign in to AutoTaskCalendar to access your tasks, view your automatically scheduled calendar, and manage your productivity.",
-      },
-      { 
-        name: "keywords", 
-        content: "login, sign in, task calendar, access account, task manager login" 
-      },
-      { name: "robots", content: "noindex, nofollow" },
-      { property: "og:title", content: "Login to AutoTaskCalendar" },
-      { 
-        property: "og:description", 
-        content: "Sign in to access your automatically scheduled task calendar." 
-      },
-    ],
-  },
 };
 </script>
 
-<style>
+<style scoped>
+.auth-page {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-8) var(--space-4);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  box-shadow: var(--elev-3);
+  text-align: left;
+}
+
+.auth-header {
+  margin-bottom: var(--space-5);
+  text-align: center;
+}
+
+.auth-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-2xl);
+}
+
+.auth-subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-md);
+}
+
+.auth-error {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-size: var(--fs-md);
+}
+
+.auth-field {
+  margin-bottom: var(--space-4);
+}
+
+.auth-submit {
+  margin-top: var(--space-2);
+}
+
+.auth-alt {
+  margin: var(--space-5) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-md);
+  text-align: center;
+}
 </style>

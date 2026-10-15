@@ -357,8 +357,8 @@ export default {
   width: 420px;
   max-width: 100vw;
   height: 100%;
-  background: var(--atc-surface);
-  border-left: 1px solid var(--atc-border);
+  background: var(--surface-1);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   text-align: left;
@@ -370,20 +370,20 @@ export default {
   align-items: center;
   justify-content: space-between;
   padding: 18px 24px;
-  border-bottom: 1px solid var(--atc-border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .drawer-title {
   font-size: 1.15rem;
   margin: 0;
   text-transform: capitalize;
-  color: var(--atc-text);
+  color: var(--text-primary);
 }
 
 .drawer-close {
   background: none;
   border: none;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 1.1rem;
   cursor: pointer;
 }
@@ -392,9 +392,9 @@ export default {
   margin: 16px 24px 0;
   padding: 10px 12px;
   border-radius: 8px;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  color: var(--atc-danger-text);
+  background: rgba(220, 53, 69, 0.15);
+  border: 1px solid rgba(220, 53, 69, 0.4);
+  color: var(--danger-text);
   font-size: 0.9rem;
 }
 
@@ -407,7 +407,7 @@ export default {
   display: block;
   margin-bottom: 6px;
   font-size: 0.85rem;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
 }
 
 .context-toggle {
@@ -417,7 +417,7 @@ export default {
 
 .context-choice {
   flex: 1;
-  border: 1px solid var(--atc-border-strong);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   background: transparent;
   color: inherit;
   opacity: 0.75;
@@ -427,8 +427,8 @@ export default {
 }
 
 .context-choice.active {
-  background: rgba(99, 102, 241, 0.35);
-  border-color: var(--atc-accent);
+  background: rgba(102, 126, 234, 0.35);
+  border-color: var(--accent);
   opacity: 1;
 }
 
@@ -442,7 +442,7 @@ export default {
   gap: 8px;
   margin-top: 8px;
   font-size: 0.9rem;
-  color: var(--atc-text-muted);
+  color: var(--text-secondary);
   font-weight: 400;
 }
 
@@ -455,12 +455,12 @@ export default {
 
 .end-confirm-title {
   font-size: 1rem;
-  color: var(--atc-text);
+  color: var(--text-primary);
   margin: 0 0 10px;
 }
 
 .end-confirm-copy {
-  color: var(--atc-text-muted);
+  color: var(--text-secondary);
   font-size: 0.9rem;
   margin-bottom: 12px;
 }
@@ -468,12 +468,12 @@ export default {
 .end-task-list {
   margin: 0 0 16px;
   padding-left: 18px;
-  color: var(--atc-text);
+  color: var(--text-secondary);
   font-size: 0.88rem;
 }
 
 .end-task-more {
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   list-style: none;
   margin-left: -18px;
 }
@@ -489,7 +489,7 @@ export default {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid var(--atc-border-strong);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   cursor: pointer;
   font-weight: 400;
@@ -502,13 +502,13 @@ export default {
 
 .end-choice strong {
   display: block;
-  color: var(--atc-text);
+  color: var(--text-primary);
   font-size: 0.92rem;
 }
 
 .end-choice small {
   display: block;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 0.8rem;
 }
 
@@ -524,7 +524,7 @@ export default {
   justify-content: space-between;
   gap: 8px;
   padding: 16px 24px;
-  border-top: 1px solid var(--atc-border);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   flex-wrap: wrap;
 }
 

@@ -10,11 +10,11 @@
 const { test, expect } = require('../fixtures');
 
 async function login(page, username, password) {
-    await page.goto('/#/login');
+    await page.goto('/login');
     await page.locator('input[type=text]').fill(username);
     await page.locator('input[type=password]').fill(password);
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page).toHaveURL(/#\/user\//);
+    await expect(page).toHaveURL(/\/user\//);
 }
 
 test.describe('calendar sidebar project labels', () => {
@@ -24,7 +24,7 @@ test.describe('calendar sidebar project labels', () => {
         const backlogId = String(data.named.backlogIdea._id);
 
         await login(page, data.primary.username, data.primary.password);
-        await page.goto('/#/calendar');
+        await page.goto('/calendar');
 
         const proposalRow = page.locator(`[data-test=task-item-${proposalId}]`);
         await expect(proposalRow).toBeVisible();
@@ -45,7 +45,7 @@ test.describe('calendar sidebar project labels', () => {
         const intentionId = String(data.named.intentionShort._id);
 
         await login(page, data.primary.username, data.primary.password);
-        await page.goto('/#/calendar');
+        await page.goto('/calendar');
 
         await page.locator('[data-test=calendar-intentions] summary').click();
         await expect(page.locator(`[data-test=task-item-${intentionId}]`)).toBeVisible();
@@ -59,7 +59,7 @@ test.describe('calendar sidebar project labels', () => {
 
         await login(page, data.primary.username, data.primary.password);
         await page.setViewportSize({ width: 480, height: 900 });
-        await page.goto('/#/calendar');
+        await page.goto('/calendar');
 
         const row = page.locator(`[data-test=task-item-${proposalId}]`);
         await expect(row).toBeVisible();

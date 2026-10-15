@@ -143,10 +143,10 @@ export default {
 .last-week {
   margin-bottom: 20px;
   padding: 16px 18px;
-  border: 1px solid var(--atc-border);
-  border-left: 3px solid rgba(165, 180, 252, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-left: 3px solid rgba(141, 162, 251, 0.6);
   border-radius: 12px;
-  background: var(--atc-surface);
+  background: rgba(22, 27, 34, 0.72);
 }
 
 .lw-head {
@@ -158,7 +158,7 @@ export default {
 
 .eyebrow {
   margin: 0 0 3px;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -167,14 +167,14 @@ export default {
 
 .lw-headline {
   margin: 0;
-  color: var(--atc-text);
+  color: var(--text-primary);
   font-size: 1.02rem;
   font-weight: 600;
 }
 
 .lw-subline {
   margin: 3px 0 0;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
 }
@@ -182,10 +182,10 @@ export default {
 .lw-toggle {
   flex: 0 0 auto;
   padding: 4px 12px;
-  border: 1px solid rgba(165, 180, 252, 0.35);
+  border: 1px solid rgba(141, 162, 251, 0.35);
   border-radius: 999px;
   background: transparent;
-  color: var(--atc-accent-text);
+  color: var(--accent-300);
   font-size: 0.74rem;
   cursor: pointer;
   transition: background 0.15s ease;
@@ -194,7 +194,7 @@ export default {
 .lw-toggle:hover,
 .lw-toggle:focus-visible {
   outline: none;
-  background: rgba(99, 102, 241, 0.14);
+  background: rgba(102, 126, 234, 0.14);
 }
 
 .lw-bar {
@@ -209,7 +209,7 @@ export default {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: var(--atc-success);
+  background: linear-gradient(90deg, var(--success-text), var(--success-text));
   transition: width 0.35s ease;
 }
 
@@ -224,13 +224,13 @@ export default {
   padding: 8px 12px;
   border: 1px solid rgba(248, 113, 113, 0.35);
   border-radius: 8px;
-  color: var(--atc-danger-text);
+  color: var(--danger-text);
   font-size: 0.8rem;
 }
 
 .lw-pointer {
   margin: 0;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 0.82rem;
 }
 </style>

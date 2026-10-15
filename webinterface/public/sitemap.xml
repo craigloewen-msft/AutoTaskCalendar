@@ -1,27 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Only genuinely indexable pages belong here. /login and /register were listed while
+  robots.txt disallowed them, which is a contradictory signal; they are now in neither.
+-->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://autotaskcalendar.com/</loc>
-    <lastmod>2025-11-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://autotaskcalendar.com/about</loc>
-    <lastmod>2025-11-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://autotaskcalendar.com/register</loc>
-    <lastmod>2025-11-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://autotaskcalendar.com/login</loc>
-    <lastmod>2025-11-12</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
   </url>
 </urlset>

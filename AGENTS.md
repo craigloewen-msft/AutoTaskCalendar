@@ -57,8 +57,9 @@ dataset.
 - `middleware/auth.js` — JWT `authenticateToken`. `utils/helpers.js` — `returnFailure()`;
   `utils/temporal.js` owns date/time parsing and timezone boundaries.
 - `webinterface/src/` — Vue app (`views/`, `components/`, `store.js`). All date entry goes
-  through `components/DateField.vue`; see `docs/DATE_PICKER.md`. Styling uses the tokens in
-  `style/theme.scss`; see `docs/STYLE_GUIDE.md`.
+  through `components/DateField.vue`; see `docs/DATE_PICKER.md`. Styling comes from the tokens
+  in `webinterface/src/style/`; see `docs/DESIGN_SYSTEM.md`. Page metadata goes through
+  `composables/useSeo.js` — never `metaInfo`; see `docs/SEO.md`.
 - `seed/` — the fake-data factories and dataset; `scripts/seed.js` is the CLI.
 - `tests/` — Playwright specs (`api/`, `ui/`) and shared `fixtures/`. The `ui` project drives
   a real browser against the built `dist/`; `npm test` rebuilds it when stale.
@@ -72,8 +73,9 @@ dataset.
   `docs/INTENTIONS.md` covers personal work that is tracked weekly but never scheduled;
   `docs/ADMIN.md` covers the admin dashboard and how a user is made an admin;
   `docs/DATE_PICKER.md` covers the one date picker shared by every date field;
-  `docs/STYLE_GUIDE.md` covers the dark theme, its `--atc-*` design tokens, and the no-raw-colours rule;
+  `docs/DESIGN_SYSTEM.md` covers the style tokens every page and component is built from;
   `docs/PROXIED_ACCESS.md` covers reaching the dev stack through a forwarded port;
+  `docs/SEO.md` covers the public pages, page metadata, and build-time prerendering;
   `docs/REFACTOR_OVERVIEW.md` is the small risk-driven refactor roadmap;
   `docs/SHARED_DATABASE.md` covers the one shared database and seed namespaces.
 
@@ -87,6 +89,8 @@ short index and put the depth in `docs/`. See `docs/TEST_CREDENTIALS.md` for the
 
 - `config.js` (gitignored) overrides `defaultconfig.js`; production reads env vars instead.
 - API errors return HTTP 200 with `{success: false}` via `returnFailure()`.
+- Page metadata uses `useSeo()` from `setup()`. A `metaInfo` option is silently ignored —
+  the app uses `@vueuse/head`, not vue-meta. See `docs/SEO.md`.
 - Distinguish instants, civil dates, and wall times; use the temporal helpers and feature manuals.
 - Never implement timezone conversion with numeric offsets or advance calendar days by milliseconds.
 - Keep code comments to one or two sentences.

@@ -6,34 +6,44 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <link rel="icon" href="<%= BASE_URL %>favicon.ico">
-  
-  <!-- Primary Meta Tags -->
-  <title>AutoTaskCalendar - Intelligent Task Scheduling & Management</title>
-  <meta name="title" content="AutoTaskCalendar - Intelligent Task Scheduling & Management">
-  <meta name="description" content="Automatically schedule your tasks into your calendar with intelligent planning. Free task management with Google Calendar integration and smart auto-scheduling.">
-  
+
+  <!--
+    Fallback only. The real per-page title and meta tags are written by @vueuse/head
+    (see src/composables/useSeo.js), and the public pages are prerendered at build time
+    so crawlers receive them in the HTML. See docs/SEO.md.
+  -->
+  <title>AutoTaskCalendar - Automatic task scheduling</title>
+  <meta name="description"
+    content="AutoTaskCalendar turns your task list into a realistic schedule. It places each task into your working hours automatically, reschedules what slips, and keeps everything in one calendar.">
+
   <!-- Schema.org Structured Data -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "WebApplication",
     "name": "AutoTaskCalendar",
-    "description": "Automatically schedule your tasks into your calendar with intelligent planning and Google Calendar integration",
+    "description": "A task manager that automatically schedules your tasks into your calendar, within the working hours you set.",
     "url": "https://autotaskcalendar.com",
     "applicationCategory": "ProductivityApplication",
-    "operatingSystem": "Web Browser",
+    "applicationSubCategory": "Task management",
+    "operatingSystem": "Any modern web browser",
+    "browserRequirements": "Requires JavaScript",
+    "isAccessibleForFree": true,
+    "image": "https://autotaskcalendar.com/og-image.png",
+    "license": "https://github.com/craigloewen-msft/AutoTaskCalendar/blob/main/LICENSE",
     "offers": {
       "@type": "Offer",
       "price": "0",
       "priceCurrency": "USD"
     },
     "featureList": [
-      "Automatic task scheduling",
+      "Automatic task scheduling within your working hours",
+      "Breaking long tasks into chunks across several days",
+      "Recurring tasks with daily, weekly, monthly and yearly rules",
+      "Forecasting the cost of a missed or blocked time slot",
       "Google Calendar integration",
-      "Smart planning based on working hours",
-      "Recurring tasks support",
-      "Task chunking",
-      "Work-life balance management"
+      "Roles, goals and projects for reviewing where your time went",
+      "Weekly planning and review"
     ]
   }
   </script>
@@ -48,12 +58,13 @@
   <!-- built files will be auto injected -->
   <footer class="footer">
     <div class="container footer-box">
-      <div class="row align-items-center">
+      <div class="row">
         <div class="col">
-          <span>AutoTaskCalendar v1.6</span>
+          <span class="text-muted">AutoTaskCalendar v1.6</span>
         </div>
         <div class="col-auto footer-box-right">
-          <a href="https://github.com/craigloewen-msft/AutoTaskCalendar">Open source on GitHub</a>
+          <a href="https://github.com/craigloewen-msft/AutoTaskCalendar">Open Sourced at:
+              AutoTaskCalendar</a>
         </div>
       </div>
     </div>

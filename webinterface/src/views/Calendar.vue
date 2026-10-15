@@ -5,7 +5,7 @@
         <h1 class="page-title">My Calendar</h1>
         <div class="header-actions">
           <BButton variant="primary" v-on:click="openAddTaskModal" class="action-btn" aria-label="Add new task">
-            <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v10M3 8h10"/></svg></span> Add Task
+            <span class="btn-icon" aria-hidden="true">+</span> Add Task
           </BButton>
           <BButton
             variant="success"
@@ -21,12 +21,11 @@
               class="spinner-border spinner-border-sm btn-icon"
               aria-hidden="true"
             ></span>
-            <span v-else-if="schedulingError" class="btn-icon" aria-hidden="true">!</span>
-            <span v-else class="btn-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3M6 10l1.5 1.5L10.5 8.5"/></svg></span>
+            <span v-else class="btn-icon" aria-hidden="true">{{ schedulingError ? "!" : "📅" }}</span>
             <span role="status" aria-live="polite">{{ scheduleButtonLabel }}</span>
           </BButton>
           <BButton
-            variant="secondary"
+            variant="info"
             v-on:click="syncCalendar"
             class="action-btn"
             aria-label="Sync calendar with Google"
@@ -39,7 +38,7 @@
               class="spinner-border spinner-border-sm btn-icon"
               aria-hidden="true"
             ></span>
-            <span v-else class="btn-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg></span>
+            <span v-else class="btn-icon" aria-hidden="true">⟳</span>
             {{ syncing ? "Syncing…" : "Sync Calendar" }}
           </BButton>
         </div>
@@ -367,10 +366,10 @@
         <div class="main-calendar">
         <div class="calendar-controls">
           <button class="nav-btn" v-on:click="prevWeek" title="Previous Week">
-            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></span> Previous
+            <span class="nav-icon">◀</span> Previous
           </button>
           <button class="nav-btn" v-on:click="nextWeek" title="Next Week">
-            Next <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5 10.5 8 6 12.5"/></svg></span>
+            Next <span class="nav-icon">▶</span>
           </button>
         </div>
         <div v-if="allDayEvents.length" class="all-day-events" data-test="all-day-row">
@@ -434,12 +433,16 @@ import {
 } from "../utils/temporal";
 import { isIntention, intentionsForWeek } from "../utils/intentions";
 import { roleContextOf } from "../utils/roleContext";
+import { useSeo } from '@/composables/useSeo';
 
 // The sidebar shows this far ahead; the scheduler materialises 60 days of occurrences.
 const SIDEBAR_WINDOW_DAYS = 21;
 
 export default {
   name: "Calendar",
+  setup() {
+    useSeo({ title: 'My calendar', noindex: true });
+  },
   components: {
     DayPilotCalendar,
     BButton,
@@ -860,11 +863,12 @@ export default {
         const inputStartDate = instantToDayPilotWall(event.startDate);
         const inputEndDate = instantToDayPilotWall(event.endDate);
 
-        // External events read as quiet slate; scheduled task blocks carry the accent.
-        let eventColor = "#3a4560";
+        // Calendar events are violet, scheduled tasks indigo. Mirrors the palette
+        // in style/_tokens.scss; see docs/DESIGN_SYSTEM.md.
+        let eventColor = "#6d4a9c";
         let eventTags = null;
         if (event.type.includes("task")) {
-          eventColor = "#4f46e5";
+          eventColor = "#4453b0";
           eventTags = {};
           eventTags.taskId = event.taskRef;
           if (event.type.includes("task-chunk")) {
@@ -1009,7 +1013,7 @@ export default {
         const currentInnerDiv = currentCell.children[0];
         currentInnerDiv.style.setProperty(
           "background",
-          "rgba(99, 102, 241, 0.22)",
+          "rgb(64,65,112)",
           "important"
         );
       }
@@ -1213,20 +1217,6 @@ export default {
     clearTimeout(this.schedulingErrorTimer);
     this.disarmCompletion();
   },
-  metaInfo: {
-    title: "My Calendar - Manage Your Tasks",
-    meta: [
-      {
-        name: "description",
-        content: "View and manage your automatically scheduled tasks in your calendar. Add tasks, sync with Google Calendar, and track your productivity.",
-      },
-      { 
-        name: "keywords", 
-        content: "my calendar, task view, scheduled tasks, manage tasks, calendar sync" 
-      },
-      { name: "robots", content: "noindex, nofollow" },
-    ],
-  },
 };
 </script>
 
@@ -1246,11 +1236,11 @@ export default {
 }
 
 .page-title {
-  font-size: 26px;
-  font-weight: 650;
-  letter-spacing: -0.025em;
   margin: 0;
-  color: var(--atc-text);
+  color: var(--text-primary);
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .header-actions {
@@ -1259,113 +1249,105 @@ export default {
 }
 
 .action-btn {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
+  font-weight: 500;
 }
 
 .btn-icon {
-  display: inline-flex;
-  font-size: 15px;
-  line-height: 1;
-}
-
-.btn-icon svg {
-  width: 16px;
-  height: 16px;
+  font-size: 18px;
 }
 
 .main-calendar {
   flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--atc-surface);
-  border: 1px solid var(--atc-border);
-  border-radius: var(--atc-radius-lg);
-  padding: 16px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--elev-1);
 }
 
-/* DayPilot theme: transparent grid with hairlines, so events carry the colour. */
+.calendar_default_rowheader_inner,
+.calendar_default_cornerright_inner,
+.calendar_default_corner_inner,
+.calendar_default_colheader_inner,
+.calendar_default_alldayheader_inner {
+  background: var(--surface-2) !important;
+  color: rgb(220, 220, 225) !important;
+  font-weight: 600;
+  border-right: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.calendar_default_cell_inner {
+  background: var(--surface-0) !important;
+}
+
+.calendar_default_cell_business .calendar_default_cell_inner {
+  background: var(--surface-1) !important;
+}
+
+/* Comprehensive dark mode overrides for DayPilot calendar */
 #dp {
-  color: var(--atc-text) !important;
+  color: rgb(220, 220, 225) !important;
+  /* Override DayPilot CSS variables for dark theme */
+  --dp-calendar-cell-bg-color: var(--surface-0);
+  --dp-calendar-cell-business-bg-color: var(--surface-1);
+  --dp-calendar-header-bg-color: var(--surface-2);
+  --dp-calendar-border-color: var(--border);
+  --dp-calendar-bg-color: var(--surface-0);
+  --dp-calendar-event-bar-bg-color: var(--border);
+  --dp-calendar-event-bar-color: var(--accent-400);
 }
 
-:deep(.calendar_default_main) {
-  border: 0 !important;
-  font-family: var(--atc-font) !important;
-  background: transparent !important;
+:deep(.calendar_default_event_inner),
+:deep(.calendar_transparent_event_inner) {
+  color: white !important;
+  border-radius: 6px 6px 0 0 !important;
+  opacity: 1 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  padding: 6px 8px !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
-:deep(.calendar_default_cell_inner) {
-  background: rgba(255, 255, 255, 0.012) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.035) !important;
-}
-
-/* Only the hour lines are strong enough to read as a grid. */
-:deep(.calendar_default_cell:nth-child(4n) .calendar_default_cell_inner) {
-  border-bottom-color: rgba(255, 255, 255, 0.07) !important;
-}
-
-:deep(.calendar_default_cell_business .calendar_default_cell_inner) {
-  background: rgba(255, 255, 255, 0.04) !important;
-}
-
+/* Headers dark theme */
 :deep(.calendar_default_rowheader_inner),
 :deep(.calendar_default_cornerright_inner),
 :deep(.calendar_default_corner_inner),
 :deep(.calendar_default_colheader_inner),
 :deep(.calendar_default_alldayheader_inner) {
-  background: var(--atc-surface) !important;
-  color: var(--atc-text-muted) !important;
-  font-size: 12px !important;
-  font-weight: 500;
-  border-right: 1px solid var(--atc-border) !important;
-  border-bottom: 1px solid var(--atc-border) !important;
-}
-
-:deep(.calendar_default_colheader_inner) {
-  color: var(--atc-text) !important;
-  font-size: 13px !important;
+  background: var(--surface-2) !important;
+  color: rgb(220, 220, 225) !important;
   font-weight: 600;
+  border-right: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
-:deep(.calendar_default_rowheader_minutes) {
-  color: var(--atc-text-subtle);
+/* Force grid lines with deep selectors */
+:deep(.calendar_default_cell_inner) {
+  border-right: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+:deep(.calendar_transparent_cell_inner) {
+  border-right: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
 }
 
 :deep(.calendar_default_rowheader),
-:deep(.calendar_default_colheader) {
-  border-color: var(--atc-border) !important;
+:deep(.calendar_transparent_rowheader) {
+  border-right: 1px solid var(--border) !important;
 }
 
-/* Events: rounded card, white text, a lighter stripe on the left for edge contrast. */
-:deep(.calendar_default_event_inner),
-:deep(.calendar_transparent_event_inner) {
-  color: #fff !important;
-  border-radius: var(--atc-radius-sm) !important;
-  opacity: 1 !important;
-  border: 0 !important;
-  box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.35), 0 1px 2px rgba(0, 0, 0, 0.35) !important;
-  padding: 5px 8px 5px 10px !important;
-  font-weight: 500 !important;
-  font-size: 12.5px !important;
-  line-height: 1.3 !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-
-:deep(.calendar_default_event) {
-  padding: 1px 2px;
-}
-
-:deep(.calendar_default_event:hover .calendar_default_event_inner) {
-  filter: brightness(1.1);
-}
-
-:deep(.calendar_default_event_bar) {
-  display: none;
+:deep(.calendar_default_colheader),
+:deep(.calendar_transparent_colheader) {
+  border-bottom: 1px solid var(--border) !important;
 }
 
 .calendar-box {
@@ -1384,45 +1366,62 @@ export default {
 .task-controls {
   min-width: 320px;
   max-width: 320px;
-  background: var(--atc-surface);
-  border: 1px solid var(--atc-border);
-  border-radius: var(--atc-radius-lg);
-  padding: 18px 14px 18px 18px;
-  text-align: left;
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--elev-1);
 }
 
 .sidebar-title {
-  font-size: 15px;
+  font-size: 20px;
   font-weight: 600;
-  margin: 0 0 16px 0;
-  color: var(--atc-text);
+  margin: 0 0 20px 0;
+  color: var(--text-primary);
 }
 
 .sidebar-title:focus-visible {
   border-radius: 4px;
-  outline: 2px solid #fbbf24;
+  outline: 2px solid var(--warning-text);
   outline-offset: 3px;
 }
 
 .task-list {
   overflow-y: auto;
   max-height: calc(100vh - 200px);
-  padding-right: 4px;
+}
+
+.task-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.task-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.task-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.task-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .task-group {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .task-date-header {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--atc-text-subtle);
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--atc-border);
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .task-items {
@@ -1431,26 +1430,21 @@ export default {
   margin: 0;
 }
 
-/* Rows sit flat on the panel; the left stripe carries the deadline status. */
 .task-item {
   display: flex;
   align-items: stretch;
   flex-direction: column;
-  padding: 10px 12px;
-  margin-bottom: 6px;
-  background: var(--atc-surface-2);
-  border: 1px solid var(--atc-border);
-  border-radius: var(--atc-radius);
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background-color var(--atc-transition), border-color var(--atc-transition);
+  transition: background var(--motion) var(--ease), border-color var(--motion) var(--ease);
   border-left: 3px solid transparent;
 }
 
 .task-item:hover {
-  background: var(--atc-surface-3);
-  border-top-color: var(--atc-border-strong);
-  border-right-color: var(--atc-border-strong);
-  border-bottom-color: var(--atc-border-strong);
+  background: var(--surface-3);
 }
 
 .task-primary-row {
@@ -1464,9 +1458,8 @@ export default {
 .task-title {
   flex: 1;
   min-width: 0;
-  font-size: 14px;
   font-weight: 500;
-  color: var(--atc-text);
+  color: var(--text-primary);
 }
 
 .task-row-meta {
@@ -1484,7 +1477,7 @@ export default {
   margin-top: 3px;
   font-size: 0.72rem;
   letter-spacing: 0.03em;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1500,7 +1493,7 @@ export default {
   border: 1px solid rgba(110, 231, 183, 0.45);
   border-radius: 50%;
   background: transparent;
-  color: var(--atc-success-text);
+  color: var(--success-text);
   cursor: pointer;
   /* Stays out of the way until the row is hovered, so it is hard to hit by accident. */
   opacity: 0;
@@ -1514,22 +1507,22 @@ export default {
 
 .quick-complete-button:hover,
 .quick-complete-button:focus-visible {
-  border-color: var(--atc-success-text);
+  border-color: var(--success-text);
   background: rgba(16, 185, 129, 0.14);
   opacity: 1;
 }
 
 /* Armed: same box, filled solid green with a ring. Nothing here affects layout. */
 .task-item .quick-complete-button.armed {
-  border-color: var(--atc-success);
-  background: var(--atc-success);
+  border-color: var(--success);
+  background: var(--success);
   color: #06281d;
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
   opacity: 1;
 }
 
 .quick-complete-button:focus-visible {
-  outline: 2px solid #a7f3d0;
+  outline: 2px solid var(--success-text);
   outline-offset: 2px;
 }
 
@@ -1582,7 +1575,7 @@ export default {
 
 .quick-complete-error {
   margin: -8px 0 14px;
-  color: var(--atc-danger-text);
+  color: var(--danger-text);
   font-size: 13px;
 }
 
@@ -1595,13 +1588,13 @@ export default {
   margin: 0 0 13px;
   padding-top: 11px;
   border-top: 1px solid rgba(251, 191, 36, 0.2);
-  color: var(--atc-text);
+  color: var(--text-primary);
   font-size: 11px;
   font-weight: 700;
 }
 
 .forecast-selection-hint {
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 11px;
   font-weight: 400;
 }
@@ -1611,14 +1604,14 @@ export default {
   border: 1px solid rgba(251, 191, 36, 0.55);
   border-radius: 999px;
   background: rgba(251, 191, 36, 0.18);
-  color: #fde68a;
+  color: var(--warning-text);
   font-size: 11px;
   font-weight: 700;
 }
 
 .forecast-analyze:hover:not(:disabled),
 .forecast-analyze:focus-visible {
-  border-color: #fbbf24;
+  border-color: var(--warning-text);
   outline: none;
   background: rgba(251, 191, 36, 0.28);
   color: #fef3c7;
@@ -1635,7 +1628,7 @@ export default {
   border: 1px dashed rgba(156, 163, 175, 0.5);
   border-radius: 999px;
   background: transparent;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 10px;
   font-weight: 700;
   line-height: 1.2;
@@ -1644,17 +1637,17 @@ export default {
 
 .slot-select-chip:hover:not(:disabled),
 .slot-select-chip:focus-visible {
-  border-color: #fbbf24;
+  border-color: var(--warning-text);
   outline: none;
   background: rgba(251, 191, 36, 0.12);
-  color: #fde68a;
+  color: var(--warning-text);
 }
 
 .slot-select-chip.selected {
   border-style: solid;
   border-color: rgba(251, 191, 36, 0.75);
   background: rgba(251, 191, 36, 0.2);
-  color: #fde68a;
+  color: var(--warning-text);
 }
 
 .slot-select-chip:disabled {
@@ -1668,7 +1661,7 @@ export default {
   gap: 4px;
   align-items: baseline;
   margin: 5px 0 0;
-  color: var(--atc-warning-text);
+  color: var(--warning-text);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -1695,7 +1688,7 @@ export default {
   background:
     radial-gradient(circle at 100% 0, rgba(239, 68, 68, 0.16), transparent 160px),
     rgba(38, 31, 35, 0.96);
-  box-shadow: var(--atc-shadow-lg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
 .slip-forecast-heading {
@@ -1706,7 +1699,7 @@ export default {
 }
 
 .what-if-label {
-  color: #fbbf24;
+  color: var(--warning-text);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -1715,7 +1708,7 @@ export default {
 
 .slip-forecast-heading h4 {
   margin: 3px 0 0;
-  color: var(--atc-text);
+  color: var(--text-primary);
   font-size: 16px;
   line-height: 1.3;
 }
@@ -1724,17 +1717,17 @@ export default {
   width: 28px;
   height: 28px;
   padding: 0;
-  border: 1px solid var(--atc-border-strong);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.12);
-  color: var(--atc-text);
+  color: var(--text-secondary);
   font-size: 19px;
   line-height: 1;
 }
 
 .forecast-close:hover,
 .forecast-close:focus-visible {
-  border-color: #fbbf24;
+  border-color: var(--warning-text);
   outline: none;
   color: #fef3c7;
 }
@@ -1748,17 +1741,17 @@ export default {
   flex-wrap: wrap;
   gap: 5px;
   margin: 12px 0 8px;
-  color: var(--atc-text);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .forecast-summary .danger {
-  color: var(--atc-danger-text);
+  color: var(--danger-text);
 }
 
 .forecast-assumption {
   margin: 0 0 13px;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 11px;
   line-height: 1.45;
 }
@@ -1773,7 +1766,7 @@ export default {
 
 .forecast-section-title {
   margin: 0 0 8px;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -1787,7 +1780,7 @@ export default {
 /* Premise rows are the question, not the collateral, so they read as outlines. */
 .premise-cascade .cascade-marker {
   border-style: dashed;
-  background: var(--atc-surface-2);
+  background: var(--surface-2);
 }
 
 .premise-cascade li:not(:last-child)::after {
@@ -1809,7 +1802,7 @@ export default {
   gap: 7px;
   align-items: center;
   min-height: 31px;
-  color: var(--atc-text);
+  color: var(--text-secondary);
   font-size: 11px;
 }
 
@@ -1827,7 +1820,7 @@ export default {
   z-index: 1;
   width: 10px;
   height: 10px;
-  border: 2px solid #fbbf24;
+  border: 2px solid var(--warning-text);
   border-radius: 50%;
   background: #262026;
 }
@@ -1844,7 +1837,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: var(--atc-warning-text);
+  color: var(--warning-text);
   white-space: nowrap;
 }
 
@@ -1852,13 +1845,13 @@ export default {
   padding: 2px 5px;
   border-radius: 999px;
   background: rgba(239, 68, 68, 0.22);
-  color: var(--atc-danger-text);
+  color: var(--danger-text);
   font-size: 9px;
   text-transform: uppercase;
 }
 
 .forecast-cascade .newly-late .cascade-marker {
-  border-color: var(--atc-danger);
+  border-color: var(--danger);
   background: #7f1d1d;
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.13);
 }
@@ -1875,7 +1868,7 @@ export default {
   border: 1px solid rgba(156, 163, 175, 0.35);
   border-radius: 999px;
   background: rgba(107, 114, 128, 0.13);
-  color: var(--atc-text);
+  color: var(--text-secondary);
   font-size: 10px;
   font-weight: 700;
   line-height: 1.2;
@@ -1885,13 +1878,13 @@ export default {
 .slip-impact-chip.risk {
   border-color: rgba(248, 113, 113, 0.55);
   background: rgba(239, 68, 68, 0.17);
-  color: var(--atc-danger-text);
+  color: var(--danger-text);
 }
 
 .slip-impact-chip.safe {
   border-color: transparent;
   background: transparent;
-  color: var(--atc-text-muted);
+  color: var(--text-faint);
   font-weight: 500;
   opacity: 0;
   transition: opacity 0.15s ease;
@@ -1906,7 +1899,7 @@ export default {
 .slip-impact-chip:hover,
 .slip-impact-chip:focus-visible,
 .slip-impact-chip[aria-expanded="true"] {
-  border-color: #fbbf24;
+  border-color: var(--warning-text);
   outline: none;
   box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.18);
 }
@@ -1923,7 +1916,7 @@ export default {
 
 .task-item.forecast-newly-late-task {
   background: rgba(239, 68, 68, 0.14);
-  border-left-color: var(--atc-danger);
+  border-left-color: var(--danger);
   box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.26);
 }
 
@@ -1938,114 +1931,105 @@ export default {
 .task-days {
   font-size: 11px;
   font-weight: 600;
-  padding: 2px 8px;
-  border-radius: var(--atc-radius-pill);
+  padding: 4px 10px;
+  border-radius: 12px;
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 
 .unscheduled-badge {
   background: rgba(245, 158, 11, 0.2);
-  color: var(--atc-warning-text);
+  color: var(--warning-text);
 }
 
 .late-task {
-  border-left-color: var(--atc-danger);
+  border-left-color: var(--danger);
 }
 
 .late-task .task-title {
-  color: var(--atc-danger-text);
+  color: var(--danger-text);
 }
 
 .late-task .task-days {
   background: rgba(239, 68, 68, 0.2);
-  color: var(--atc-danger-text);
+  color: var(--danger-text);
 }
 
 .due-that-day-task {
-  border-left-color: var(--atc-warning);
+  border-left-color: var(--warning);
 }
 
 .due-that-day-task .task-title {
-  color: var(--atc-warning-text);
+  color: var(--warning-text);
 }
 
 .due-that-day-task .task-days {
   background: rgba(245, 158, 11, 0.2);
-  color: var(--atc-warning-text);
+  color: var(--warning-text);
 }
 
 .on-track-task {
-  border-left-color: var(--atc-success);
+  border-left-color: var(--success);
 }
 
 .on-track-task .task-days {
   background: rgba(16, 185, 129, 0.2);
-  color: var(--atc-success-text);
+  color: var(--success-text);
 }
 
 .backlog-task {
-  border-left-color: var(--atc-text-subtle);
+  border-left-color: var(--text-faint);
   opacity: 0.7;
 }
 
 .backlog-task .task-title {
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-style: italic;
 }
 
 .backlog-task .task-badge {
   background: rgba(107, 114, 128, 0.2);
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
 }
 
 .calendar-controls {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 12px;
-  gap: 8px;
+  margin-bottom: 16px;
+  gap: 12px;
 }
 
 .nav-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--atc-surface-2);
-  color: var(--atc-text);
-  border: 1px solid var(--atc-border-strong);
-  border-radius: var(--atc-radius-sm);
-  font-size: 13px;
+  flex: 1;
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: background-color var(--atc-transition), border-color var(--atc-transition);
+  transition: background var(--motion) var(--ease), color var(--motion) var(--ease),
+    border-color var(--motion) var(--ease);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
 }
 
 .nav-btn:hover {
-  background: var(--atc-surface-3);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.nav-btn:focus-visible {
-  outline: none;
-  box-shadow: var(--atc-focus-ring);
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
 }
 
 .nav-icon {
-  display: inline-flex;
-}
-
-.nav-icon svg {
-  width: 14px;
-  height: 14px;
+  font-size: 14px;
 }
 
 .calendar-container {
   flex: 1;
-  border: 1px solid var(--atc-border);
-  border-radius: var(--atc-radius);
+  border-radius: 8px;
   overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .all-day-events {
@@ -2053,15 +2037,8 @@ export default {
   gap: 8px;
   align-items: center;
   min-height: 36px;
-  margin-bottom: 8px;
   padding: 6px 10px;
-  border: 1px solid var(--atc-border);
-  border-radius: var(--atc-radius);
-  font-size: 13px;
-}
-
-.all-day-label {
-  color: var(--atc-text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .all-day-label {
@@ -2073,10 +2050,9 @@ export default {
   align-items: center;
   gap: 6px;
   padding: 3px 5px 3px 8px;
-  border-radius: var(--atc-radius-sm);
-  background: #3a4560;
+  border-radius: 4px;
+  background: #a27cf9;
   color: #fff;
-  font-size: 12.5px;
 }
 
 .all-day-delete {

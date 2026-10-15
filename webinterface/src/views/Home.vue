@@ -1,37 +1,88 @@
 <template>
   <div class="home">
-    <section class="home-hero">
-      <span class="home-eyebrow">Free task manager &middot; auto-scheduling</span>
-      <h1 class="home-title">Your tasks, scheduled<br />into your calendar.</h1>
-      <p class="home-lede">
-        Add what you need to do and when it's due. AutoTaskCalendar fits it around your
-        meetings and working hours, so your week plans itself.
-      </p>
-      <div v-if="!this.$store.getters.isLoggedIn" class="loginSelect">
-        <router-link class="btn btn-primary btn-lg" to="/register">Get started free</router-link>
-        <router-link class="btn btn-outline-secondary btn-lg" to="/login">Login</router-link>
-      </div>
-      <div v-if="this.$store.getters.isLoggedIn" class="loginSelect">
-        <router-link class="btn btn-primary btn-lg" to="/calendar">Open calendar</router-link>
-        <router-link class="btn btn-outline-secondary btn-lg" :to="'/user/' + user.username"
-          >My Profile
-        </router-link>
+    <!-- Hero: a CSS gradient rather than a multi-megabyte photograph. -->
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="hero-eyebrow">Task manager and scheduler</p>
+        <h1 class="hero-title">
+          Your task list, placed into the hours you actually have
+        </h1>
+        <p class="hero-subtitle">
+          AutoTaskCalendar reads your deadlines, durations and working hours, then builds a
+          realistic calendar for you. When something slips, it tells you what that costs
+          before you find out the hard way.
+        </p>
+
+        <div v-if="!isLoggedIn" class="hero-actions">
+          <router-link class="btn btn-primary btn-lg" to="/register">
+            Create a free account
+          </router-link>
+          <router-link class="btn btn-outline-light btn-lg" to="/about">
+            See how it works
+          </router-link>
+        </div>
+        <div v-else class="hero-actions">
+          <router-link class="btn btn-primary btn-lg" to="/calendar">
+            Open my calendar
+          </router-link>
+          <router-link class="btn btn-outline-light btn-lg" :to="'/user/' + user.username">
+            My profile
+          </router-link>
+        </div>
+
+        <p class="hero-note">Free to use. No credit card required.</p>
       </div>
     </section>
 
-    <BContainer class="section-slides">
-      <div class="home-features">
-        <div class="home-feature">
-          <h3>Auto-scheduling</h3>
-          <p>Tasks are placed into free time before their due dates, and move when plans change.</p>
-        </div>
-        <div class="home-feature">
-          <h3>Weekly planning</h3>
-          <p>Commit to projects each week and review how last week actually went.</p>
-        </div>
-        <div class="home-feature">
-          <h3>Google Calendar sync</h3>
-          <p>Meetings come in from your calendar so scheduled work never collides with them.</p>
+    <BContainer as="section" class="home-section" aria-labelledby="problem-heading">
+      <h2 id="problem-heading" class="section-title">
+        A to-do list does not tell you when
+      </h2>
+      <p class="section-lede">
+        Lists grow without limit because nothing in them competes for time. A calendar is
+        honest about that, but filling one in by hand is tedious and falls apart the first
+        time a day runs long. AutoTaskCalendar does the placing for you, and does it again
+        whenever things change.
+      </p>
+    </BContainer>
+
+    <BContainer as="section" class="home-section" aria-labelledby="features-heading">
+      <h2 id="features-heading" class="section-title">What it does</h2>
+      <div class="feature-grid">
+        <article v-for="feature in features" :key="feature.title" class="feature-card">
+          <FeatureIcon :name="feature.icon" :size="26" class="feature-card-icon" />
+          <h3 class="feature-card-title">{{ feature.title }}</h3>
+          <p class="feature-card-text">{{ feature.text }}</p>
+        </article>
+      </div>
+    </BContainer>
+
+    <BContainer as="section" class="home-section" aria-labelledby="steps-heading">
+      <h2 id="steps-heading" class="section-title">Getting started</h2>
+      <ol class="step-list">
+        <li v-for="(step, index) in steps" :key="step.title" class="step">
+          <span class="step-number" aria-hidden="true">{{ index + 1 }}</span>
+          <div>
+            <h3 class="step-title">{{ step.title }}</h3>
+            <p class="step-text">{{ step.text }}</p>
+          </div>
+        </li>
+      </ol>
+    </BContainer>
+
+    <BContainer as="section" class="home-section">
+      <div class="cta-panel">
+        <h2 class="cta-title">Start scheduling your week</h2>
+        <p class="cta-text">
+          Create an account, add a handful of tasks, and let the scheduler lay out your week.
+        </p>
+        <div class="cta-actions">
+          <router-link v-if="!isLoggedIn" class="btn btn-primary btn-lg" to="/register">
+            Create a free account
+          </router-link>
+          <router-link v-else class="btn btn-primary btn-lg" to="/calendar">
+            Open my calendar
+          </router-link>
         </div>
       </div>
     </BContainer>
@@ -39,138 +90,346 @@
 </template>
 
 <script>
-// @ is an alias to /src
-// import HelloWorld from '@/components/HelloWorld.vue'
 import { BContainer } from 'bootstrap-vue-next';
+import FeatureIcon from '@/components/FeatureIcon.vue';
+import { useSeo } from '@/composables/useSeo';
 
 export default {
   name: "Home",
   components: {
-    BContainer
+    BContainer,
+    FeatureIcon,
+  },
+  setup() {
+    useSeo({
+      title: 'Automatic task scheduling',
+      description:
+        'AutoTaskCalendar turns your task list into a realistic schedule. It places each '
+        + 'task into your working hours automatically, handles recurring work, syncs with '
+        + 'Google Calendar, and shows what a missed slot costs. Free to use.',
+      path: '/',
+    });
+  },
+  data() {
+    return {
+      features: [
+        {
+          icon: 'bolt',
+          title: 'Automatic scheduling',
+          text: 'Give a task a duration and a due date. The scheduler finds it a slot, respecting priorities and the order work has to happen in.',
+        },
+        {
+          icon: 'clock',
+          title: 'Your real working hours',
+          text: 'Set the hours and days you actually work, in your own timezone. Nothing is scheduled outside them.',
+        },
+        {
+          icon: 'layers',
+          title: 'Long tasks, split up',
+          text: 'A task too big for one sitting can be broken into chunks of a size you choose and spread across several days.',
+        },
+        {
+          icon: 'repeat',
+          title: 'Recurring work',
+          text: 'Daily, weekly, monthly and yearly rules generate real tasks you can complete, reschedule or skip individually.',
+        },
+        {
+          icon: 'shield',
+          title: 'See what slipping costs',
+          text: 'Ask what happens if a slot is lost. The forecast shows which later tasks move and which would miss their deadline.',
+        },
+        {
+          icon: 'link',
+          title: 'Google Calendar sync',
+          text: 'Connect your Google Calendar so existing commitments are scheduled around rather than double-booked.',
+        },
+        {
+          icon: 'compass',
+          title: 'Roles, goals and projects',
+          text: 'Ladder tasks up to the projects and goals they serve, so you can see whether this week went where you meant it to.',
+        },
+        {
+          icon: 'scales',
+          title: 'Personal time stays personal',
+          text: 'Work tracked under a personal role is reviewed weekly but never given a slot on your work calendar.',
+        },
+      ],
+      steps: [
+        {
+          title: 'Set your working hours',
+          text: 'Tell AutoTaskCalendar which days and hours are yours to work in, and your timezone.',
+        },
+        {
+          title: 'Add your tasks',
+          text: 'Each one needs roughly how long it takes and when it is due. Add a repeat rule if it comes back.',
+        },
+        {
+          title: 'Let it schedule',
+          text: 'The scheduler places everything into the time you have and flags anything that will not fit.',
+        },
+        {
+          title: 'Review as the week moves',
+          text: 'Complete what is done, reschedule when plans change, and check the forecast before giving a slot away.',
+        },
+      ],
+    };
   },
   computed: {
-    user: function () {
+    isLoggedIn() {
+      return this.$store.getters.isLoggedIn;
+    },
+    user() {
       return this.$store.state.user;
     },
-  },
-  metaInfo: {
-    title: "Home - Automatic Task Scheduling Made Easy",
-    meta: [
-      {
-        name: "description",
-        content: "AutoTaskCalendar automatically schedules your tasks into your calendar. Free to use, intelligent planning, and seamless Google Calendar integration. Start managing your tasks smarter today.",
-      },
-      { 
-        name: "keywords", 
-        content: "free task manager, automatic task scheduling, calendar management, productivity tool, task organizer, time management, Google Calendar sync" 
-      },
-      { property: "og:title", content: "AutoTaskCalendar - Automatic Task Scheduling Made Easy" },
-      { 
-        property: "og:description", 
-        content: "Free task management with automatic scheduling. Integrate with Google Calendar and let AutoTaskCalendar organize your work intelligently." 
-      },
-      { name: "twitter:title", content: "AutoTaskCalendar - Automatic Task Scheduling Made Easy" },
-      { 
-        name: "twitter:description", 
-        content: "Free task management with automatic scheduling. Integrate with Google Calendar and let AutoTaskCalendar organize your work intelligently." 
-      },
-    ],
   },
 };
 </script>
 
-<style>
-.home-hero {
+<style scoped>
+/* Scoped: this page used to leak generic names like .box and .section-header globally. */
+
+.hero {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 14vh 20px 10vh;
   overflow: hidden;
+  padding: 96px 20px 104px;
+  margin-bottom: 72px;
+  text-align: center;
+  background:
+    radial-gradient(60% 80% at 15% 15%, rgba(102, 126, 234, 0.35) 0%, transparent 60%),
+    radial-gradient(55% 75% at 85% 20%, rgba(118, 75, 162, 0.32) 0%, transparent 62%),
+    linear-gradient(160deg, var(--surface-1) 0%, var(--surface-2) 55%, var(--surface-0) 100%);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-/* A soft accent glow behind the headline instead of a photo. */
-.home-hero::before {
+/* A faint grid, suggesting a calendar without the weight of an image. */
+.hero::after {
   content: "";
   position: absolute;
-  inset: -40% 10% auto;
-  height: 520px;
-  background: radial-gradient(closest-side, rgba(99, 102, 241, 0.22), transparent);
+  inset: 0;
+  background-image:
+    linear-gradient(var(--surface-2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--surface-2) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(70% 60% at 50% 40%, #000 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(70% 60% at 50% 40%, #000 0%, transparent 100%);
   pointer-events: none;
 }
 
-.home-hero > * {
+.hero-inner {
   position: relative;
-}
-
-.home-eyebrow {
-  display: inline-block;
-  padding: 4px 12px;
-  margin-bottom: 20px;
-  border: 1px solid var(--atc-border-strong);
-  border-radius: var(--atc-radius-pill);
-  background: var(--atc-surface);
-  color: var(--atc-text-muted);
-  font-size: 13px;
-}
-
-.home-title {
-  font-size: clamp(2.2rem, 5vw, 3.6rem);
-  font-weight: 700;
-  line-height: 1.08;
-  letter-spacing: -0.035em;
-  margin: 0 0 18px;
-}
-
-.home-lede {
-  max-width: 560px;
+  z-index: 1;
+  max-width: 820px;
   margin: 0 auto;
-  color: var(--atc-text-muted);
-  font-size: 1.1rem;
-  line-height: 1.6;
 }
 
-.loginSelect {
+.hero-eyebrow {
+  margin: 0 0 18px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-300);
+}
+
+.hero-title {
+  margin: 0 0 22px;
+  font-size: clamp(2.1rem, 5vw, 3.4rem);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.hero-subtitle {
+  max-width: 660px;
+  margin: 0 auto 36px;
+  font-size: clamp(1rem, 2vw, 1.18rem);
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.hero-actions {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 32px;
+  gap: 14px;
 }
 
-.loginSelect .btn-lg {
-  font-size: 1rem;
-  padding: 0.65rem 1.3rem;
+.hero-note {
+  margin: 22px 0 0;
+  font-size: 0.92rem;
+  color: var(--text-muted);
 }
 
-.section-slides {
-  margin-bottom: 64px;
-}
-
-.home-features {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
+.home-section {
+  margin-bottom: 72px;
   text-align: left;
 }
 
-.home-feature {
-  padding: 22px;
-  background: var(--atc-surface);
-  border: 1px solid var(--atc-border);
-  border-radius: var(--atc-radius-lg);
+.section-title {
+  margin: 0 0 18px;
+  font-size: clamp(1.5rem, 3vw, 2.05rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  text-align: center;
 }
 
-.home-feature h3 {
-  font-size: 1rem;
+.section-lede {
+  max-width: 720px;
+  margin: 0 auto;
+  font-size: 1.06rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+  margin-top: 36px;
+}
+
+.feature-card {
+  padding: 26px 24px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  transition: border-color 0.25s ease, transform 0.25s ease, background 0.25s ease;
+}
+
+.feature-card:hover {
+  background: var(--surface-2);
+  border-color: rgba(102, 126, 234, 0.45);
+  transform: translateY(-3px);
+}
+
+.feature-card-icon {
+  margin-bottom: 16px;
+  color: var(--accent-300);
+}
+
+.feature-card-title {
+  margin: 0 0 10px;
+  font-size: 1.1rem;
   font-weight: 600;
-  margin: 0 0 6px;
+  color: var(--text-primary);
 }
 
-.home-feature p {
+.feature-card-text {
   margin: 0;
-  color: var(--atc-text-muted);
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 0.96rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.step-list {
+  max-width: 760px;
+  margin: 36px auto 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 22px 24px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--violet-500) 100%);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.step-title {
+  margin: 0 0 6px;
+  font-size: 1.08rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.step-text {
+  margin: 0;
+  font-size: 0.97rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.cta-panel {
+  padding: 56px 32px;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.16) 0%, rgba(118, 75, 162, 0.16) 100%);
+  border: 1px solid rgba(102, 126, 234, 0.28);
+  border-radius: 18px;
+}
+
+.cta-title {
+  margin: 0 0 14px;
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.cta-text {
+  max-width: 540px;
+  margin: 0 auto 28px;
+  font-size: 1.04rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.cta-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+@media (max-width: 576px) {
+  .hero {
+    padding: 64px 18px 72px;
+    margin-bottom: 56px;
+  }
+
+  .home-section {
+    margin-bottom: 56px;
+  }
+
+  .hero-actions .btn,
+  .cta-actions .btn {
+    width: 100%;
+  }
+
+  .step {
+    gap: 16px;
+    padding: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-card {
+    transition: none;
+  }
+
+  .feature-card:hover {
+    transform: none;
+  }
 }
 </style>

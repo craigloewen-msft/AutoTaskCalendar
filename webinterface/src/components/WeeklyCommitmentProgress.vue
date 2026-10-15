@@ -169,9 +169,9 @@ export default {
 .commitment {
   margin: 14px 0 0;
   padding: 14px;
-  border: 1px solid rgba(165, 180, 252, 0.16);
+  border: 1px solid rgba(141, 162, 251, 0.16);
   border-radius: 10px;
-  background: rgba(99, 102, 241, 0.05);
+  background: rgba(102, 126, 234, 0.05);
 }
 
 .commitment-head {
@@ -183,7 +183,7 @@ export default {
 }
 
 .commitment-label {
-  color: var(--atc-accent-text);
+  color: var(--accent-300);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -191,7 +191,7 @@ export default {
 }
 
 .commitment-score {
-  color: var(--atc-text);
+  color: var(--text-secondary);
   font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
 }
@@ -208,7 +208,7 @@ export default {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: var(--atc-success);
+  background: linear-gradient(90deg, var(--success-text), var(--success-text));
   transition: width 0.35s ease;
 }
 
@@ -230,7 +230,7 @@ export default {
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: var(--atc-text);
+  color: var(--text-secondary);
   font: inherit;
   font-size: 0.84rem;
   text-align: left;
@@ -243,9 +243,9 @@ button.commitment-cell {
 
 button.commitment-cell:hover,
 button.commitment-cell:focus-visible {
-  border-color: rgba(165, 180, 252, 0.45);
+  border-color: rgba(141, 162, 251, 0.45);
   outline: none;
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(102, 126, 234, 0.1);
 }
 
 .commitment-title {
@@ -262,47 +262,47 @@ button.commitment-cell:focus-visible {
 .status-glyph {
   flex: 0 0 auto;
   width: 12px;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 0.8rem;
   text-align: center;
 }
 
 .commitment-meta {
   flex: 0 0 auto;
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .task-marker {
-  color: var(--atc-accent-text);
+  color: var(--accent-300);
 }
 
 .is-done .status-glyph {
-  color: var(--atc-success-text);
+  color: var(--success-text);
 }
 
 .is-done .title-text {
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   text-decoration: line-through;
 }
 
 .is-moved .status-glyph {
-  color: #fbbf24;
+  color: var(--warning-text);
 }
 
 .is-removed .status-glyph {
-  color: var(--atc-danger-text);
+  color: var(--danger-text);
 }
 
 .is-removed .title-text {
-  color: var(--atc-text-muted);
+  color: var(--text-muted);
   text-decoration: line-through;
 }
 
 .is-added .status-glyph {
-  color: var(--atc-accent-text);
+  color: var(--accent-300);
 }
 
 .added-head {
@@ -312,8 +312,8 @@ button.commitment-cell:focus-visible {
   gap: 12px;
   margin: 12px 0 6px;
   padding-top: 10px;
-  border-top: 1px dashed var(--atc-border);
-  color: var(--atc-text-muted);
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
   font-size: 0.72rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -328,10 +328,10 @@ button.commitment-cell:focus-visible {
 
 .fold-in {
   padding: 3px 10px;
-  border: 1px solid rgba(165, 180, 252, 0.4);
+  border: 1px solid rgba(141, 162, 251, 0.4);
   border-radius: 999px;
   background: transparent;
-  color: var(--atc-accent-text);
+  color: var(--accent-300);
   font-size: 0.7rem;
   letter-spacing: 0.04em;
   text-transform: none;
@@ -342,7 +342,7 @@ button.commitment-cell:focus-visible {
 .fold-in:hover:not(:disabled),
 .fold-in:focus-visible {
   outline: none;
-  background: rgba(99, 102, 241, 0.14);
+  background: rgba(102, 126, 234, 0.14);
 }
 
 .fold-in:disabled {

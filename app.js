@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const fs = require('fs');
+const path = require('path');
 const session = require('express-session');
 const MongoStore = require('connect-mongo')
 const express = require('express');
@@ -105,6 +106,45 @@ app.use('/api', eventRoutes);
 app.use('/api', compassRoutes);
 app.use('/api', weeklyPlanRoutes);
 app.use('/api', adminRoutes);
+
+// SPA fallback. The client router owns real paths like /about, so a cold load or refresh
+// of one must return HTML rather than 404. Mounted last, after /api and after
+// express.static, so it can never shadow an endpoint or a built asset.
+//
+// Public pages are prerendered at build time (see webinterface/build/PrerenderPlugin.js)
+// and are served as themselves. Everything else gets `app.html`, the neutral shell:
+// serving the prerendered home page here would give every private URL home's title,
+// description and canonical until the app booted.
+const distDir = path.join(__dirname, 'dist');
+
+function prerenderedPageFor(urlPath) {
+    const route = urlPath.replace(/\/+$/, '') || '/';
+    if (route === '/') {
+        const home = path.join(distDir, 'index.html');
+        return fs.existsSync(home) ? home : null;
+    }
+
+    // Resolve before comparing: a path only looks safe until '..' has been collapsed.
+    const file = path.resolve(distDir, `${route.replace(/^\/+/, '')}.html`);
+    if (!file.startsWith(distDir + path.sep)) return null;
+
+    return fs.existsSync(file) ? file : null;
+}
+
+app.get('*', (req, res, next) => {
+    // An unmatched /api path is a missing endpoint, not a page; let it 404 as itself.
+    if (req.path.startsWith('/api/')) return next();
+    // Anything with a file extension is a missing asset; serving HTML for it would hide
+    // the error and break module/image loading with a confusing MIME type.
+    if (path.extname(req.path)) return next();
+
+    const prerendered = prerenderedPageFor(req.path);
+    if (prerendered) return res.sendFile(prerendered);
+
+    const shell = path.join(distDir, 'app.html');
+    // app.html exists only when the build prerendered; otherwise index.html is the shell.
+    return res.sendFile(fs.existsSync(shell) ? shell : path.join(distDir, 'index.html'));
+});
 
 async function start() {
     await mongoose.connect(mongooseConnectionString, {

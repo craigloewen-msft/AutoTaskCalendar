@@ -72,13 +72,13 @@ The dataset creates:
    npm run dev
    ```
 
-2. Navigate to the login page at `http://localhost:8080/#/login`
+2. Navigate to the login page at `http://localhost:8080/login`
 
 3. Enter the test credentials:
    - Username: `testuser`
    - Password: `testpassword`
 
-4. You will be redirected to the user profile page at `http://localhost:8080/#/user/testuser`
+4. You will be redirected to the user profile page at `http://localhost:8080/user/testuser`
 
 5. From there you can:
    - View the Calendar page to see scheduled tasks and events

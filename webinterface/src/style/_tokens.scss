@@ -1,0 +1,109 @@
+// Design tokens: the single source of truth for colour, type, space, and elevation.
+// Pure Sass variables, no CSS output. Bootstrap's variables derive from these in
+// darkVariables.scss, and base.scss re-publishes them as CSS custom properties for
+// component <style> blocks. See docs/DESIGN_SYSTEM.md.
+
+// --- Surfaces -------------------------------------------------------------
+// A cool slate ramp. Depth is a step on this ramp, never an ad-hoc white alpha.
+$surface-0: #0d1017; // page background
+$surface-1: #141822; // cards, panels
+$surface-2: #1b212c; // raised: inputs, row hover
+$surface-3: #232a38; // highest: dropdowns, popovers, active rows
+
+$border-subtle: #1f2634; // hairline inside a surface
+$border: #2b3341;        // default edge
+$border-strong: #3a4454; // emphasis
+
+// --- Text -----------------------------------------------------------------
+$text-primary: #e6eaf2;
+$text-secondary: #a6b0c0;
+$text-muted: #78839a;
+$text-faint: #6b7688;
+
+// --- Accent ---------------------------------------------------------------
+// Indigo stays the identity. Solid for controls; the violet gradient is reserved
+// for the brand wordmark and hero titles.
+$accent-100: #c7cefb;
+$accent-300: #8da2fb;
+$accent-400: #7b8ef5;
+$accent-500: #667eea;
+$accent-600: #5568d3;
+$accent-700: #4453b0;
+$violet-500: #764ba2;
+
+$accent-soft: rgba(102, 126, 234, 0.14);
+$accent-softer: rgba(102, 126, 234, 0.07);
+$brand-gradient: linear-gradient(135deg, $accent-500 0%, $violet-500 100%);
+
+// --- Status ---------------------------------------------------------------
+// Each is a trio: solid fill, readable text on dark, tinted background.
+$success: #10b981;
+$success-text: #6ee7b7;
+$success-soft: rgba(16, 185, 129, 0.14);
+
+$warning: #f59e0b;
+$warning-text: #fcd34d;
+$warning-soft: rgba(245, 158, 11, 0.15);
+
+$danger: #ef4444;
+$danger-text: #fca5a5;
+$danger-soft: rgba(239, 68, 68, 0.14);
+
+$info: #3b82f6;
+$info-text: #93c5fd;
+$info-soft: rgba(59, 130, 246, 0.14);
+
+// --- Typography -----------------------------------------------------------
+$font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+$font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+$fs-xs: 0.72rem;
+$fs-sm: 0.82rem;
+$fs-md: 0.9rem;
+$fs-base: 1rem;
+$fs-lg: 1.15rem;
+$fs-xl: 1.4rem;
+$fs-2xl: 1.8rem;
+$fs-3xl: 2.4rem;
+
+$fw-normal: 400;
+$fw-medium: 500;
+$fw-semibold: 600;
+$fw-bold: 700;
+
+$lh-tight: 1.2;
+$lh-normal: 1.5;
+$lh-relaxed: 1.65;
+
+// --- Space ----------------------------------------------------------------
+$space-1: 4px;
+$space-2: 8px;
+$space-3: 12px;
+$space-4: 16px;
+$space-5: 24px;
+$space-6: 32px;
+$space-7: 48px;
+$space-8: 64px;
+
+// --- Radius ---------------------------------------------------------------
+$radius-xs: 4px;
+$radius-sm: 6px;
+$radius-md: 10px;
+$radius-lg: 14px;
+$radius-xl: 20px;
+$radius-pill: 999px;
+
+// --- Elevation ------------------------------------------------------------
+$elev-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+$elev-2: 0 2px 8px rgba(0, 0, 0, 0.35);
+$elev-3: 0 8px 24px rgba(0, 0, 0, 0.4);
+$elev-4: 0 16px 48px rgba(0, 0, 0, 0.5);
+
+// --- Motion ---------------------------------------------------------------
+$motion-fast: 120ms;
+$motion: 180ms;
+$motion-slow: 300ms;
+$ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+// --- Focus ----------------------------------------------------------------
+$focus-ring: 0 0 0 3px rgba(102, 126, 234, 0.45);
