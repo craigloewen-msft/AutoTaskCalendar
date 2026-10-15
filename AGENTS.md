@@ -73,6 +73,7 @@ dataset.
   `docs/ADMIN.md` covers the admin dashboard and how a user is made an admin;
   `docs/DATE_PICKER.md` covers the one date picker shared by every date field;
   `docs/STYLE_GUIDE.md` covers the dark theme, its `--atc-*` design tokens, and the no-raw-colours rule;
+  `docs/PROXIED_ACCESS.md` covers reaching the dev stack through a forwarded port;
   `docs/REFACTOR_OVERVIEW.md` is the small risk-driven refactor roadmap;
   `docs/SHARED_DATABASE.md` covers the one shared database and seed namespaces.
 
