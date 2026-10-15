@@ -1486,7 +1486,7 @@ export default {
   padding: 0 20px 60px;
   text-align: left;
   background:
-    radial-gradient(circle at 12% 0%, rgba(102, 126, 234, 0.13), transparent 34rem),
+    radial-gradient(circle at 12% 0%, rgba(99, 102, 241, 0.13), transparent 34rem),
     #0d1117;
 }
 
@@ -1580,7 +1580,7 @@ export default {
   width: 100%;
   min-height: 2px;
   border-radius: 4px;
-  background: linear-gradient(180deg, var(--accent-300), var(--accent));
+  background: var(--accent);
   transition: height 0.3s ease;
 }
 
@@ -1911,9 +1911,9 @@ export default {
 
 .loose-task:hover,
 .loose-task:focus-visible {
-  border-color: rgba(141, 162, 251, 0.5);
+  border-color: rgba(165, 180, 252, 0.5);
   outline: none;
-  background: rgba(102, 126, 234, 0.12);
+  background: rgba(99, 102, 241, 0.12);
 }
 
 .loose-meta {

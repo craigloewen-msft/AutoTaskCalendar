@@ -365,7 +365,7 @@ function todayIso() {
 }
 
 .weekday-pill.selected {
-  background: linear-gradient(135deg, var(--accent) 0%, var(--violet-500) 100%);
+  background: var(--accent);
   border-color: transparent;
   color: #fff;
 }

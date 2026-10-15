@@ -440,9 +440,9 @@ button.task-row {
 
 button.task-row:hover,
 button.task-row:focus-visible {
-  border-color: rgba(141, 162, 251, 0.5);
+  border-color: rgba(165, 180, 252, 0.5);
   outline: none;
-  background: rgba(102, 126, 234, 0.12);
+  background: rgba(99, 102, 241, 0.12);
 }
 
 .task-name {
@@ -532,7 +532,7 @@ button.task-row:focus-visible {
 
 .quick-add-trigger {
   padding: 5px 11px;
-  border: 1px dashed rgba(141, 162, 251, 0.36);
+  border: 1px dashed rgba(165, 180, 252, 0.36);
   border-radius: 999px;
   background: transparent;
   color: var(--accent-300);
@@ -543,9 +543,9 @@ button.task-row:focus-visible {
 
 .quick-add-trigger:hover,
 .quick-add-trigger:focus-visible {
-  border-color: rgba(141, 162, 251, 0.7);
+  border-color: rgba(165, 180, 252, 0.7);
   outline: none;
-  background: rgba(102, 126, 234, 0.12);
+  background: rgba(99, 102, 241, 0.12);
 }
 
 .quick-form {
@@ -620,7 +620,7 @@ button.task-row:focus-visible {
 }
 
 .day-chip:hover span {
-  border-color: rgba(141, 162, 251, 0.5);
+  border-color: rgba(165, 180, 252, 0.5);
   color: var(--text-secondary);
 }
 

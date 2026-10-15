@@ -1,7 +1,12 @@
 <template>
   <div id="app">
     <BNavbar toggleable="lg" variant="dark" class="app-navbar" data-bs-theme="dark">
-      <router-link class="navbar-brand" to="/">AutoTaskCalendar</router-link>
+      <router-link class="navbar-brand" to="/">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3M6 10l1.5 1.5L10.5 8.5"/></svg>
+        </span>
+        AutoTaskCalendar
+      </router-link>
 
       <BNavbarToggle target="nav-collapse"></BNavbarToggle>
 
@@ -17,9 +22,9 @@
         <BNavbarNav class="ms-auto">
           <!--- Right-aligned navigation items --->
           <template v-if="isLoggedIn">
-            <Bootstrapnavlinkcustom :to="'/user/' + user.username">{{
-              user.username
-            }}</Bootstrapnavlinkcustom>
+            <Bootstrapnavlinkcustom class="nav-user-link" :to="'/user/' + user.username">
+              <span class="nav-avatar" aria-hidden="true">{{ user.username.charAt(0) }}</span>{{ user.username }}
+            </Bootstrapnavlinkcustom>
             <Bootstrapnavlinkcustom to="/logout">Logout</Bootstrapnavlinkcustom>
           </template>
           <template v-else>
@@ -76,7 +81,7 @@ export default {
         { property: "og:image:alt", content: `${SITE_NAME} - ${SITE_TAGLINE}` },
         { name: "twitter:card", content: "summary_large_image" },
         { name: "twitter:image", content: DEFAULT_OG_IMAGE },
-        { name: "theme-color", content: "#667eea" },
+        { name: "theme-color", content: "#0b0d12" },
       ],
       htmlAttrs: { lang: 'en' },
     });
@@ -123,22 +128,37 @@ export default {
   position: sticky;
   top: 0;
   z-index: 1030;
-  padding: 0 var(--space-5);
+  padding: 10px var(--space-5);
   border-bottom: 1px solid var(--border-subtle);
-  background: rgba(13, 16, 23, 0.85);
-  backdrop-filter: blur(12px);
-  box-shadow: var(--elev-1);
+  background: rgba(11, 13, 18, 0.78);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
 }
 
-.navbar-brand {
+.app-navbar .navbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   margin-right: var(--space-6);
-  font-size: var(--fs-lg);
-  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  font-weight: 650;
   letter-spacing: -0.01em;
-  background: var(--brand-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+}
+
+.app-navbar .navbar-brand:hover {
+  color: #fff;
+}
+
+.brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 0 1px rgba(99, 102, 241, 0.5);
 }
 
 .navbar-brand:focus-visible {
@@ -147,7 +167,7 @@ export default {
   border-radius: var(--radius-xs);
 }
 
-/* Nav links: a quiet pill that fills in on hover, and an accent underline when active. */
+/* Nav links: a quiet pill that fills in on hover and stays filled for the current page. */
 .app-navbar .nav-link {
   position: relative;
   padding: var(--space-2) var(--space-3);
@@ -165,19 +185,27 @@ export default {
 
 .app-navbar .nav-link.router-link-active,
 .app-navbar .nav-link.active {
-  color: var(--accent-300);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.07);
 }
 
-.app-navbar .nav-link.router-link-active::after,
-.app-navbar .nav-link.active::after {
-  content: "";
-  position: absolute;
-  left: var(--space-3);
-  right: var(--space-3);
-  bottom: 0;
-  height: 2px;
-  border-radius: var(--radius-pill);
-  background: var(--accent-400);
+.nav-user-link .nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.nav-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-300);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .app-main {
@@ -189,8 +217,7 @@ export default {
   margin-top: auto;
   padding: var(--space-5) 0;
   border-top: 1px solid var(--border-subtle);
-  background: var(--surface-1);
-  color: var(--text-muted);
+  color: var(--text-faint);
   font-size: var(--fs-sm);
 }
 

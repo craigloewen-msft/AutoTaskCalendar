@@ -195,8 +195,8 @@ export default {
   margin-bottom: 72px;
   text-align: center;
   background:
-    radial-gradient(60% 80% at 15% 15%, rgba(102, 126, 234, 0.35) 0%, transparent 60%),
-    radial-gradient(55% 75% at 85% 20%, rgba(118, 75, 162, 0.32) 0%, transparent 62%),
+    radial-gradient(60% 80% at 15% 15%, rgba(99, 102, 241, 0.35) 0%, transparent 60%),
+    radial-gradient(55% 75% at 85% 20%, rgba(139, 92, 246, 0.32) 0%, transparent 62%),
     linear-gradient(160deg, var(--surface-1) 0%, var(--surface-2) 55%, var(--surface-0) 100%);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -301,8 +301,7 @@ export default {
 
 .feature-card:hover {
   background: var(--surface-2);
-  border-color: rgba(102, 126, 234, 0.45);
-  transform: translateY(-3px);
+  border-color: rgba(99, 102, 241, 0.45);
 }
 
 .feature-card-icon {
@@ -352,7 +351,7 @@ export default {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--violet-500) 100%);
+  background: var(--accent);
   font-size: 1.05rem;
   font-weight: 700;
   color: #fff;
@@ -375,8 +374,8 @@ export default {
 .cta-panel {
   padding: 56px 32px;
   text-align: center;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.16) 0%, rgba(118, 75, 162, 0.16) 100%);
-  border: 1px solid rgba(102, 126, 234, 0.28);
+  background: var(--accent-soft);
+  border: 1px solid rgba(99, 102, 241, 0.28);
   border-radius: 18px;
 }
 

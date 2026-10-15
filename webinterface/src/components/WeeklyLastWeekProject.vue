@@ -184,7 +184,7 @@ export default {
 .lw-project {
   margin-top: 12px;
   padding: 8px 10px;
-  border-left: 2px solid rgba(141, 162, 251, 0.45);
+  border-left: 2px solid rgba(165, 180, 252, 0.45);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.022);
 }
@@ -204,7 +204,7 @@ export default {
 }
 
 .lw-summary:focus-visible {
-  outline: 1px solid rgba(141, 162, 251, 0.6);
+  outline: 1px solid rgba(165, 180, 252, 0.6);
   outline-offset: 3px;
 }
 
@@ -255,9 +255,9 @@ export default {
 
 .carry-all {
   padding: 3px 11px;
-  border: 1px solid rgba(141, 162, 251, 0.45);
+  border: 1px solid rgba(165, 180, 252, 0.45);
   border-radius: 999px;
-  background: rgba(102, 126, 234, 0.12);
+  background: rgba(99, 102, 241, 0.12);
   color: var(--accent-300);
   font-size: 0.72rem;
   cursor: pointer;
@@ -266,7 +266,7 @@ export default {
 .carry-all:hover:not(:disabled),
 .carry-all:focus-visible {
   outline: none;
-  background: rgba(102, 126, 234, 0.24);
+  background: rgba(99, 102, 241, 0.24);
 }
 
 .carry-all:disabled {
@@ -329,7 +329,7 @@ export default {
 
 .carry {
   padding: 2px 9px;
-  border: 1px solid rgba(141, 162, 251, 0.4);
+  border: 1px solid rgba(165, 180, 252, 0.4);
   border-radius: 999px;
   background: transparent;
   color: var(--accent-300);
@@ -341,7 +341,7 @@ export default {
 .carry:hover:not(:disabled),
 .carry:focus-visible {
   outline: none;
-  background: rgba(102, 126, 234, 0.16);
+  background: rgba(99, 102, 241, 0.16);
 }
 
 .carry:disabled {

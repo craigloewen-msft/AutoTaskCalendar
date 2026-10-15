@@ -5,7 +5,7 @@
         <h1 class="page-title">My Calendar</h1>
         <div class="header-actions">
           <BButton variant="primary" v-on:click="openAddTaskModal" class="action-btn" aria-label="Add new task">
-            <span class="btn-icon" aria-hidden="true">+</span> Add Task
+            <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v10M3 8h10"/></svg></span> Add Task
           </BButton>
           <BButton
             variant="success"
@@ -21,11 +21,12 @@
               class="spinner-border spinner-border-sm btn-icon"
               aria-hidden="true"
             ></span>
-            <span v-else class="btn-icon" aria-hidden="true">{{ schedulingError ? "!" : "📅" }}</span>
+            <span v-else-if="schedulingError" class="btn-icon" aria-hidden="true">!</span>
+            <span v-else class="btn-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3M6 10l1.5 1.5L10.5 8.5"/></svg></span>
             <span role="status" aria-live="polite">{{ scheduleButtonLabel }}</span>
           </BButton>
           <BButton
-            variant="info"
+            variant="secondary"
             v-on:click="syncCalendar"
             class="action-btn"
             aria-label="Sync calendar with Google"
@@ -38,7 +39,7 @@
               class="spinner-border spinner-border-sm btn-icon"
               aria-hidden="true"
             ></span>
-            <span v-else class="btn-icon" aria-hidden="true">⟳</span>
+            <span v-else class="btn-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg></span>
             {{ syncing ? "Syncing…" : "Sync Calendar" }}
           </BButton>
         </div>
@@ -366,10 +367,10 @@
         <div class="main-calendar">
         <div class="calendar-controls">
           <button class="nav-btn" v-on:click="prevWeek" title="Previous Week">
-            <span class="nav-icon">◀</span> Previous
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></span> Previous
           </button>
           <button class="nav-btn" v-on:click="nextWeek" title="Next Week">
-            Next <span class="nav-icon">▶</span>
+            Next <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5 10.5 8 6 12.5"/></svg></span>
           </button>
         </div>
         <div v-if="allDayEvents.length" class="all-day-events" data-test="all-day-row">
@@ -863,12 +864,12 @@ export default {
         const inputStartDate = instantToDayPilotWall(event.startDate);
         const inputEndDate = instantToDayPilotWall(event.endDate);
 
-        // Calendar events are violet, scheduled tasks indigo. Mirrors the palette
-        // in style/_tokens.scss; see docs/DESIGN_SYSTEM.md.
-        let eventColor = "#6d4a9c";
+        // External events are quiet slate; scheduled task blocks carry the indigo accent.
+        // DayPilot needs literal colours; see docs/DESIGN_SYSTEM.md.
+        let eventColor = "#3a4560";
         let eventTags = null;
         if (event.type.includes("task")) {
-          eventColor = "#4453b0";
+          eventColor = "#4f46e5";
           eventTags = {};
           eventTags.taskId = event.taskRef;
           if (event.type.includes("task-chunk")) {
@@ -1013,7 +1014,7 @@ export default {
         const currentInnerDiv = currentCell.children[0];
         currentInnerDiv.style.setProperty(
           "background",
-          "rgb(64,65,112)",
+          "rgba(99, 102, 241, 0.22)",
           "important"
         );
       }
@@ -1256,98 +1257,107 @@ export default {
 }
 
 .btn-icon {
-  font-size: 18px;
+  display: inline-flex;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.btn-icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 .main-calendar {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: var(--space-5);
-  box-shadow: var(--elev-1);
+  padding: var(--space-4);
 }
 
-.calendar_default_rowheader_inner,
-.calendar_default_cornerright_inner,
-.calendar_default_corner_inner,
-.calendar_default_colheader_inner,
-.calendar_default_alldayheader_inner {
-  background: var(--surface-2) !important;
-  color: rgb(220, 220, 225) !important;
-  font-weight: 600;
-  border-right: 1px solid var(--border) !important;
-  border-bottom: 1px solid var(--border) !important;
-}
-
-.calendar_default_cell_inner {
-  background: var(--surface-0) !important;
-}
-
-.calendar_default_cell_business .calendar_default_cell_inner {
-  background: var(--surface-1) !important;
-}
-
-/* Comprehensive dark mode overrides for DayPilot calendar */
+/* DayPilot theme: transparent grid with hairlines, so events carry the colour. */
 #dp {
-  color: rgb(220, 220, 225) !important;
-  /* Override DayPilot CSS variables for dark theme */
-  --dp-calendar-cell-bg-color: var(--surface-0);
-  --dp-calendar-cell-business-bg-color: var(--surface-1);
-  --dp-calendar-header-bg-color: var(--surface-2);
-  --dp-calendar-border-color: var(--border);
-  --dp-calendar-bg-color: var(--surface-0);
-  --dp-calendar-event-bar-bg-color: var(--border);
-  --dp-calendar-event-bar-color: var(--accent-400);
+  color: var(--text-primary) !important;
 }
 
-:deep(.calendar_default_event_inner),
-:deep(.calendar_transparent_event_inner) {
-  color: white !important;
-  border-radius: 6px 6px 0 0 !important;
-  opacity: 1 !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  padding: 6px 8px !important;
-  font-weight: 500 !important;
-  font-size: 13px !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
+:deep(.calendar_default_main) {
+  border: 0 !important;
+  font-family: inherit !important;
+  background: transparent !important;
 }
 
-/* Headers dark theme */
+:deep(.calendar_default_cell_inner) {
+  background: rgba(255, 255, 255, 0.012) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.035) !important;
+}
+
+/* Only the hour lines are strong enough to read as a grid. */
+:deep(.calendar_default_cell:nth-child(4n) .calendar_default_cell_inner) {
+  border-bottom-color: rgba(255, 255, 255, 0.07) !important;
+}
+
+:deep(.calendar_default_cell_business .calendar_default_cell_inner) {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
 :deep(.calendar_default_rowheader_inner),
 :deep(.calendar_default_cornerright_inner),
 :deep(.calendar_default_corner_inner),
 :deep(.calendar_default_colheader_inner),
 :deep(.calendar_default_alldayheader_inner) {
-  background: var(--surface-2) !important;
-  color: rgb(220, 220, 225) !important;
+  background: var(--surface-1) !important;
+  color: var(--text-muted) !important;
+  font-size: 12px !important;
+  font-weight: 500;
+  border-right: 1px solid var(--border-subtle) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+:deep(.calendar_default_colheader_inner) {
+  color: var(--text-primary) !important;
+  font-size: 13px !important;
   font-weight: 600;
-  border-right: 1px solid var(--border) !important;
-  border-bottom: 1px solid var(--border) !important;
 }
 
-/* Force grid lines with deep selectors */
-:deep(.calendar_default_cell_inner) {
-  border-right: 1px solid var(--border) !important;
-  border-bottom: 1px solid var(--border) !important;
-}
-
-:deep(.calendar_transparent_cell_inner) {
-  border-right: 1px solid var(--border) !important;
-  border-bottom: 1px solid var(--border) !important;
+:deep(.calendar_default_rowheader_minutes) {
+  color: var(--text-faint);
 }
 
 :deep(.calendar_default_rowheader),
-:deep(.calendar_transparent_rowheader) {
-  border-right: 1px solid var(--border) !important;
+:deep(.calendar_default_colheader) {
+  border-color: var(--border-subtle) !important;
 }
 
-:deep(.calendar_default_colheader),
-:deep(.calendar_transparent_colheader) {
-  border-bottom: 1px solid var(--border) !important;
+/* Events: rounded card, white text, a lighter stripe on the left for edge contrast. */
+:deep(.calendar_default_event_inner),
+:deep(.calendar_transparent_event_inner) {
+  color: #fff !important;
+  border-radius: var(--radius-sm) !important;
+  opacity: 1 !important;
+  border: 0 !important;
+  box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.35), 0 1px 2px rgba(0, 0, 0, 0.35) !important;
+  padding: 5px 8px 5px 10px !important;
+  font-weight: 500 !important;
+  font-size: 12.5px !important;
+  line-height: 1.3 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+:deep(.calendar_default_event) {
+  padding: 1px 2px;
+}
+
+:deep(.calendar_default_event:hover .calendar_default_event_inner) {
+  filter: brightness(1.1);
+}
+
+:deep(.calendar_default_event_bar) {
+  display: none;
 }
 
 .calendar-box {
@@ -1369,14 +1379,14 @@ export default {
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: var(--space-5);
-  box-shadow: var(--elev-1);
+  padding: 18px 14px 18px 18px;
+  text-align: left;
 }
 
 .sidebar-title {
-  font-size: 20px;
+  font-size: 15px;
   font-weight: 600;
-  margin: 0 0 20px 0;
+  margin: 0 0 16px 0;
   color: var(--text-primary);
 }
 
@@ -1389,39 +1399,22 @@ export default {
 .task-list {
   overflow-y: auto;
   max-height: calc(100vh - 200px);
-}
-
-.task-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.task-list::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 3px;
-}
-
-.task-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
-
-.task-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  padding-right: 4px;
 }
 
 .task-group {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .task-date-header {
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-faint);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .task-items {
@@ -1434,10 +1427,11 @@ export default {
   display: flex;
   align-items: stretch;
   flex-direction: column;
-  padding: 12px 16px;
-  margin-bottom: 8px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
   background: var(--surface-2);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: background var(--motion) var(--ease), border-color var(--motion) var(--ease);
   border-left: 3px solid transparent;
@@ -1445,6 +1439,9 @@ export default {
 
 .task-item:hover {
   background: var(--surface-3);
+  border-top-color: var(--border);
+  border-right-color: var(--border);
+  border-bottom-color: var(--border);
 }
 
 .task-primary-row {
@@ -1931,9 +1928,10 @@ export default {
 .task-days {
   font-size: 11px;
   font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 12px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .unscheduled-badge {
@@ -1999,8 +1997,8 @@ export default {
 }
 
 .nav-btn {
-  flex: 1;
-  padding: var(--space-2) var(--space-4);
+  padding: 6px 12px;
+  font-size: 13px;
   background: var(--surface-2);
   color: var(--text-secondary);
   border: 1px solid var(--border);
@@ -2022,14 +2020,19 @@ export default {
 }
 
 .nav-icon {
-  font-size: 14px;
+  display: inline-flex;
+}
+
+.nav-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 .calendar-container {
   flex: 1;
-  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .all-day-events {
@@ -2037,12 +2040,16 @@ export default {
   gap: 8px;
   align-items: center;
   min-height: 36px;
+  margin-bottom: 8px;
   padding: 6px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-size: 13px;
 }
 
 .all-day-label {
   font-weight: 600;
+  color: var(--text-muted);
 }
 
 .all-day-event {
@@ -2050,8 +2057,8 @@ export default {
   align-items: center;
   gap: 6px;
   padding: 3px 5px 3px 8px;
-  border-radius: 4px;
-  background: #a27cf9;
+  border-radius: var(--radius-sm);
+  background: #3a4560;
   color: #fff;
 }
 
