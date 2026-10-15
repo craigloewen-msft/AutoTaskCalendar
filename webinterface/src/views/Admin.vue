@@ -191,6 +191,7 @@
 
 <script>
 import { BContainer } from "bootstrap-vue-next";
+import { useSeo } from '@/composables/useSeo';
 
 const TREND_SERIES = [
   { key: "signups", label: "Signups" },
@@ -202,6 +203,9 @@ const SEARCH_DELAY_MS = 250;
 
 export default {
   name: "Admin",
+  setup() {
+    useSeo({ title: 'Admin', noindex: true });
+  },
   components: { BContainer },
   data() {
     return {

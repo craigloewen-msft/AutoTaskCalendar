@@ -1,4 +1,4 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import Home from '../views/Home.vue'
 import store from "../store.js"
 
@@ -84,10 +84,24 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHashHistory(process.env.BASE_URL),
+  // Real paths, not fragments: a crawler cannot see past a '#', so hash URLs made the
+  // whole site look like one page. Express serves index.html for these; see app.js.
+  history: createWebHistory(process.env.BASE_URL),
   linkActiveClass: "active",
-  routes
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    return { top: 0 }
+  }
 })
+
+// Links shared while the app used hash URLs still arrive as "/#/about". Translate them
+// once, on load, so old bookmarks and inbound links do not land on an empty home page.
+const legacyHash = typeof window !== 'undefined' ? window.location.hash : ''
+if (legacyHash.startsWith('#/')) {
+  const target = legacyHash.slice(1)
+  router.isReady().then(() => router.replace(target).catch(() => {}))
+}
 
 router.beforeEach(async (to) => {
   await store.dispatch('initializeSession')

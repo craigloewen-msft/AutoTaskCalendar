@@ -44,11 +44,15 @@
 <script>
 import axios from "axios";
 import { BContainer } from 'bootstrap-vue-next';
+import { useSeo } from '@/composables/useSeo';
 
 let devEndPoint = "/api/";
 
 export default {
   name: "Register",
+  setup() {
+    useSeo({ title: 'Create an account', noindex: true });
+  },
   components: {
     BContainer
   },
@@ -146,29 +150,6 @@ export default {
       }
       return true;
     },
-  },
-  metaInfo: {
-    title: "Register - Start Scheduling Tasks Automatically",
-    meta: [
-      {
-        name: "description",
-        content: "Create your free AutoTaskCalendar account to start automatically scheduling tasks, integrating with Google Calendar, and managing your productivity effortlessly.",
-      },
-      { 
-        name: "keywords", 
-        content: "register, sign up, create account, free task manager, task calendar registration, productivity account" 
-      },
-      { property: "og:title", content: "Register for AutoTaskCalendar - Free Task Scheduling" },
-      { 
-        property: "og:description", 
-        content: "Create your free account and start scheduling tasks automatically with intelligent planning." 
-      },
-      { name: "twitter:title", content: "Register for AutoTaskCalendar - Free Task Scheduling" },
-      { 
-        name: "twitter:description", 
-        content: "Create your free account and start scheduling tasks automatically with intelligent planning." 
-      },
-    ],
   },
 };
 </script>

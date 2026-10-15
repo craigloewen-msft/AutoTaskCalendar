@@ -161,6 +161,7 @@ import CompassEditorDrawer from "../components/CompassEditorDrawer.vue";
 import { buildRoleColorMap } from "../utils/roleColors";
 import ContextFilter from "../components/ContextFilter";
 import { contextMeta, filterRolesByContext, readContextFilter, roleContextOf } from "../utils/roleContext";
+import { useSeo } from '@/composables/useSeo';
 
 /**
  * Compass: roles > goals > projects.
@@ -170,6 +171,9 @@ import { contextMeta, filterRolesByContext, readContextFilter, roleContextOf } f
  */
 export default {
   name: "Compass",
+  setup() {
+    useSeo({ title: 'Compass', noindex: true });
+  },
   components: { BContainer, CompassEditorDrawer, ContextFilter },
   data() {
     return {

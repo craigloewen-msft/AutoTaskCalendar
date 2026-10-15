@@ -433,12 +433,16 @@ import {
 } from "../utils/temporal";
 import { isIntention, intentionsForWeek } from "../utils/intentions";
 import { roleContextOf } from "../utils/roleContext";
+import { useSeo } from '@/composables/useSeo';
 
 // The sidebar shows this far ahead; the scheduler materialises 60 days of occurrences.
 const SIDEBAR_WINDOW_DAYS = 21;
 
 export default {
   name: "Calendar",
+  setup() {
+    useSeo({ title: 'My calendar', noindex: true });
+  },
   components: {
     DayPilotCalendar,
     BButton,
@@ -1210,20 +1214,6 @@ export default {
     clearInterval(this.highlightInterval);
     clearTimeout(this.schedulingErrorTimer);
     this.disarmCompletion();
-  },
-  metaInfo: {
-    title: "My Calendar - Manage Your Tasks",
-    meta: [
-      {
-        name: "description",
-        content: "View and manage your automatically scheduled tasks in your calendar. Add tasks, sync with Google Calendar, and track your productivity.",
-      },
-      { 
-        name: "keywords", 
-        content: "my calendar, task view, scheduled tasks, manage tasks, calendar sync" 
-      },
-      { name: "robots", content: "noindex, nofollow" },
-    ],
   },
 };
 </script>

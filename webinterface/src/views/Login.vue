@@ -28,11 +28,15 @@
 
 <script>
 import { BContainer } from 'bootstrap-vue-next';
+import { useSeo } from '@/composables/useSeo';
 
 let devEndPoint = "/api/";
 
 export default {
   name: "Login",
+  setup() {
+    useSeo({ title: 'Sign in', noindex: true });
+  },
   components: {
     BContainer
   },
@@ -91,25 +95,6 @@ export default {
         });
       //   axios.get(devEndPoint).then(response => (this.userdata = response.data));
     },
-  },
-  metaInfo: {
-    title: "Login - Access Your Task Calendar",
-    meta: [
-      {
-        name: "description",
-        content: "Sign in to AutoTaskCalendar to access your tasks, view your automatically scheduled calendar, and manage your productivity.",
-      },
-      { 
-        name: "keywords", 
-        content: "login, sign in, task calendar, access account, task manager login" 
-      },
-      { name: "robots", content: "noindex, nofollow" },
-      { property: "og:title", content: "Login to AutoTaskCalendar" },
-      { 
-        property: "og:description", 
-        content: "Sign in to access your automatically scheduled task calendar." 
-      },
-    ],
   },
 };
 </script>
