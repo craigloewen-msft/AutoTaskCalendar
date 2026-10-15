@@ -14,11 +14,11 @@ const { RoleDetails } = require('../../models');
 const { mondayWeekBounds, todayInZone } = require('../../utils/temporal');
 
 async function login(page, username, password) {
-    await page.goto('/#/login');
+    await page.goto('/login');
     await page.locator('input[type=text]').fill(username);
     await page.locator('input[type=password]').fill(password);
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page).toHaveURL(/#\/user\//);
+    await expect(page).toHaveURL(/\/user\//);
 }
 
 // The titles in this week's committed snapshot.
@@ -39,7 +39,7 @@ test.describe('weekly plan intentions', () => {
         const projectId = String(data.named.weekendProject._id);
 
         await login(page, data.primary.username, data.primary.password);
-        await page.goto('/#/weekly-plan');
+        await page.goto('/weekly-plan');
         await expect(page.locator('[data-test=week-range]')).toBeVisible();
 
         const card = page.locator(`[data-test=quick-task-${projectId}]`);
@@ -96,7 +96,7 @@ test.describe('weekly plan intentions', () => {
         ));
 
         await login(page, data.primary.username, data.primary.password);
-        await page.goto('/#/weekly-plan');
+        await page.goto('/weekly-plan');
         await expect(page.locator('[data-test=week-range]')).toBeVisible();
 
         const trigger = page.locator(`[data-test=quick-add-open-${projectId}]`);

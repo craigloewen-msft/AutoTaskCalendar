@@ -1,6 +1,6 @@
 # Admin dashboard
 
-A site-wide management dashboard at `/#/admin`, visible only to administrators. It answers
+A site-wide management dashboard at `/admin`, visible only to administrators. It answers
 "how is the whole site doing?" — how many people signed up, how many are still using it,
 how much work they are filing, and whether the scheduler is keeping up.
 

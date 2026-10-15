@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="AutoTaskCalendar - Automatic task scheduling">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#13131a"/>
+      <stop offset="100%" stop-color="#1d1b2e"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#667eea"/>
+      <stop offset="100%" stop-color="#764ba2"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="1020" cy="120" r="300" fill="#667eea" opacity="0.14"/>
+  <circle cx="180" cy="560" r="240" fill="#764ba2" opacity="0.14"/>
+
+  <!-- Calendar mark -->
+  <g transform="translate(96 150)">
+    <rect x="0" y="14" width="132" height="124" rx="16" fill="none" stroke="url(#brand)" stroke-width="6"/>
+    <path d="M3 52 H129" stroke="url(#brand)" stroke-width="6"/>
+    <path d="M34 26 V6 M98 26 V6" stroke="url(#brand)" stroke-width="9" stroke-linecap="round"/>
+    <rect x="24" y="72" width="30" height="12" rx="6" fill="#667eea"/>
+    <rect x="66" y="72" width="42" height="12" rx="6" fill="#764ba2" opacity="0.8"/>
+    <rect x="24" y="98" width="52" height="12" rx="6" fill="#764ba2" opacity="0.6"/>
+    <rect x="88" y="98" width="20" height="12" rx="6" fill="#667eea" opacity="0.5"/>
+  </g>
+
+  <text x="96" y="372" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="78" font-weight="700" fill="#f5f5f7">AutoTaskCalendar</text>
+  <text x="96" y="446" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="38" font-weight="500" fill="#a9b0c4">Automatic task scheduling</text>
+  <text x="96" y="508" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="28" fill="#7f879c">Your task list, placed into the hours you actually have.</text>
+
+  <rect x="96" y="544" width="150" height="6" rx="3" fill="url(#brand)"/>
+</svg>

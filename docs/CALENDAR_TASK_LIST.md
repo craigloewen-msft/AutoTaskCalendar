@@ -1,6 +1,6 @@
 # The calendar task list
 
-The sidebar on the left of `/#/calendar` is the day-by-day reading of your open work. This
+The sidebar on the left of `/calendar` is the day-by-day reading of your open work. This
 manual covers what a row shows and where each part comes from. It lives in
 `webinterface/src/views/Calendar.vue`.
 

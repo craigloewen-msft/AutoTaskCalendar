@@ -38,6 +38,12 @@
 import Bootstrapnavlinkcustom from "./components/BootstrapNavlinkCustom.vue";
 import { BNavbar, BNavbarToggle, BCollapse, BNavbarNav } from 'bootstrap-vue-next';
 import { useHead } from '@vueuse/head';
+import {
+  SITE_NAME,
+  SITE_TAGLINE,
+  DEFAULT_DESCRIPTION,
+  DEFAULT_OG_IMAGE,
+} from './seo/siteConfig';
 
 export default {
   name: "App",
@@ -49,15 +55,28 @@ export default {
     BNavbarNav
   },
   setup() {
+    // Site-wide defaults. Each view sets its own title/description via useSeo();
+    // @vueuse/head dedupes by name/property so the page's value wins.
     useHead({
+      // A template rather than a literal title: a literal here would compete with the
+      // page's own title and whichever resolved last would win.
+      titleTemplate: (pageTitle) => (
+        pageTitle ? `${pageTitle} | ${SITE_NAME}` : `${SITE_NAME} - ${SITE_TAGLINE}`
+      ),
       meta: [
-        {
-          name: "description",
-          content:
-            "Easily manage your Github issues using this tool. This is a great way to never lose track of a Github issue again.",
-        },
-        { name: "keywords", content: "manage, github, issues" },
+        { name: "description", content: DEFAULT_DESCRIPTION },
+        { name: "author", content: SITE_NAME },
+        { property: "og:type", content: "website" },
+        { property: "og:site_name", content: SITE_NAME },
+        { property: "og:image", content: DEFAULT_OG_IMAGE },
+        { property: "og:image:width", content: "1200" },
+        { property: "og:image:height", content: "630" },
+        { property: "og:image:alt", content: `${SITE_NAME} - ${SITE_TAGLINE}` },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:image", content: DEFAULT_OG_IMAGE },
+        { name: "theme-color", content: "#667eea" },
       ],
+      htmlAttrs: { lang: 'en' },
     });
   },
   computed: {
@@ -84,46 +103,6 @@ export default {
       }
       return Promise.reject(error);
     });
-  },
-  metaInfo: {
-    title: "AutoTaskCalendar - Intelligent Task Scheduling & Management",
-    titleTemplate: "%s | AutoTaskCalendar",
-    meta: [
-      {
-        name: "description",
-        content:
-          "AutoTaskCalendar automatically schedules your tasks into your calendar. Smart task management with Google Calendar integration, automatic scheduling, and intelligent planning for optimal productivity.",
-      },
-      { 
-        name: "keywords", 
-        content: "task management, calendar, auto schedule, productivity, task scheduler, Google Calendar, time management, task planner, automatic scheduling, work organization" 
-      },
-      { name: "author", content: "AutoTaskCalendar" },
-      { name: "viewport", content: "width=device-width, initial-scale=1.0" },
-      { charset: "utf-8" },
-      // Open Graph / Facebook
-      { property: "og:type", content: "website" },
-      { property: "og:title", content: "AutoTaskCalendar - Intelligent Task Scheduling & Management" },
-      { 
-        property: "og:description", 
-        content: "Automatically schedule your tasks into your calendar with smart planning and Google Calendar integration." 
-      },
-      { property: "og:site_name", content: "AutoTaskCalendar" },
-      // Twitter Card
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "AutoTaskCalendar - Intelligent Task Scheduling & Management" },
-      { 
-        name: "twitter:description", 
-        content: "Automatically schedule your tasks into your calendar with smart planning and Google Calendar integration." 
-      },
-      // Additional SEO
-      { name: "robots", content: "index, follow" },
-      { name: "googlebot", content: "index, follow" },
-      { name: "theme-color", content: "#667eea" },
-    ],
-    link: [
-      { rel: "canonical", href: "https://autotaskcalendar.com" }
-    ]
   },
 };
 </script>

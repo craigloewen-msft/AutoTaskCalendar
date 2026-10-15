@@ -201,9 +201,13 @@
 import { dateOnlyInTimeZone } from "../utils/temporal";
 import { BContainer, BRow, BCol, BCard, BButton, BFormGroup, BFormCheckbox, BFormInput } from 'bootstrap-vue-next';
 import DateField from "../components/DateField.vue";
+import { useSeo } from '@/composables/useSeo';
 
 export default {
   name: "User",
+  setup() {
+    useSeo({ title: 'Profile and settings', noindex: true });
+  },
   components: {
     BContainer,
     BRow,
@@ -339,22 +343,6 @@ export default {
   },
   mounted() {
     this.refreshCalendarData();
-  },
-  metaInfo() {
-    return {
-      title: `${this.input.username || 'User'} Profile - Settings & Configuration`,
-      meta: [
-        {
-          name: "description",
-          content: "Manage your AutoTaskCalendar profile settings, working hours, Google Calendar integration, and task scheduling preferences.",
-        },
-        {
-          name: "keywords",
-          content: "user profile, settings, working hours, calendar preferences, account management"
-        },
-        { name: "robots", content: "noindex, nofollow" },
-      ],
-    };
   },
 };
 </script>

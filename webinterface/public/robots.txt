@@ -1,16 +1,18 @@
 # robots.txt for AutoTaskCalendar
+
 User-agent: *
 Allow: /
+
+# Private areas and the API: nothing here is useful in a search result, and these
+# pages require a session anyway.
 Disallow: /api/
 Disallow: /user/
 Disallow: /calendar
+Disallow: /weekly-plan
+Disallow: /compass
+Disallow: /admin
 Disallow: /login
 Disallow: /register
 Disallow: /logout
 
-# Allow indexing of public pages
-Allow: /$
-Allow: /about
-
-# Sitemap location (update with actual domain when deployed)
 Sitemap: https://autotaskcalendar.com/sitemap.xml

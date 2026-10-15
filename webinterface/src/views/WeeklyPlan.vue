@@ -460,6 +460,7 @@ import {
   formatCivilDate,
   mondayWeekBounds,
 } from "../utils/temporal";
+import { useSeo } from '@/composables/useSeo';
 
 /**
  * Weekly Plan. See docs/WEEKLY_PLAN.md.
@@ -470,6 +471,9 @@ import {
  */
 export default {
   name: "WeeklyPlan",
+  setup() {
+    useSeo({ title: 'Weekly plan', noindex: true });
+  },
   components: { ContextFilter, IntentionBand, TaskEditor, WeeklyCommitmentProgress, WeeklyLastWeekReview, WeeklyProjectCard },
   data() {
     const today = dateOnlyInTimeZone(this.$store.state.user?.timeZone);
