@@ -144,7 +144,7 @@ export default {
   margin-bottom: 20px;
   padding: 16px 18px;
   border: 1px solid rgba(255, 255, 255, 0.09);
-  border-left: 3px solid rgba(141, 162, 251, 0.6);
+  border-left: 3px solid rgba(165, 180, 252, 0.6);
   border-radius: 12px;
   background: rgba(22, 27, 34, 0.72);
 }
@@ -182,7 +182,7 @@ export default {
 .lw-toggle {
   flex: 0 0 auto;
   padding: 4px 12px;
-  border: 1px solid rgba(141, 162, 251, 0.35);
+  border: 1px solid rgba(165, 180, 252, 0.35);
   border-radius: 999px;
   background: transparent;
   color: var(--accent-300);
@@ -194,7 +194,7 @@ export default {
 .lw-toggle:hover,
 .lw-toggle:focus-visible {
   outline: none;
-  background: rgba(102, 126, 234, 0.14);
+  background: rgba(99, 102, 241, 0.14);
 }
 
 .lw-bar {
@@ -209,7 +209,7 @@ export default {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--success-text), var(--success-text));
+  background: var(--success);
   transition: width 0.35s ease;
 }
 

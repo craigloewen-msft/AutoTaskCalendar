@@ -598,9 +598,9 @@ function clone(value) {
   gap: 8px;
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid rgba(102, 126, 234, 0.42);
+  border: 1px solid rgba(99, 102, 241, 0.42);
   border-radius: 8px;
-  background: rgba(102, 126, 234, 0.1);
+  background: rgba(99, 102, 241, 0.1);
   color: var(--text-secondary);
   font-size: 0.86rem;
 }
@@ -704,7 +704,7 @@ function clone(value) {
   padding: 10px 12px;
   border-left: 3px solid var(--accent);
   border-radius: 6px;
-  background: rgba(102, 126, 234, 0.13);
+  background: rgba(99, 102, 241, 0.13);
   color: var(--accent-100);
 }
 

@@ -169,9 +169,9 @@ export default {
 .commitment {
   margin: 14px 0 0;
   padding: 14px;
-  border: 1px solid rgba(141, 162, 251, 0.16);
+  border: 1px solid rgba(165, 180, 252, 0.16);
   border-radius: 10px;
-  background: rgba(102, 126, 234, 0.05);
+  background: rgba(99, 102, 241, 0.05);
 }
 
 .commitment-head {
@@ -208,7 +208,7 @@ export default {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--success-text), var(--success-text));
+  background: var(--success);
   transition: width 0.35s ease;
 }
 
@@ -243,9 +243,9 @@ button.commitment-cell {
 
 button.commitment-cell:hover,
 button.commitment-cell:focus-visible {
-  border-color: rgba(141, 162, 251, 0.45);
+  border-color: rgba(165, 180, 252, 0.45);
   outline: none;
-  background: rgba(102, 126, 234, 0.1);
+  background: rgba(99, 102, 241, 0.1);
 }
 
 .commitment-title {
@@ -328,7 +328,7 @@ button.commitment-cell:focus-visible {
 
 .fold-in {
   padding: 3px 10px;
-  border: 1px solid rgba(141, 162, 251, 0.4);
+  border: 1px solid rgba(165, 180, 252, 0.4);
   border-radius: 999px;
   background: transparent;
   color: var(--accent-300);
@@ -342,7 +342,7 @@ button.commitment-cell:focus-visible {
 .fold-in:hover:not(:disabled),
 .fold-in:focus-visible {
   outline: none;
-  background: rgba(102, 126, 234, 0.14);
+  background: rgba(99, 102, 241, 0.14);
 }
 
 .fold-in:disabled {

@@ -52,8 +52,8 @@ test.describe('design system', () => {
             };
         });
 
-        expect(theme.surface).toBe('#0d1017');
-        expect(theme.bootstrapBg).toBe('#0d1017');
+        expect(theme.surface).toBe('#0b0d12');
+        expect(theme.bootstrapBg).toBe('#0b0d12');
     });
 
     test('every token a component uses is published on :root', async ({ page, seed }) => {
@@ -105,7 +105,7 @@ test.describe('design system', () => {
 
         const accent = await menu.evaluate((el) =>
             getComputedStyle(el).getPropertyValue('--dp-primary-color').trim());
-        expect(accent.toLowerCase()).toBe('#667eea');
+        expect(accent.toLowerCase()).toBe('#6366f1');
     });
 
     test('keyboard focus stays visible on the primary action', async ({ page }) => {

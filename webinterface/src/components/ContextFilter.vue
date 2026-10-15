@@ -65,7 +65,7 @@ export default {
 }
 
 .context-option.active {
-  background: rgba(102, 126, 234, 0.35);
+  background: rgba(99, 102, 241, 0.35);
   opacity: 1;
 }
 </style>

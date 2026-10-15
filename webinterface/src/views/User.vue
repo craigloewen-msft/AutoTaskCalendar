@@ -360,7 +360,7 @@ export default {
 .user-profile-header {
   text-align: center;
   padding: 40px 20px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  background: var(--accent-soft);
   border-radius: 16px;
   margin-bottom: 40px;
 }
@@ -373,12 +373,12 @@ export default {
   width: 100px;
   height: 100px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--violet-500) 100%);
+  background: var(--accent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 48px;
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
 }
 
 .user-icon {
@@ -408,7 +408,6 @@ export default {
 }
 
 .modern-card:hover {
-  transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
@@ -446,7 +445,7 @@ export default {
 .modern-input:focus {
   background: rgba(255, 255, 255, 0.08);
   border-color: var(--accent);
-  box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+  box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
   color: var(--text-primary);
 }
 
@@ -512,7 +511,7 @@ export default {
 
 .calendar-item:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(102, 126, 234, 0.5);
+  border-color: rgba(99, 102, 241, 0.5);
 }
 
 .calendar-info {
@@ -532,13 +531,12 @@ export default {
   font-size: 1.2rem;
   border-radius: 12px;
   font-weight: 600;
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
   transition: all 0.3s ease;
 }
 
 .save-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
 }
 
 /* Override Bootstrap Vue form group labels */
@@ -565,7 +563,7 @@ export default {
 }
 
 :deep(.btn-outline-primary) {
-  border-color: rgba(102, 126, 234, 0.5);
+  border-color: rgba(99, 102, 241, 0.5);
   color: var(--accent);
 }
 

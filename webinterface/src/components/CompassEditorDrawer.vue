@@ -392,8 +392,8 @@ export default {
   margin: 16px 24px 0;
   padding: 10px 12px;
   border-radius: 8px;
-  background: rgba(220, 53, 69, 0.15);
-  border: 1px solid rgba(220, 53, 69, 0.4);
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
   color: var(--danger-text);
   font-size: 0.9rem;
 }
@@ -427,7 +427,7 @@ export default {
 }
 
 .context-choice.active {
-  background: rgba(102, 126, 234, 0.35);
+  background: rgba(99, 102, 241, 0.35);
   border-color: var(--accent);
   opacity: 1;
 }

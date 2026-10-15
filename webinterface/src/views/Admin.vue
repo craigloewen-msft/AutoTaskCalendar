@@ -416,10 +416,9 @@ export default {
   margin: 4px 0 2px;
   font-size: 2rem;
   font-weight: 700;
-  background: var(--brand-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .metric-note {
@@ -600,7 +599,7 @@ export default {
   padding: 1px 7px;
   border-radius: 2em;
   font-size: 0.7rem;
-  background: rgba(102, 126, 234, 0.2);
+  background: rgba(99, 102, 241, 0.2);
   color: var(--accent-300);
 }
 

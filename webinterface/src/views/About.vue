@@ -213,9 +213,9 @@ export default {
   padding: 56px 24px;
   text-align: center;
   background:
-    radial-gradient(70% 90% at 20% 10%, rgba(102, 126, 234, 0.22) 0%, transparent 62%),
-    radial-gradient(60% 80% at 85% 15%, rgba(118, 75, 162, 0.2) 0%, transparent 64%),
-    linear-gradient(160deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+    radial-gradient(70% 90% at 20% 10%, rgba(99, 102, 241, 0.22) 0%, transparent 62%),
+    radial-gradient(60% 80% at 85% 15%, rgba(139, 92, 246, 0.2) 0%, transparent 64%),
+    linear-gradient(160deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
   border: 1px solid var(--border-subtle);
   border-radius: 18px;
 }
@@ -288,7 +288,7 @@ export default {
 
 .capability:hover {
   background: var(--surface-2);
-  border-color: rgba(102, 126, 234, 0.4);
+  border-color: rgba(99, 102, 241, 0.4);
 }
 
 .capability-icon {
@@ -337,7 +337,7 @@ export default {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--violet-500) 100%);
+  background: var(--accent);
   font-size: 1rem;
   font-weight: 700;
   color: #fff;
@@ -389,8 +389,8 @@ export default {
 .about-cta {
   padding: 52px 32px;
   text-align: center;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.16) 0%, rgba(118, 75, 162, 0.16) 100%);
-  border: 1px solid rgba(102, 126, 234, 0.28);
+  background: var(--accent-soft);
+  border: 1px solid rgba(99, 102, 241, 0.28);
   border-radius: 18px;
 }
 

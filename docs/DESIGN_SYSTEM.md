@@ -66,8 +66,9 @@ metadata) · `--text-faint` (placeholders, disabled).
 and active and `--accent-300` / `--accent-100` for text on dark. `--accent-soft` and
 `--accent-softer` are tinted backgrounds.
 
-`--brand-gradient` (indigo → violet) is reserved for the brand wordmark and hero titles. **Do not
-put it on buttons.**
+The accent is always a **solid** fill. There is no gradient token: no gradient buttons, no
+gradient-filled text (the wordmark is plain text next to a solid indigo mark). `--violet-500`
+exists only as a faint second hue in large background glows, such as the Home and About heroes.
 
 ### Status
 
@@ -84,6 +85,13 @@ On a dark surface, a status message wants `-soft` background with `-text` foregr
 - Motion: `--motion-fast` 120ms · `--motion` 180ms · `--motion-slow` 300ms, with `--ease`.
 
 ## Rules
+
+**Flat and dark.** The page is near-black (`--surface-0` `#0b0d12`) and panels sit one step up
+with a `--border-subtle` hairline rather than a heavy shadow. Save `--elev-3`/`--elev-4` for
+things that float: modals, drawers, dropdowns.
+
+**Icons are inline SVG** with `stroke="currentColor"` (see `components/FeatureIcon.vue`), not
+emoji or Unicode glyphs.
 
 **Hover changes colour, not geometry.** Transition `background-color`, `border-color`, `color`
 and `box-shadow`. Do not `transform: translateY()` on hover: in a dense toolbar or table every
@@ -111,6 +119,13 @@ Bare `<input type="checkbox">` without Bootstrap's `.form-check-input` is themed
 `components/DateField.vue` themes `@vuepic/vue-datepicker` by driving its `--dp-*` variables from
 our tokens. That block must stay **global, not scoped**, and keyed on `.dp--theme-dark`: the menu
 teleports to `<body>`, outside the component's scope. See `docs/DATE_PICKER.md`.
+
+## Colours that are deliberately literal
+
+- **Role colours** in `utils/roleColors.js`: derived from a role's position, and users know them.
+- **Calendar event fills** in `Calendar.vue` `loadCalendarEvents()`: DayPilot takes a literal
+  `backColor`. Slate `#3a4560` for external events, indigo `#4f46e5` for scheduled task blocks.
+- **The share image** `public/og-image.*`: a marketing asset, not app chrome.
 
 ## Adding a component
 
