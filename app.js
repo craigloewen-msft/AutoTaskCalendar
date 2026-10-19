@@ -133,7 +133,8 @@ function prerenderedPageFor(urlPath) {
 
 app.get('*', (req, res, next) => {
     // An unmatched /api path is a missing endpoint, not a page; let it 404 as itself.
-    if (req.path.startsWith('/api/')) return next();
+    // Also catches relative API calls that resolved under a page path, like /user/api/x.
+    if (/(^|\/)api\//.test(req.path)) return next();
     // Anything with a file extension is a missing asset; serving HTML for it would hide
     // the error and break module/image loading with a confusing MIME type.
     if (path.extname(req.path)) return next();

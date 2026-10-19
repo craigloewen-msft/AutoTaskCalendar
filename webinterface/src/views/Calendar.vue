@@ -930,7 +930,7 @@ export default {
       this.schedulingError = false;
       this.schedulingBusy = true;
       try {
-        const response = await this.$http.get("api/scheduletasks");
+        const response = await this.$http.get("/api/scheduletasks");
         if (response.data && response.data.success === false) {
           throw new Error(response.data.log || "Scheduling failed");
         }

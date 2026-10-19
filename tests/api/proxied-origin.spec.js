@@ -72,3 +72,8 @@ test.describe('proxied origin', () => {
         await context.dispose();
     });
 });
+
+test('an api path nested under a page path is a 404, not the app shell', async ({ request }) => {
+    const res = await request.get('/user/api/connectGoogle');
+    expect(res.status()).toBe(404);
+});

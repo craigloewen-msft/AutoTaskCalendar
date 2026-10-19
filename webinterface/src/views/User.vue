@@ -318,7 +318,7 @@ export default {
     },
     async connectCalendar() {
       try {
-        const response = await this.$http.get("api/connectGoogle");
+        const response = await this.$http.get("/api/connectGoogle");
         window.location.href = response.data.authUrl;
       } catch (error) {
         console.error(error);
@@ -326,7 +326,7 @@ export default {
     },
     async refreshCalendarData() {
       try {
-        const response = await this.$http.get("api/getCalendars");
+        const response = await this.$http.get("/api/getCalendars");
         if (response.data.success) {
           this.userCalendarList = response.data.calendars;
           // Add selected calendars to input
