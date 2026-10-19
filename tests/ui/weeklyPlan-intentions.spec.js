@@ -85,6 +85,36 @@ test.describe('weekly plan intentions', () => {
         expect(await committedTitles(api, week)).not.toContain('Swim on Saturday');
     });
 
+    // A missed intention from last week can be marked done instead of carried forward.
+    test('last week\'s missed intention can be marked done from the review', async ({ page, seed, api }) => {
+        const data = await seed();
+        const missedId = String(data.named.intentionLastMissed._id);
+
+        await login(page, data.primary.username, data.primary.password);
+        await page.goto('/weekly-plan');
+        await expect(page.locator('[data-test=week-range]')).toBeVisible();
+
+        const recap = page.locator('[data-test=previous-week-recap]');
+        if (await recap.evaluate((el) => el.classList.contains('collapsed'))) {
+            await page.locator('[data-test=last-week-toggle]').click();
+        }
+
+        const row = recap.locator(`[data-test=intention-${missedId}]`);
+        await expect(row.locator(`[data-test=intention-carry-${missedId}]`)).toBeVisible();
+        await row.locator(`[data-test=intention-review-complete-${missedId}]`).click();
+
+        // It stays in last week's band, now done, with nothing left to act on.
+        await expect(row).toHaveClass(/done/);
+        await expect(row.locator(`[data-test=intention-carry-${missedId}]`)).toHaveCount(0);
+        await expect(row.locator(`[data-test=intention-review-complete-${missedId}]`)).toHaveCount(0);
+        await expect(recap.locator('[data-test=intention-summary]')).toContainText('2 of 2');
+
+        const body = await (await api.get('/api/getIntentions', {
+            params: { from: '2000-01-01', to: '2100-01-01' },
+        })).json();
+        expect(body.items.find((task) => String(task._id) === missedId).completed).toBe(true);
+    });
+
     // The reported bug: a role saved before work/personal existed has no stored context. The
     // page showed it as personal and sent no due date, but the server read it as work.
     test('a role with no stored context still takes an intention from quick-add', async ({ page, seed }) => {
