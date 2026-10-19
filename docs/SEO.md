@@ -220,3 +220,7 @@ curl -s http://127.0.0.1:3000/about | sed 's/<[^>]*>/ /g' | tr -s ' '
 ```
 
 If the title is generic or the body is empty, prerendering did not run.
+
+## API URLs must be absolute
+
+The router uses real paths, so a relative `"api/foo"` on `/user/alice` resolves to `/user/api/foo`. Always call `/api/...`. The Express fallback returns 404 for any nested `/api/` path, so a relative call fails loudly instead of getting HTML.
