@@ -65,6 +65,7 @@
         :busy="busy"
         headline-override="Beyond work"
         @carry="(task) => $emit('carry-intention', task)"
+        @complete="(task) => $emit('complete-intention', task)"
       />
     </div>
   </section>
@@ -100,7 +101,7 @@ export default {
     // Last week's personal work, counted separately from the promises.
     intentions: { type: Array, default: () => [] },
   },
-  emits: ["carry", "carry-intention", "toggle"],
+  emits: ["carry", "carry-intention", "complete-intention", "toggle"],
   computed: {
     items() {
       return this.plan?.items || [];

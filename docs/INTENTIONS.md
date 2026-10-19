@@ -145,6 +145,8 @@ life because you are "in work mode" would defeat the purpose of the feature.
 The last-week panel carries a second band with the same component in `review` mode: what
 you kept, what you missed, and a **Carry →** on each miss that moves it to *this* week's
 Sunday via the existing `carryTasksForward`.
+Beside it, **Done ✓** marks the miss as done instead, via the ordinary `completeTask`
+(the completion date is when you clicked, not backdated into last week).
 
 Missed intentions render in muted grey, never red, and the band never says "failed".
 

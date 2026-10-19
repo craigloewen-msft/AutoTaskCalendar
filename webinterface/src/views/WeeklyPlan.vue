@@ -85,12 +85,13 @@
         :week="week"
         :today="today"
         :open="lastWeekOpen"
-        :busy="carrying"
-        :error="carryError"
+        :busy="carrying || completingIntentionId !== null"
+        :error="carryError || intentionError"
         :intentions="previousIntentions"
         @toggle="lastWeekOpenOverride = !lastWeekOpen"
         @carry="carryForward"
         @carry-intention="carryIntention"
+        @complete-intention="completeIntention"
       />
 
       <div

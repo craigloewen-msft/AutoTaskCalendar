@@ -89,6 +89,17 @@
             v-if="review && !task.completed"
             class="ib-carry"
             type="button"
+            :data-test="`intention-review-complete-${task._id}`"
+            :aria-label="`Mark ${task.title} done`"
+            :disabled="busy"
+            @click="$emit('complete', task)"
+          >
+            Done ✓
+          </button>
+          <button
+            v-if="review && !task.completed"
+            class="ib-carry"
+            type="button"
             :data-test="`intention-carry-${task._id}`"
             :disabled="busy"
             @click="$emit('carry', task)"
@@ -111,7 +122,7 @@ export default {
     // "quiet" most of the week, "nudge" from Friday.
     urgency: { type: String, default: "quiet" },
     open: { type: Boolean, default: false },
-    // Last week's band is read-only apart from carrying a miss forward.
+    // Last week's band is read-only apart from carrying a miss forward or marking it done.
     review: { type: Boolean, default: false },
     busy: { type: Boolean, default: false },
     error: { type: String, default: "" },
