@@ -457,6 +457,8 @@ export default {
         businessBeginsHour: 10,
         businessEndsHour: 18,
         cellDuration: 15,
+        // Empty strip beside events so a new range can be dragged over busy slots.
+        columnMarginRight: 14,
         onBeforeCellRender: (args) => {
           const user = this.$store.state.user || {};
           const start = user.workingStartMinutes ?? 9 * 60;
