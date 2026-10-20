@@ -55,3 +55,9 @@ elements out of `.task-primary-row`'s flex line unless they should compete with 
 width, and give each a `data-test` attribute keyed by task id so specs can target one row.
 
 Covered by `tests/ui/calendar-project-labels.spec.js`.
+
+## Drag-to-create gutter
+
+The week view sets DayPilot's `columnMarginRight: 14`, so events stop 14px short of each day
+column's right edge. Drag in that strip to create a new event over or beside a busy slot.
+Covered by `tests/ui/calendar-drag-gutter.spec.js`.
