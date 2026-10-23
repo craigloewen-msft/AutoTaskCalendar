@@ -163,7 +163,10 @@ async function generateTaskEvents(user) {
     }
     const plan = planTaskPlacements({ ...input, user });
     if (plan.reachedLimit) {
-        console.error('Task scheduling loop limit reached. Remaining tasks:', plan.unscheduledTaskIds.length);
+        console.error(
+            'Task scheduling loop limit reached after', plan.iterations,
+            'iterations. Unplaced task ids:', plan.unscheduledTaskIds.join(', ')
+        );
     }
     await persistPlan(plan, user, input.currentTime);
     await cacheBlockedSlotForecasts(user, input.currentTime);

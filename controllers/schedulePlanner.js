@@ -16,7 +16,9 @@ const {
 const MS_PER_MINUTE = 60 * 1000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
-const MAX_SCHEDULING_ITERATIONS = 10000;
+// The iteration cap scales with the input, since each event and placement costs a few steps.
+const BASE_SCHEDULING_ITERATIONS = 10000;
+const ITERATIONS_PER_INPUT = 20;
 const MAX_NO_PROGRESS_ITERATIONS = 100;
 const VERY_LARGE_TIME_MS = 999 * MS_PER_DAY;
 
@@ -289,13 +291,26 @@ function advanceToNextBoundary(context, endOfWorking) {
         : new Date(endOfWorking);
 }
 
+/**
+ * Counts only truly stuck steps. Walking past events or into a later day is progress, so
+ * busy calendars do not exhaust the guard before reaching future-dated work.
+ */
 function trackProgress(context) {
-    if (context.pendingTasks.length === context.lastTaskCount) {
-        context.noProgressCount++;
-    } else {
-        context.noProgressCount = 0;
-        context.lastTaskCount = context.pendingTasks.length;
-    }
+    const time = context.currentTime.getTime();
+    const moved = time !== context.lastProgressTime
+        || context.eventIndex !== context.lastEventIndex
+        || context.placements.length !== context.lastPlacementCount
+        || context.pendingTasks.length !== context.lastTaskCount;
+
+    context.lastProgressTime = time;
+    context.lastEventIndex = context.eventIndex;
+    context.lastPlacementCount = context.placements.length;
+    context.lastTaskCount = context.pendingTasks.length;
+    context.noProgressCount = moved ? 0 : context.noProgressCount + 1;
+}
+
+function maxSchedulingIterations(tasks, events) {
+    return BASE_SCHEDULING_ITERATIONS + ITERATIONS_PER_INPUT * (tasks.length + events.length);
 }
 
 /**
@@ -336,8 +351,12 @@ function planTaskPlacements({
         placements: [],
         expiredTaskIds: [],
         iterations: 0,
+        maxIterations: maxSchedulingIterations(pendingTasks, events),
         noProgressCount: 0,
         lastTaskCount: pendingTasks.length,
+        lastProgressTime: null,
+        lastEventIndex: 0,
+        lastPlacementCount: 0,
     };
 
     if (!context.workingDays.length) {
@@ -354,7 +373,7 @@ function planTaskPlacements({
     while (context.pendingTasks.length
         && context.currentTime.getTime() < context.schedulingHorizon.getTime()) {
         context.iterations++;
-        if (context.iterations > MAX_SCHEDULING_ITERATIONS
+        if (context.iterations > context.maxIterations
             || context.noProgressCount > MAX_NO_PROGRESS_ITERATIONS) {
             reachedLimit = true;
             break;
@@ -391,6 +410,7 @@ function planTaskPlacements({
         unscheduledTaskIds: context.pendingTasks.map(taskId),
         expiredTaskIds: context.expiredTaskIds,
         reachedLimit,
+        iterations: context.iterations,
     };
 }
 

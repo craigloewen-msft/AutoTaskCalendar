@@ -273,6 +273,14 @@
                   >
                     {{ projectLabelFor(task) }}
                   </span>
+                  <!-- Which occurrence this is, when the scheduler moved it to another day. -->
+                  <span
+                    v-if="movedOccurrenceFor(task)"
+                    class="task-occurrence"
+                    :data-test="`task-occurrence-${task._id}`"
+                  >
+                    ↻ for {{ movedOccurrenceFor(task) }}
+                  </span>
                   <span v-if="showsSlotControl(task)" class="slip-impact-row">
                     <!-- The task that opened the panel keeps its chip; the rest offer to join it. -->
                     <button
@@ -362,6 +370,12 @@
                 </li>
               </ul>
             </details>
+
+            <RecurringSeriesDrawer
+              :series="recurringSeries"
+              :time-zone="userTimeZone"
+              @open="openSeries"
+            />
           </div>
       </div>
         <div class="main-calendar">
@@ -421,6 +435,7 @@
 import { DayPilot, DayPilotCalendar } from "@daypilot/daypilot-lite-vue";
 import { BButton } from 'bootstrap-vue-next';
 import TaskEditor from "../components/TaskEditor.vue";
+import RecurringSeriesDrawer from "../components/RecurringSeriesDrawer.vue";
 import {
   addCalendarDays,
   apiDateOnly,
@@ -433,6 +448,11 @@ import {
   mondayWeekBounds,
 } from "../utils/temporal";
 import { isIntention, intentionsForWeek } from "../utils/intentions";
+import {
+  isEarlyOccurrence,
+  movedOccurrenceDate,
+  occurrenceLabel,
+} from "../utils/recurrence";
 import { roleContextOf } from "../utils/roleContext";
 import { useSeo } from '@/composables/useSeo';
 
@@ -447,7 +467,8 @@ export default {
   components: {
     DayPilotCalendar,
     BButton,
-    TaskEditor
+    TaskEditor,
+    RecurringSeriesDrawer,
   },
   data() {
     return {
@@ -568,6 +589,7 @@ export default {
       },
       user: this.$store.state.user,
       taskList: null,
+      recurringSeries: [],
       highlightInterval: null,
       taskEditorOpen: false,
       currentDate: dateOnlyInTimeZone(this.$store.state.user?.timeZone),
@@ -633,9 +655,35 @@ export default {
     },
     quickCompleteLabel(task) {
       const title = task?.title || "task";
+      // Completing before the occurrence day retires that occurrence, so say which one.
+      if (isEarlyOccurrence(task, this.userTimeZone)) {
+        const day = occurrenceLabel(task.occurrenceDate);
+        return this.isCompletionArmed(task)
+          ? `Confirm early completion of the ${day} occurrence of ${title}`
+          : `Complete the ${day} occurrence of ${title} early`;
+      }
       return this.isCompletionArmed(task)
         ? `Confirm completion of ${title}`
         : `Complete task: ${title}`;
+    },
+    movedOccurrenceFor(task) {
+      const date = movedOccurrenceDate(task, this.userTimeZone);
+      return date ? occurrenceLabel(date) : null;
+    },
+    async loadRecurringSeries() {
+      try {
+        const response = await this.$http.get("/api/getRecurringSeries");
+        this.recurringSeries = response.data.success ? response.data.series || [] : [];
+      } catch (error) {
+        // The drawer is context; never block the calendar on it.
+        console.error(error);
+      }
+    },
+    // A series opens on its next pending occurrence, which edits the whole series.
+    openSeries(series) {
+      const id = series?.nextOccurrence?._id;
+      const task = id && (this.taskList || []).find((item) => item._id === id);
+      if (task) this.openEditTaskModal(task);
     },
     /** First click arms the button, second click within the window completes. */
     toggleQuickComplete(task) {
@@ -676,7 +724,11 @@ export default {
 
         this.taskList = response.data.taskList;
         completed = true;
-        await Promise.all([this.loadCalendarEvents(), this.loadSlipForecasts()]);
+        await Promise.all([
+          this.loadCalendarEvents(),
+          this.loadSlipForecasts(),
+          this.loadRecurringSeries(),
+        ]);
       } catch (error) {
         this.quickCompleteError = completed
           ? "Task completed, but the calendar could not refresh."
@@ -894,7 +946,12 @@ export default {
       this.calendar.update({ events: eventsToAdd });
     },
     async loadData() {
-      await Promise.all([this.loadTasks(), this.loadCalendarEvents(), this.loadCompass()]);
+      await Promise.all([
+        this.loadTasks(),
+        this.loadCalendarEvents(),
+        this.loadCompass(),
+        this.loadRecurringSeries(),
+      ]);
     },
     async syncCalendar() {
       if (this.syncing) return;
@@ -961,7 +1018,11 @@ export default {
     applyTaskChanges(taskList) {
       this.taskList = taskList;
       this.closeTaskEditor();
-      Promise.all([this.loadCalendarEvents(), this.loadSlipForecasts()]);
+      Promise.all([
+        this.loadCalendarEvents(),
+        this.loadSlipForecasts(),
+        this.loadRecurringSeries(),
+      ]);
     },
     openEditTaskModal(inputTask) {
       if (!inputTask) return;
@@ -1068,6 +1129,9 @@ export default {
     },
     userWorkingDays() {
       return this.$store.state.user?.workingDays || [];
+    },
+    userTimeZone() {
+      return this.$store.state.user?.timeZone || "UTC";
     },
     editorDefaultStartDate() {
       return dateOnlyInTimeZone(this.$store.state.user?.timeZone);
@@ -1470,7 +1534,8 @@ export default {
 }
 
 /* Secondary line: present, readable, never competing with the title. */
-.task-project {
+.task-project,
+.task-occurrence {
   display: block;
   max-width: 100%;
   margin-top: 3px;

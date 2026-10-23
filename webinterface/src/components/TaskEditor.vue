@@ -224,9 +224,11 @@
             class="btn btn-outline-success"
             type="button"
             :disabled="busy || confirmingDelete || followUpOpen"
+            :title="earlyOccurrenceLabel || null"
+            data-test="task-complete-button"
             @click="completeTask"
           >
-            Complete
+            {{ earlyOccurrenceLabel ? "Complete early" : "Complete" }}
           </button>
           <button
             class="btn btn-outline-danger"
@@ -284,6 +286,7 @@ import {
   formatCivilDate,
   mondayWeekBounds,
 } from "../utils/temporal";
+import { isEarlyOccurrence, occurrenceLabel } from "../utils/recurrence";
 
 export default {
   name: "TaskEditor",
@@ -317,6 +320,11 @@ export default {
     },
     isSeriesTask() {
       return !!this.task?.seriesRef;
+    },
+    // Completing before the occurrence day retires that occurrence, so name it.
+    earlyOccurrenceLabel() {
+      if (!isEarlyOccurrence(this.task, this.timeZone)) return "";
+      return `Completes the ${occurrenceLabel(this.task.occurrenceDate)} occurrence before its day`;
     },
     deleteMessage() {
       return this.isSeriesTask

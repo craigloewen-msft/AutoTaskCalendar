@@ -5,7 +5,7 @@
  * the user reads must match what the API stores. Change one, change both.
  */
 
-import { formatCivilDate } from './temporal';
+import { apiDateOnly, dateOnlyInTimeZone, formatCivilDate } from './temporal';
 
 export const WEEKDAY_NAMES = [
   'Sunday',
@@ -80,4 +80,27 @@ export function emptyRule(freq) {
     endsAfter: null,
     whenUnschedulableBehavior: 'skip',
   };
+}
+
+/** "Fri 23 Oct": the short civil-date form used for occurrence identity. */
+export function occurrenceLabel(dateOnly) {
+  return formatCivilDate(dateOnly, { weekday: 'short', day: 'numeric', month: 'short' }, 'en-GB');
+}
+
+/**
+ * The occurrence date when it differs from the day the task was scheduled, else null.
+ * Tells you that a task under Tuesday is really the previous Friday's occurrence.
+ */
+export function movedOccurrenceDate(task, timeZone) {
+  const occurrence = apiDateOnly(task?.occurrenceDate);
+  if (!occurrence || !task?.scheduledDate) return null;
+  const scheduledDay = dateOnlyInTimeZone(timeZone, task.scheduledDate);
+  return scheduledDay && scheduledDay !== occurrence ? occurrence : null;
+}
+
+/** True when completing this occurrence now would be before its own day. */
+export function isEarlyOccurrence(task, timeZone, now = new Date()) {
+  const occurrence = apiDateOnly(task?.occurrenceDate);
+  if (!occurrence || !task?.seriesRef) return false;
+  return dateOnlyInTimeZone(timeZone, now) < occurrence;
 }

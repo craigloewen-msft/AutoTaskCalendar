@@ -545,6 +545,67 @@ async function expandSeries(template, rule, today, horizonEnd, { synchronizePend
     }
 }
 
+/**
+ * Every active series for the calendar drawer: the rule, the next pending occurrence, and
+ * the latest completion, so a series that seems to vanish can be explained at a glance.
+ */
+async function listRecurringSeries(user) {
+    const templates = await TaskDetails.find({
+        userRef: user._id,
+        'recurrence.freq': { $in: FREQUENCIES },
+        $or: [{ completed: false }, { completed: null }],
+    }).sort({ title: 1 }).lean();
+    if (!templates.length) return [];
+
+    const occurrences = await TaskDetails.find({
+        userRef: user._id,
+        seriesRef: { $in: templates.map((t) => t._id) },
+    }, 'seriesRef occurrenceDate scheduledDate completed completedDate').lean();
+
+    const bySeries = new Map(templates.map((t) => [t._id.toString(), []]));
+    for (const occurrence of occurrences) {
+        bySeries.get(occurrence.seriesRef.toString())?.push(occurrence);
+    }
+
+    return templates.map((template) => {
+        const rule = effectiveRule(template);
+        const series = bySeries.get(template._id.toString());
+        const pending = series
+            .filter((o) => !o.completed)
+            .sort((a, b) => a.occurrenceDate - b.occurrenceDate);
+        const lastDone = series
+            .filter((o) => o.completed && o.completedDate)
+            .sort((a, b) => b.completedDate - a.completedDate)[0];
+        const next = pending[0];
+        const nextPlaced = pending.find((o) => o.scheduledDate);
+
+        return {
+            _id: template._id,
+            title: template.title,
+            duration: template.duration,
+            projectRef: template.projectRef || null,
+            summary: describeRecurrence(rule),
+            whenUnschedulableBehavior: rule.whenUnschedulableBehavior,
+            pendingCount: pending.length,
+            unscheduledCount: pending.filter((o) => !o.scheduledDate).length,
+            nextOccurrence: next ? {
+                _id: next._id,
+                occurrenceDate: dateOnlyFromMarker(next.occurrenceDate),
+                scheduledDate: next.scheduledDate || null,
+            } : null,
+            // The first occurrence that did get a slot, when the next one did not.
+            nextScheduledOccurrence: nextPlaced && nextPlaced !== next ? {
+                occurrenceDate: dateOnlyFromMarker(nextPlaced.occurrenceDate),
+                scheduledDate: nextPlaced.scheduledDate,
+            } : null,
+            lastCompletion: lastDone ? {
+                occurrenceDate: dateOnlyFromMarker(lastDone.occurrenceDate),
+                completedDate: lastDone.completedDate,
+            } : null,
+        };
+    });
+}
+
 module.exports = {
     FREQUENCIES,
     WHEN_UNSCHEDULABLE_BEHAVIORS,
@@ -559,4 +620,5 @@ module.exports = {
     describeRecurrence,
     occurrenceDatesBetween,
     expandRecurrences,
+    listRecurringSeries,
 };
