@@ -415,3 +415,125 @@ test.describe('scheduling a recurring series', () => {
         expect(new Set(weeklyEventDays).size).toBe(weeklyEventDays.length);
     });
 });
+
+/** Reset the recurring seed user to a known UTC working week with no tasks or events. */
+async function resetRecurringUser(userId) {
+    await Promise.all([
+        TaskDetails.deleteMany({ userRef: userId }),
+        EventDetails.deleteMany({ userRef: userId }),
+        UserDetails.updateOne({ _id: userId }, {
+            $set: {
+                timeZone: 'UTC',
+                workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+                workingStartMinutes: 9 * 60,
+                workingEndMinutes: 17 * 60,
+            },
+        }),
+    ]);
+}
+
+test.describe('recurring series on a busy calendar', () => {
+    test('a next-available occurrence weeks away is placed despite daily meetings', async ({ seed, loginAs }) => {
+        const data = await seed();
+        const userId = data.recurring.user._id;
+        const today = todayInZone('UTC');
+
+        const series = await withDb(async () => {
+            await resetRecurringUser(userId);
+            // Eight 25-minute meetings every day: enough to exhaust the old no-progress guard.
+            const meetings = [];
+            for (let day = 0; day <= 61; day++) {
+                const date = moment.utc(today).add(day, 'days').format('YYYY-MM-DD');
+                for (let slot = 0; slot < 8; slot++) {
+                    const start = zonedDateTime(date, 9 * 60 + slot * 60, 'UTC');
+                    meetings.push({
+                        title: 'Meeting',
+                        type: 'calendar',
+                        userRef: userId,
+                        startDate: start,
+                        endDate: new Date(start.getTime() + 25 * 60 * 1000),
+                    });
+                }
+            }
+            await EventDetails.insertMany(meetings);
+            return TaskDetails.create({
+                title: 'Four-weekly prep',
+                duration: 30,
+                startDate: parseDateOnly(today).date,
+                dueDate: parseDateOnly(today).date,
+                completed: false,
+                isBacklog: false,
+                // Four weeks of meetings between placements is what tripped the old guard.
+                recurrence: {
+                    freq: 'weekly',
+                    interval: 4,
+                    byWeekday: [moment.utc(today).day()],
+                    whenUnschedulableBehavior: 'next-available',
+                },
+                userRef: userId,
+            });
+        });
+
+        const userApi = await loginAs(data.recurring.username);
+        expect((await (await userApi.get('/api/scheduletasks')).json()).success).toBe(true);
+
+        const occurrences = await occurrencesOf(series);
+        expect(occurrences.length).toBeGreaterThanOrEqual(2);
+        // The far end of the horizon is the part the old guard never reached.
+        for (const occurrence of occurrences) {
+            expect(occurrence.scheduledDate, `occurrence ${days([occurrence.occurrenceDate])[0]}`).not.toBeNull();
+            expect(occurrence.scheduledDate.getTime())
+                .toBeGreaterThanOrEqual(occurrence.occurrenceDate.getTime());
+        }
+    });
+
+    test('the series drawer reports each rule, its next occurrence, and its last completion', async ({ seed, loginAs }) => {
+        const data = await seed();
+        const userId = data.recurring.user._id;
+        const today = todayInZone('UTC');
+        const nextWeek = moment.utc(today).add(7, 'days');
+
+        const series = await withDb(async () => {
+            await resetRecurringUser(userId);
+            return TaskDetails.create({
+                title: 'Make slides',
+                duration: 30,
+                startDate: parseDateOnly(today).date,
+                dueDate: parseDateOnly(today).date,
+                completed: false,
+                isBacklog: false,
+                recurrence: {
+                    freq: 'weekly',
+                    interval: 1,
+                    byWeekday: [nextWeek.day()],
+                    whenUnschedulableBehavior: 'next-available',
+                },
+                userRef: userId,
+            });
+        });
+
+        const userApi = await loginAs(data.recurring.username);
+        expect((await (await userApi.get('/api/scheduletasks')).json()).success).toBe(true);
+
+        // A completed occurrence must stay visible as the series' last completion.
+        const [first, second] = await occurrencesOf(series);
+        await complete(userApi, String(first._id));
+
+        const body = await (await userApi.get('/api/getRecurringSeries')).json();
+        expect(body.success).toBe(true);
+        expect(body.series).toHaveLength(1);
+
+        const [row] = body.series;
+        expect(row.title).toBe('Make slides');
+        expect(row.summary).toMatch(/^Every week on /);
+        expect(row.whenUnschedulableBehavior).toBe('next-available');
+        expect(row.nextOccurrence._id).toBe(String(second._id));
+        expect(row.nextOccurrence.occurrenceDate).toBe(days([second.occurrenceDate])[0]);
+        expect(row.lastCompletion.occurrenceDate).toBe(days([first.occurrenceDate])[0]);
+        expect(row.lastCompletion.completedDate).toBeTruthy();
+
+        // Another user's series never appears.
+        const primaryBody = await (await (await loginAs(data.primary.username)).get('/api/getRecurringSeries')).json();
+        expect(primaryBody.series.map((item) => item._id)).not.toContain(String(series._id));
+    });
+});

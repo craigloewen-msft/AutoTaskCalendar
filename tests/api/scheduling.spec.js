@@ -3,7 +3,13 @@ const moment = require('moment');
 const { test, expect, withDb } = require('../fixtures');
 const { EventDetails, TaskDetails, UserDetails } = require('../../models');
 const { getWorkingHoursForDay, isWorkingDay } = require('../../controllers/scheduling');
-const { taskEligibleInstant } = require('../../utils/temporal');
+const { planTaskPlacements } = require('../../controllers/schedulePlanner');
+const {
+    addDateOnlyDays,
+    parseDateOnly,
+    taskEligibleInstant,
+    zonedDateTime,
+} = require('../../utils/temporal');
 
 const MS_PER_MINUTE = 60 * 1000;
 
@@ -218,6 +224,40 @@ test.describe('scheduling', () => {
                 && task.endDate.getTime() > farEvent.startDate.getTime();
             expect(overlaps, `"${task.title}" overlaps "${farEvent.title}"`).toBe(false);
         }
+    });
+
+    test('places future-dated work weeks out on a busy calendar without hitting the loop guard', () => {
+        const timeZone = 'America/Toronto';
+        const user = {
+            timeZone,
+            workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+            workingStartMinutes: 9 * 60,
+            workingEndMinutes: 17 * 60,
+        };
+        const today = '2026-03-02';
+        const events = [];
+        for (let day = 0; day <= 61; day++) {
+            const date = addDateOnlyDays(today, day);
+            for (let slot = 0; slot < 8; slot++) {
+                const start = zonedDateTime(date, 9 * 60 + slot * 60, timeZone);
+                events.push({ startDate: start, endDate: new Date(start.getTime() + 25 * MS_PER_MINUTE) });
+            }
+        }
+        // Forty days out: the old guard gave up after about two weeks of eight meetings a day.
+        const due = parseDateOnly(addDateOnlyDays(today, 40)).date;
+        const plan = planTaskPlacements({
+            tasks: [{ _id: 'far', title: 'Far', duration: 30, startDate: due, dueDate: due, dependsOn: [] }],
+            events,
+            user,
+            currentTime: zonedDateTime(today, 10 * 60, timeZone),
+            schedulingHorizon: zonedDateTime(addDateOnlyDays(today, 61), 0, timeZone),
+        });
+
+        expect(plan.reachedLimit).toBe(false);
+        expect(plan.placements).toHaveLength(1);
+        expect(plan.placements[0].startDate.getTime()).toBeGreaterThanOrEqual(
+            zonedDateTime(addDateOnlyDays(today, 40), 9 * 60, timeZone).getTime()
+        );
     });
 
     test('materialises recurring work on its chosen weekdays and handles DST-shaped work windows', async ({

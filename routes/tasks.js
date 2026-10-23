@@ -8,7 +8,12 @@ const {
     completeTask,
     generateTaskEvents,
 } = require('../controllers/taskController');
-const { validateRecurrence, normaliseRecurrence, expandRecurrences } = require('../controllers/recurrence');
+const {
+    validateRecurrence,
+    normaliseRecurrence,
+    expandRecurrences,
+    listRecurringSeries,
+} = require('../controllers/recurrence');
 const {
     SCHEDULING_HORIZON_DAYS,
     MAX_BLOCKED_SLOT_SELECTION,
@@ -627,6 +632,20 @@ function createTaskRoutes(config, authenticateSession) {
         } catch (error) {
             console.error(error);
             return res.json({ success: false });
+        }
+    });
+
+    // Series rules for the calendar drawer, with each one's next and latest occurrence.
+    router.get('/getRecurringSeries', authenticateSession, async (req, res) => {
+        try {
+            const user = await UserDetails.findOne({ username: req.user.username });
+            if (!user) {
+                return res.send(returnFailure('Not logged in'));
+            }
+            return res.json({ success: true, series: await listRecurringSeries(user) });
+        } catch (error) {
+            console.error(error);
+            return res.send(returnFailure('Repeating tasks could not be loaded'));
         }
     });
 

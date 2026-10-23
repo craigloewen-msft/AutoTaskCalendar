@@ -140,6 +140,7 @@ expansion recreates it as a duplicate.
 | Situation | What happens |
 |---|---|
 | You complete an occurrence | That document is marked complete. The next one already exists. Two ticks = two records, each with its own date |
+| You complete an occurrence before its day | It is retired for good, so that week's slot never appears. The quick-complete label and the editor's **Complete early** button name the occurrence date first |
 | You miss a skip-policy occurrence | The past incomplete occurrence is deleted, so chores do not pile up |
 | You miss a next-available occurrence | It remains pending and can be scheduled on a later run |
 | You edit anything on an occurrence | The edit applies to the **whole series** (v1). Pending occurrences refresh immediately; completed history stays unchanged. The modal says so |
@@ -168,7 +169,43 @@ known calendar window.
 The sidebar in `Calendar.vue` shows scheduled recurring occurrences within a shorter 21-day
 window (`SIDEBAR_WINDOW_DAYS`), since 60 days of daily occurrences would bury the list.
 Unscheduled recurring occurrences stay out of the sidebar's urgent **NEEDS TIME** group;
-ordinary unscheduled tasks and backlog work remain visible.
+ordinary unscheduled tasks and backlog work remain visible. The **Repeating tasks** drawer
+below is where an unplaced occurrence shows instead.
+
+### The planner's loop guard
+
+`planTaskPlacements` (`controllers/schedulePlanner.js`) walks forward through time. Its
+no-progress guard counts only steps where *nothing* changed: no placement, no task removed,
+and neither the clock nor the event cursor moved. Walking past meetings or into the next day
+is progress.
+
+It once counted every step that placed nothing, so a calendar with 4+ meetings a day gave up
+after two or three weeks and silently left later occurrences unscheduled. The total-iteration
+cap also scales with the number of tasks and events rather than being fixed. If either limit
+trips, the server log names the unplaced task ids.
+
+## The Repeating tasks drawer
+
+The calendar sidebar ends with a collapsed **Repeating tasks** drawer, under the intentions
+group (`webinterface/src/components/RecurringSeriesDrawer.vue`). It lists one row per active
+series, which is how to answer "where did my repeating task go?":
+
+| Line | Meaning |
+|---|---|
+| Title, `NOT SCHEDULED` | A next-available series whose next occurrence got no slot. This should be rare: it means the 60-day horizon is full |
+| Title, `SKIPPED` | A skip series whose next occurrence's day had no room. Expected; see **Next placed** |
+| Rule line | `describeRecurrence`, duration, and the **If no time** setting |
+| **Next** | The next pending occurrence's date `→` where it was scheduled |
+| **Next placed** | Shown only when the next one was not placed: the first occurrence that was |
+| **Last done** | The latest completed occurrence, plus the day it was ticked when that differs |
+
+**Last done** is what explains a series that seems to skip a week: an occurrence ticked off
+early is complete, and completed occurrences never reappear.
+
+Clicking a row opens the editor on the next pending occurrence, so edits and deletion apply to
+the series as usual. The data comes from `GET /api/getRecurringSeries`
+(`listRecurringSeries` in `controllers/recurrence.js`), refreshed on load, after scheduling,
+and after any save or completion.
 
 ## Timezones
 
@@ -216,5 +253,7 @@ a spec.
 | `controllers/taskController.js` | Completion semantics; attaches `seriesRecurrence` for display |
 | `routes/tasks.js` | Rule validation, series-aware edit and delete |
 | `webinterface/src/components/RepeatEditor.vue` | The rule editor |
-| `webinterface/src/utils/recurrence.js` | Shared `describeRecurrence` for the UI |
-| `tests/api/recurrence.spec.js` | Generator (exact dates) + expansion (invariants) |
+| `webinterface/src/utils/recurrence.js` | Shared `describeRecurrence` and occurrence-date helpers for the UI |
+| `webinterface/src/components/RecurringSeriesDrawer.vue` | The calendar's Repeating tasks drawer |
+| `tests/api/recurrence.spec.js` | Generator (exact dates) + expansion (invariants), busy-calendar placement, the drawer API |
+| `tests/ui/calendar-recurring-series.spec.js` | The drawer, the moved-occurrence hint, and early-completion labels |

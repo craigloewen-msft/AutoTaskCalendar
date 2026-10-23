@@ -15,11 +15,22 @@ by scheduled time. Each row is:
   deadline and the scheduled date; then the quick-complete button (see
   `docs/TASK_COMPLETION.md`).
 - **Project name**, on a second line, muted and truncated to one line.
+- **Occurrence date**, `↻ for Fri 23 Oct`, when a recurring occurrence was scheduled on a
+  different day from the one it belongs to. Without it, a Friday task listed under Tuesday
+  reads as Tuesday's work.
 - A blocked-slot chip when a forecast exists for that task (`docs/TASK_SLIP_FORECAST.md`).
 
 This week's unfinished intentions get their own collapsible group below the dated ones; they
 are never scheduled, so they carry an `INTENTION` badge instead of a day gap. See
 `docs/INTENTIONS.md`.
+
+Below that, a collapsed **Repeating tasks** drawer lists one row per series: its rule, where
+its next occurrence landed, and its last completion. Unplaced recurring occurrences are kept
+out of the dated groups, so the drawer is where they show. See `docs/RECURRING_TASKS.md`.
+
+The quick-complete button on a recurring occurrence says so when it would complete the
+occurrence **before its day** ("Complete the Fri 23 Oct occurrence of … early"), since that
+week's slot is then gone for good.
 
 ## The project name
 
@@ -54,7 +65,8 @@ added to one must be added to the other or it silently vanishes for personal wor
 elements out of `.task-primary-row`'s flex line unless they should compete with the title for
 width, and give each a `data-test` attribute keyed by task id so specs can target one row.
 
-Covered by `tests/ui/calendar-project-labels.spec.js`.
+Covered by `tests/ui/calendar-project-labels.spec.js` and
+`tests/ui/calendar-recurring-series.spec.js`.
 
 ## Drag-to-create gutter
 
