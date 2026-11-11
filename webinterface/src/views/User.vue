@@ -179,6 +179,76 @@
             </BButton>
           </BCard>
 
+          <BCard class="modern-card mb-4" data-test="api-tokens">
+            <h3 class="section-title">
+              <span class="title-icon">🔑</span>
+              API tokens
+            </h3>
+            <p class="section-description">
+              Let a desktop tool or script add tasks for you. A token can read and change your
+              tasks, so treat it like a password and revoke any you no longer use.
+            </p>
+
+            <form class="token-create" @submit.prevent="createApiToken">
+              <BFormInput
+                id="apiTokenName"
+                v-model="apiTokens.name"
+                class="modern-input"
+                maxlength="100"
+                placeholder="Token name, e.g. Laptop"
+                aria-label="Token name"
+                data-test="api-token-name"
+              />
+              <BButton
+                type="submit"
+                variant="outline-primary"
+                :disabled="apiTokens.creating || !apiTokens.name.trim()"
+                data-test="create-api-token"
+              >
+                Create token
+              </BButton>
+            </form>
+
+            <div v-if="apiTokens.created" class="token-secret" role="status" data-test="api-token-secret">
+              <p class="mb-2">Copy this token now. It will not be shown again.</p>
+              <code class="token-value">{{ apiTokens.created }}</code>
+              <BButton size="sm" variant="outline-primary" class="ms-2" @click="copyApiToken">
+                {{ apiTokens.copied ? "Copied" : "Copy" }}
+              </BButton>
+            </div>
+
+            <p
+              v-if="apiTokens.error"
+              class="export-message error"
+              role="alert"
+              data-test="api-token-error"
+            >
+              {{ apiTokens.error }}
+            </p>
+
+            <ul v-if="apiTokens.list.length" class="token-list" data-test="api-token-list">
+              <li v-for="token in apiTokens.list" :key="token._id" class="token-row">
+                <div>
+                  <span class="token-name">{{ token.name }}</span>
+                  <code class="token-prefix">{{ token.prefix }}…</code>
+                  <small class="token-meta">
+                    Created {{ formatTokenDate(token.createdAt) }} ·
+                    {{ token.lastUsedAt ? `Last used ${formatTokenDate(token.lastUsedAt)}` : "Never used" }}
+                  </small>
+                </div>
+                <BButton
+                  size="sm"
+                  variant="outline-danger"
+                  :aria-label="`Revoke ${token.name}`"
+                  @click="revokeApiToken(token)"
+                >
+                  Revoke
+                </BButton>
+              </li>
+            </ul>
+            <p v-else class="token-meta mb-0">No API tokens yet.</p>
+          </BCard>
+
           <!-- Save Button -->
           <div class="text-center">
             <BButton
@@ -233,6 +303,14 @@ export default {
         error: false,
         message: "",
       },
+      apiTokens: {
+        list: [],
+        name: "",
+        created: "",
+        copied: false,
+        creating: false,
+        error: "",
+      },
       input: {
         startTime: null,
         endTime: null,
@@ -245,6 +323,59 @@ export default {
     };
   },
   methods: {
+    formatTokenDate(value) {
+      return value ? new Date(value).toLocaleDateString() : "";
+    },
+    async loadApiTokens() {
+      try {
+        const response = await this.$http.get("/api/apiTokens");
+        if (response.data.success) this.apiTokens.list = response.data.apiTokens;
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    async createApiToken() {
+      const state = this.apiTokens;
+      state.error = "";
+      state.creating = true;
+      try {
+        const response = await this.$http.post("/api/apiTokens", { name: state.name.trim() });
+        if (!response.data.success) {
+          state.error = response.data.log || "The token could not be created.";
+          return;
+        }
+        state.created = response.data.token;
+        state.copied = false;
+        state.name = "";
+        state.list = [response.data.apiToken, ...state.list];
+      } catch (error) {
+        state.error = "The token could not be created.";
+      } finally {
+        state.creating = false;
+      }
+    },
+    async copyApiToken() {
+      try {
+        await navigator.clipboard.writeText(this.apiTokens.created);
+        this.apiTokens.copied = true;
+      } catch (error) {
+        this.apiTokens.error = "Copy failed; select the token and copy it by hand.";
+      }
+    },
+    async revokeApiToken(token) {
+      if (!window.confirm(`Revoke "${token.name}"? Anything using it will stop working.`)) return;
+      this.apiTokens.error = "";
+      try {
+        const response = await this.$http.delete(`/api/apiTokens/${token._id}`);
+        if (!response.data.success) {
+          this.apiTokens.error = response.data.log || "The token could not be revoked.";
+          return;
+        }
+        this.apiTokens.list = this.apiTokens.list.filter((t) => t._id !== token._id);
+      } catch (error) {
+        this.apiTokens.error = "The token could not be revoked.";
+      }
+    },
     async downloadCompletedTasks() {
       const form = this.completedExport;
       form.error = false;
@@ -343,11 +474,55 @@ export default {
   },
   mounted() {
     this.refreshCalendarData();
+    this.loadApiTokens();
   },
 };
 </script>
 
 <style scoped>
+.token-create {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+
+.token-secret {
+  padding: 12px;
+  margin-bottom: 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+
+.token-value {
+  word-break: break-all;
+  user-select: all;
+}
+
+.token-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.token-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+}
+
+.token-name {
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.token-meta {
+  display: block;
+  color: var(--text-muted);
+}
 .export-message {
   margin-bottom: 1rem;
   color: var(--success-text);

@@ -41,6 +41,7 @@ const {
     ProjectDetails,
     WeeklyPlanDetails,
     GoogleOAuthStateDetails,
+    ApiTokenDetails,
 } = require('../models');
 const instance = require('../instance');
 const factories = require('./factories');
@@ -95,6 +96,7 @@ async function deleteUsers(userIds) {
         ProjectDetails.deleteMany(owned),
         WeeklyPlanDetails.deleteMany(owned),
         GoogleOAuthStateDetails.deleteMany(owned),
+        ApiTokenDetails.deleteMany(owned),
     ]);
     await UserDetails.deleteMany({ _id: { $in: userIds } });
 }
