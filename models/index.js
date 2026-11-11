@@ -250,6 +250,16 @@ const GoogleOAuthStateDetail = new Schema({
 
 GoogleOAuthStateDetail.index({ userRef: 1, sessionDigest: 1 }, { unique: true });
 
+// Personal API tokens for non-browser clients. Only a SHA-256 digest is stored. See docs/API_TOKENS.md.
+const ApiTokenDetail = new Schema({
+    userRef: { type: Schema.Types.ObjectId, ref: 'userInfo', required: true, index: true },
+    name: { type: String, required: true },
+    tokenDigest: { type: String, required: true, unique: true },
+    prefix: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+    lastUsedAt: { type: Date, default: null },
+}, { collection: 'apiToken' });
+
 UserDetail.plugin(passportLocalMongoose);
 
 const UserDetails = mongoose.model('userInfo', UserDetail, 'userInfo');
@@ -264,6 +274,7 @@ const GoogleOAuthStateDetails = mongoose.model(
     GoogleOAuthStateDetail,
     'googleOAuthState'
 );
+const ApiTokenDetails = mongoose.model('apiToken', ApiTokenDetail, 'apiToken');
 
 module.exports = {
     UserDetails,
@@ -273,5 +284,6 @@ module.exports = {
     GoalDetails,
     ProjectDetails,
     WeeklyPlanDetails,
-    GoogleOAuthStateDetails
+    GoogleOAuthStateDetails,
+    ApiTokenDetails
 };

@@ -6,6 +6,7 @@ const {
     CompassError,
     getCompassPayload,
     getCompassArchive,
+    getLiveProjects,
     createItem,
     editItem,
     endItem,
@@ -47,6 +48,18 @@ function createCompassRoutes(config, authenticateSession) {
     }
 
     router.get('/getCompass', authenticateSession, handle(async () => {}));
+
+    // A flat list of live projects for pickers outside the web app. See docs/API_TOKENS.md.
+    router.get('/projects', authenticateSession, async (req, res) => {
+        try {
+            const user = await UserDetails.findOne({ username: req.user.username });
+            if (!user) return res.send(returnFailure('Not logged in'));
+            return res.json({ success: true, projects: await getLiveProjects(user) });
+        } catch (error) {
+            console.error(error);
+            return res.json({ success: false });
+        }
+    });
 
     // Ended items are excluded from getCompass, so detail about them is paged through here.
     router.get('/getCompassArchive', authenticateSession, async (req, res) => {

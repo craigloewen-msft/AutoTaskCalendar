@@ -54,7 +54,8 @@ dataset.
 - `controllers/scheduling.js` — the task-scheduling algorithm. Highest-risk code.
 - `controllers/recurrence.js` — recurrence rules and occurrence expansion. See `docs/RECURRING_TASKS.md`.
 - `models/index.js` — all Mongoose schemas. Import these; never redefine.
-- `middleware/auth.js` — JWT `authenticateToken`. `utils/helpers.js` — `returnFailure()`;
+- `middleware/auth.js` — `authenticateSession` (session cookie or `Bearer atc_…` API token),
+  `requireSessionAuth`, `requireAdmin`; see `docs/API_TOKENS.md`. `utils/helpers.js` — `returnFailure()`;
   `utils/temporal.js` owns date/time parsing and timezone boundaries.
 - `webinterface/src/` — Vue app (`views/`, `components/`, `store.js`). All date entry goes
   through `components/DateField.vue`; see `docs/DATE_PICKER.md`. Styling comes from the tokens
@@ -72,6 +73,7 @@ dataset.
   `docs/TASK_COMPLETION.md` covers the ways a task gets marked done, including the inline button;
   `docs/INTENTIONS.md` covers personal work that is tracked weekly but never scheduled;
   `docs/ADMIN.md` covers the admin dashboard and how a user is made an admin;
+  `docs/API_TOKENS.md` covers personal API tokens for desktop tools and scripts;
   `docs/DATE_PICKER.md` covers the one date picker shared by every date field;
   `docs/DESIGN_SYSTEM.md` covers the style tokens every page and component is built from;
   `docs/PROXIED_ACCESS.md` covers reaching the dev stack through a forwarded port;

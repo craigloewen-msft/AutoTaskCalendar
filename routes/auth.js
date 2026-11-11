@@ -1,7 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const passport = require('passport');
-const { UserDetails } = require('../models');
+const { ApiTokenDetails, UserDetails } = require('../models');
+const { requireSessionAuth } = require('../middleware/auth');
+const {
+    MAX_TOKEN_NAME_LENGTH,
+    MAX_TOKENS_PER_USER,
+    generateToken,
+    publicToken,
+} = require('../utils/apiTokens');
 const { returnFailure, returnBasicUserInfo } = require('../utils/helpers');
 const {
     TEMPORAL_DATA_VERSION,
@@ -74,7 +81,7 @@ function createAuthRoutes(config, authenticateSession, requireSameOrigin) {
         });
     });
 
-    router.post('/logout', authenticateSession, (req, res, next) => {
+    router.post('/logout', authenticateSession, requireSessionAuth, (req, res, next) => {
         req.logout((logoutError) => {
             if (logoutError) return next(logoutError);
             req.session.destroy((destroyError) => {
@@ -148,6 +155,55 @@ function createAuthRoutes(config, authenticateSession, requireSameOrigin) {
         }
         catch (error) {
             return res.json(returnFailure(error));
+        }
+    });
+
+    // Personal API tokens. See docs/API_TOKENS.md.
+    router.get('/apiTokens', authenticateSession, requireSessionAuth, async (req, res) => {
+        try {
+            const tokens = await ApiTokenDetails.find({ userRef: req.user._id }).sort({ createdAt: -1 });
+            return res.json({ success: true, apiTokens: tokens.map(publicToken) });
+        } catch (error) {
+            console.error(error);
+            return res.json(returnFailure('Could not load API tokens'));
+        }
+    });
+
+    router.post('/apiTokens', authenticateSession, requireSessionAuth, async (req, res) => {
+        const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+        if (!name) return res.json(returnFailure('A token name is required'));
+        if (name.length > MAX_TOKEN_NAME_LENGTH) {
+            return res.json(returnFailure(`Token names are limited to ${MAX_TOKEN_NAME_LENGTH} characters`));
+        }
+
+        try {
+            const count = await ApiTokenDetails.countDocuments({ userRef: req.user._id });
+            if (count >= MAX_TOKENS_PER_USER) {
+                return res.json(returnFailure(`You can have at most ${MAX_TOKENS_PER_USER} API tokens`));
+            }
+
+            const { token, digest, prefix } = generateToken();
+            const record = await ApiTokenDetails.create({
+                userRef: req.user._id,
+                name,
+                tokenDigest: digest,
+                prefix,
+            });
+            // The plaintext token is returned once and never stored.
+            return res.json({ success: true, token, apiToken: publicToken(record) });
+        } catch (error) {
+            console.error(error);
+            return res.json(returnFailure('Could not create the API token'));
+        }
+    });
+
+    router.delete('/apiTokens/:id', authenticateSession, requireSessionAuth, async (req, res) => {
+        try {
+            const result = await ApiTokenDetails.deleteOne({ _id: req.params.id, userRef: req.user._id });
+            if (result.deletedCount === 0) return res.json(returnFailure('API token not found'));
+            return res.json({ success: true });
+        } catch (error) {
+            return res.json(returnFailure('API token not found'));
         }
     });
 

@@ -423,6 +423,25 @@ function completedFilter(userId, timeZone, from, to) {
     return { userRef: userId, endDate };
 }
 
+// Live roles with their live goals and projects populated, in display order.
+function liveRoleTree(user) {
+    const sort = { sortOrder: 1, startDate: 1 };
+    const live = liveFilter(user.timeZone);
+
+    return RoleDetails.find({ userRef: user._id, ...live })
+        .sort(sort)
+        .populate({
+            path: 'goalList',
+            match: { userRef: user._id, ...live },
+            options: { sort },
+            populate: {
+                path: 'projectList',
+                match: { userRef: user._id, ...live },
+                options: { sort },
+            },
+        });
+}
+
 /**
  * The live hierarchy, nested, plus the counts the page needs.
  *
@@ -440,23 +459,9 @@ function completedFilter(userId, timeZone, from, to) {
  * `completedFrom`/`completedTo` scope completedCounts only.
  */
 async function getCompassPayload(user, { completedFrom, completedTo } = {}) {
-    const sort = { sortOrder: 1, startDate: 1 };
     const from = parseDateOrIgnore(completedFrom);
     const to = parseDateOrIgnore(completedTo);
-    const live = liveFilter(user.timeZone);
-
-    const roles = await RoleDetails.find({ userRef: user._id, ...live })
-        .sort(sort)
-        .populate({
-            path: 'goalList',
-            match: { userRef: user._id, ...live },
-            options: { sort },
-            populate: {
-                path: 'projectList',
-                match: { userRef: user._id, ...live },
-                options: { sort },
-            },
-        });
+    const roles = await liveRoleTree(user);
 
     const [completedRoles, completedGoals, completedProjects, unalignedTaskCount] = await Promise.all([
         RoleDetails.countDocuments(completedFilter(user._id, user.timeZone, from, to)),
@@ -552,9 +557,36 @@ async function getCompassArchive(user, { level, limit, skip, completedFrom, comp
     };
 }
 
+/**
+ * Every live project as a flat list, labelled like the task editor's project groups.
+ *
+ * For clients that only need to pick a project; `context` is the owning role's, so a
+ * `personal` project makes a new task an intention. See docs/INTENTIONS.md.
+ */
+async function getLiveProjects(user) {
+    const projects = [];
+    for (const role of await liveRoleTree(user)) {
+        const context = role.context === 'work' ? 'work' : 'personal';
+        for (const goal of role.goalList || []) {
+            for (const project of goal.projectList || []) {
+                projects.push({
+                    _id: String(project._id),
+                    title: project.title,
+                    goalTitle: goal.title,
+                    roleTitle: role.title,
+                    label: `${role.title} \u2192 ${goal.title}`,
+                    context,
+                });
+            }
+        }
+    }
+    return projects;
+}
+
 module.exports = {
     CompassError,
     getCompassPayload,
+    getLiveProjects,
     getCompassArchive,
     createItem,
     editItem,

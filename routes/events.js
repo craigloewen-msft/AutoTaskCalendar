@@ -7,6 +7,7 @@ const { readGoogleCredentials, writeGoogleCredentials } = require('../utils/goog
 const { returnFailure } = require('../utils/helpers');
 const { parseInstant, localWeekBounds } = require('../utils/temporal');
 const { resolveRequestOrigin } = require('../utils/requestOrigin');
+const { requireSessionAuth } = require('../middleware/auth');
 const {
   getEventListFromUsername,
   createEvent,
@@ -155,7 +156,7 @@ function createEventRoutes(config, authenticateSession) {
     }
   });
 
-  router.get('/connectGoogle', authenticateSession, async (req, res) => {
+  router.get('/connectGoogle', authenticateSession, requireSessionAuth, async (req, res) => {
     let user = await UserDetails.findOne({ username: req.user.username });
 
     if (!req.user || !user) return res.send(returnFailure('Not logged in'));
